@@ -57,8 +57,8 @@ local LAYOUT = {
   { 1, 'LTRT', U, 'item', 6948 },                                        -- Hearthstone
   { 1, 'LTRT', R, 'spell', 'Find Minerals' },
   { 1, 'LTRT', L, 'spell', 'Tailoring' },
-  { 1, 'LTRT', D, 'item', WATERS },
-  { 1, 'LTRT', X, 'item', FOODS },
+  { 1, 'LTRT', D, 'drink', WATERS },                                     -- smart: best drink in the bags (fallback list)
+  { 1, 'LTRT', X, 'food', FOODS },                                       -- smart: best food in the bags (fallback list)
   { 1, 'LTRT', Y, 'spell', { 'Demon Armor', 'Demon Skin' } },
   { 1, 'LTRT', B, 'spell', 'Cannibalize' },
   { 1, 'LTRT', A, 'spell', 'Create Healthstone' },
@@ -106,6 +106,69 @@ local function bestItem(ids)
 end
 local function inList(list, v) if type(list) ~= 'table' then return list == v end; for _, x in ipairs(list) do if x == v then return true end end end
 
+-- Smart food and water (Joshua, 2026-11-09). Scan the bags for anything that is Food & Drink, read what it restores
+-- from its tooltip, and pick: food = cooked Well Fed food first (+5% kill XP on Forever), then the most health;
+-- drink = Well Fed smoothies first, then the most mana. Only things usable at your level. If no tooltip can be read,
+-- the fixed vendor lists above still work. Every scan is written to OmashuPadDB.foodScan for checking.
+local FOOD_CLASS, FOOD_SUB = 0, 5                                        -- Consumable, Food & Drink
+local scan, scanAt = nil, 0
+local function tipLines(bag, slot)
+  if C_TooltipInfo and C_TooltipInfo.GetBagItem then
+    local ok, data = pcall(C_TooltipInfo.GetBagItem, bag, slot)
+    if ok and data and data.lines then local out = {}; for _, l in ipairs(data.lines) do out[#out + 1] = l.leftText or '' end; return out end
+  end
+end
+local function scanBags()
+  if scan and GetTime() - scanAt < 1 then return scan end
+  local found, seen, lvl = {}, {}, UnitLevel('player')
+  local getID = C_Container and C_Container.GetContainerItemID or GetContainerItemID
+  local slots = C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots
+  for bag = 0, 5 do
+    for slot = 1, (slots(bag) or 0) do
+      local id = getID(bag, slot)
+      if id and not seen[id] then
+        seen[id] = true
+        local _, _, _, _, _, cls, sub = C_Item.GetItemInfoInstant(id)
+        if cls == FOOD_CLASS and sub == FOOD_SUB then
+          local name, _, _, _, minLevel = C_Item.GetItemInfo(id)
+          local lines, hp, mana, fed = tipLines(bag, slot), 0, 0, false
+          for _, l in ipairs(lines or {}) do
+            local low = l:lower()
+            local a = low:match('restores ([%d,]+) health'); if a then hp = math.max(hp, tonumber((a:gsub(',', ''))) or 0) end
+            local m = low:match('restores ([%d,]+) mana') or low:match('and ([%d,]+) mana'); if m then mana = math.max(mana, tonumber((m:gsub(',', ''))) or 0) end
+            if low:find('well fed') then fed = true end
+          end
+          found[#found + 1] = { id = id, name = name or ('item ' .. id), minLevel = minLevel or 0, hp = hp, mana = mana, fed = fed,
+                                usable = (minLevel or 0) <= lvl, tip = lines ~= nil }
+        end
+      end
+    end
+  end
+  scan, scanAt = found, GetTime()
+  OmashuPadDB.foodScan = {}
+  for _, f in ipairs(found) do
+    OmashuPadDB.foodScan[#OmashuPadDB.foodScan + 1] = ('%s (%d): health %d, mana %d%s, level %d%s%s'):format(f.name, f.id, f.hp, f.mana,
+      f.fed and ', Well Fed' or '', f.minLevel, f.usable and '' or ' TOO HIGH', f.tip and '' or ', no tooltip')
+  end
+  return found
+end
+local function bestConsumable(kind)
+  local best, bestScore
+  for _, f in ipairs(scanBags()) do
+    if f.usable then
+      local amount = kind == 'food' and f.hp or f.mana
+      if amount > 0 then
+        local score = (f.fed and 1e6 or 0) + amount
+        if not bestScore or score > bestScore then best, bestScore = f.id, score end
+      end
+    end
+  end
+  return best
+end
+local function isFoodDrink(id)
+  local _, _, _, _, _, cls, sub = C_Item.GetItemInfoInstant(id); return cls == FOOD_CLASS and sub == FOOD_SUB
+end
+
 -- What a slot holds, as 'spell:<name>', 'macro:<name>' or 'item:<id>' (spell by NAME so new ranks match).
 local function sigOf(slot)
   if not HasAction(slot) then return nil end
@@ -119,12 +182,17 @@ end
 local function want(e)
   if e[4] == 'spell' then local id = knownId(e[5]); if id then return 'spell:' .. tostring(spellName(id)), function() (C_Spell and C_Spell.PickupSpell or PickupSpell)(id) end end
   elseif e[4] == 'macro' then if GetMacroIndexByName(e[5]) > 0 then return 'macro:' .. e[5], function() PickupMacro(e[5]) end end
-  elseif e[4] == 'item' then local i = bestItem(e[5]); if i then return 'item:' .. i, function() (C_Item and C_Item.PickupItem or PickupItem)(i) end end end
+  elseif e[4] == 'item' then local i = bestItem(e[5]); if i then return 'item:' .. i, function() (C_Item and C_Item.PickupItem or PickupItem)(i) end end
+  elseif e[4] == 'food' or e[4] == 'drink' then
+    local ok, i = pcall(bestConsumable, e[4]); if not ok or not i then i = bestItem(e[5]) end
+    if i then return 'item:' .. i, function() (C_Item and C_Item.PickupItem or PickupItem)(i) end end
+  end
 end
 -- Is this sig one of the entry's own options (so the add-on may upgrade it)?
 local function ownsOption(e, sig)
   if not sig then return false end
   local k, v = sig:match('^(%a+):(.*)$')
+  if (e[4] == 'food' or e[4] == 'drink') and k == 'item' then return isFoodDrink(tonumber(v)) end
   if k ~= e[4] then return false end
   if k == 'item' then return inList(e[5], tonumber(v)) end
   return inList(e[5], v)

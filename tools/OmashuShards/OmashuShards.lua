@@ -13,7 +13,7 @@ local function coords(t, c) t:SetTexCoord(c[1] / 512, c[2] / 512, c[3] / 256, c[
 OmashuShardsDB = OmashuShardsDB or {}
 local db
 local function say(m) print('|cffe8c860Omashu:|r ' .. m) end
-local function log(m) db.log = db.log or {}; table.insert(db.log, 1, date('%H:%M:%S ') .. m); while #db.log > 40 do table.remove(db.log) end end
+local function log(m) if not db then return end; db.log = db.log or {}; table.insert(db.log, 1, date('%H:%M:%S ') .. m); while #db.log > 40 do table.remove(db.log) end end
 local function reduced() return db.reduced end
 
 -- ---------- count (guarded: a "secret" value in combat keeps the last known count) ----------
@@ -117,20 +117,7 @@ local function place()
   -- layout, so the row's top goes 12 px under it, left edge on the pet portrait.
   local x, y = 232, -237
   root:ClearAllPoints(); root:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', x, y)
-  db.placed = ('%.0f,%.0f'):format(x, y)
-  -- probe (read-only): what the frames around the top-left report, so the anchor can be chosen right
-  local pr = { scale = UIParent:GetEffectiveScale(), h = UIParent:GetHeight(), w = UIParent:GetWidth() }
-  for _, n in ipairs({ 'PlayerFrame', 'PetFrame', 'PlayerFrameHealthBar', 'PetFrameHealthBar', 'PlayerFrameContainer', 'PetFrameContainer' }) do
-    local f = _G[n]; if f and f.GetLeft and pcall(f.GetLeft, f) and f:GetLeft() then pr[n] = ('%s L%.0f B%.0f T%.0f R%.0f s%.2f'):format(f:IsShown() and 'shown' or 'hidden', f:GetLeft(), f:GetBottom(), f:GetTop(), f:GetRight(), f:GetScale()) end
-  end
-  local pets = {}
-  for k, v in pairs(_G) do
-    if type(k) == 'string' and type(v) == 'table' and (k:find('^Gamepad') or k:find('^Pet')) and v.IsShown and v.GetLeft and not k:find('Button') and not k:find('Stable') then
-      local ok, l, b, tp, sh = pcall(function() return v:GetLeft(), v:GetBottom(), v:GetTop(), v:IsShown() end)
-      if ok and l and sh and l < 400 and tp > 600 then pets[#pets + 1] = ('%s L%.0f B%.0f T%.0f'):format(k, l, b, tp) end
-    end
-  end
-  table.sort(pets); pr.pets = pets; db.probe = pr
+  if db then db.placed = ('%.0f,%.0f'):format(x, y) end
 end
 
 -- ---------- states ----------
@@ -201,6 +188,7 @@ end
 local ev = CreateFrame('Frame')
 for _, e in ipairs({ 'PLAYER_LOGIN', 'PLAYER_ENTERING_WORLD', 'BAG_UPDATE_DELAYED', 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'SPELLS_CHANGED', 'EDIT_MODE_LAYOUTS_UPDATED', 'UI_SCALE_CHANGED', 'DISPLAY_SIZE_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript('OnEvent', function(_, e)
+  if e ~= 'PLAYER_LOGIN' and not db then return end
   if e == 'PLAYER_LOGIN' then
     db = OmashuShardsDB
     if select(2, UnitClass('player')) ~= 'WARLOCK' then root:Hide(); ev:UnregisterAllEvents(); return end
