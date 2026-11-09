@@ -8,6 +8,7 @@ local BASE = { none = 181, LT = 185, RT = 193, LTRT = 201 }
 local MACROS = {                               -- Joshua's two demon buttons (his old "Good Boi", split for the pad)
   { 'PetFight', '/click PetActionButton9\n/petattack', 'Ability_Warrior_Charge' },   -- defensive + attack my target
   { 'PetHome',  '/petpassive\n/petfollow', 'Ability_Tracking' },                     -- passive + come back
+  { 'Meters',   '/ommeters', 'INV_Misc_PocketWatch_01' },                               -- damage + threat meters, show/hide
 }
 local OLD_MACROS = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink' }
 local STONES = { 9421, 5510, 5509, 5511, 5512 }                                       -- Major .. Minor Healthstone
@@ -38,7 +39,7 @@ local LAYOUT = {
   { 'RT', X, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' } },
   { 'RT', Y, 'spell', 'Summon Felhunter' },
   { 'RT', B, 'spell', 'Health Funnel' },
-  { 'RT', A, 'spell', 'Create Soulstone' },
+  { 'RT', A, 'macro', 'Meters' },               -- damage + threat meters (Create Soulstone goes elsewhere at 18)
   -- LT+RT: out of fights
   { 'LTRT', U, 'item', 6948 },                  -- Hearthstone
   { 'LTRT', R, 'spell', 'Find Minerals' },
@@ -138,6 +139,52 @@ local function hideTracker()
   if not f.omashuHooked then f.omashuHooked = true; f:HookScript('OnShow', function(s) s:SetAlpha(0) end) end
 end
 
+
+-- Meters (Joshua, 2026-11-09): Details! (damage) on top, ForeverThreat under it, on the right edge below the
+-- minimap where the quest panel was. Both hidden at every login; one pad button (/ommeters) shows or hides both.
+local RIGHT, TOP, W, DH, GAP, TH = -16, -270, 300, 190, 30, 140   -- UI units (1080 px = 768 units): starts just under the minimap
+local function detailsWin() local d = _G.Details; return d and d.GetInstance and d:GetInstance(1) end
+local function placeMeters()
+  local s = UIParent:GetEffectiveScale()
+  local w = detailsWin()
+  if w and w.baseframe then
+    pcall(function()
+      w.baseframe:ClearAllPoints(); w.baseframe:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', RIGHT, TOP - 20)
+      w.baseframe:SetSize(W, DH); if w.SaveMainWindowPosition then w:SaveMainWindowPosition() end
+    end)
+  end
+  local ft = _G.ForeverThreat
+  if ft and ft.frame and ft.db then
+    ft.frame:ClearAllPoints(); ft.frame:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', RIGHT, TOP - 20 - DH - GAP)
+    ft.frame:SetSize(W, TH)
+    ft.db.point, ft.db.x, ft.db.y, ft.db.frameWidth, ft.db.frameHeight = 'TOPRIGHT', RIGHT, TOP - 20 - DH - GAP, W, TH
+    ft.db.locked = true; if ft.RefreshWindowLockState then ft:RefreshWindowLockState() end
+  end
+end
+local function metersShown()
+  local ft = _G.ForeverThreat
+  if ft and ft.frame and ft.frame:IsShown() then return true end
+  local w = detailsWin(); return w and w.IsEnabled and w:IsEnabled() or false
+end
+local function setMeters(on)
+  if SlashCmdList.DETAILS then pcall(SlashCmdList.DETAILS, on and 'show' or 'hide') end
+  if SlashCmdList.FOREVERTHREAT then pcall(SlashCmdList.FOREVERTHREAT, on and 'show' or 'hide') end
+  if on then placeMeters() end
+end
+SLASH_OMASHUMETERS1 = '/ommeters'
+SlashCmdList.OMASHUMETERS = function() setMeters(not metersShown()) end
+
+-- What each addon costs in memory (KB), for checking the 8 GB laptop.
+local function memory()
+  if not UpdateAddOnMemoryUsage then return end
+  UpdateAddOnMemoryUsage(); local m, total = {}, 0
+  for i = 1, C_AddOns.GetNumAddOns() do
+    local n = C_AddOns.GetAddOnInfo(i)
+    if C_AddOns.IsAddOnLoaded(i) then local kb = GetAddOnMemoryUsage(i); m[n] = math.floor(kb); total = total + kb end
+  end
+  m.TOTAL = math.floor(total); OmashuPadDB.memory = m
+end
+
 local busy
 local function later(full) if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply(full) end) end
 
@@ -148,7 +195,7 @@ end
 ev:SetScript('OnEvent', function(_, e)
   if e == 'PLAYER_ENTERING_WORLD' then
     C_Timer.After(3, function()
-      pcall(keepRxpProfile); pcall(settings); pcall(hideTracker)
+      pcall(keepRxpProfile); pcall(settings); pcall(hideTracker); pcall(setMeters, false); C_Timer.After(30, function() pcall(memory) end)
       local full = OmashuPadDB.layoutV ~= V
       apply(full); if full then OmashuPadDB.layoutV = V end
     end)
