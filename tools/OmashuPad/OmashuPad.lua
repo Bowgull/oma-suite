@@ -11,7 +11,7 @@
 --      is his for good; the add-on never touches it again.
 --   4. A new layout version moves only the add-on's own buttons.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local V = 4                                    -- layout version: bump when LAYOUT changes
+local V = 5                                    -- layout version: bump when LAYOUT changes
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
 local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
@@ -25,33 +25,34 @@ local OLD_MACROS = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 
 local STONES = { 9421, 5510, 5509, 5511, 5512 }                    -- Major .. Minor Healthstone, best first
 local WATERS = { 8766, 1645, 1708, 1205, 1179, 159 }                -- vendor water, best first
 local FOODS  = { 8948, 4608, 4607, 4606, 4605, 4604 }               -- vendor mushrooms (Undercity), best first
-local SAYAAD = { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' }
 
 -- { set, bar, button, kind, name or list (best first) }    kind: spell | macro | item
 local LAYOUT = {
-  -- SET 1 -- every pull, no trigger: thumbs stay on the sticks
-  { 1, 'none', U, 'spell', 'Bane of Agony' },
-  { 1, 'none', R, 'spell', 'Corruption' },
-  { 1, 'none', L, 'spell', 'Immolate' },
-  { 1, 'none', D, 'spell', 'Shoot' },                                    -- wand
-  -- LT: D-pad = casts (standing still anyway), face = instants (keep moving)
+  -- SET 1 (v5, Joshua 2026-11-09): the face buttons (with a trigger) hold the most-used actions; the bare D-pad is the demon.
+  -- No trigger, D-pad: the demon
+  { 1, 'none', U, 'macro', 'PetFight' },                                 -- defensive + attack my target
+  { 1, 'none', D, 'macro', 'PetHome' },                                  -- passive + follow
+  { 1, 'none', L, 'spell', 'Health Funnel' },                            -- your health -> the demon
+  { 1, 'none', R, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus', 'Summon Voidwalker', 'Summon Imp' } }, -- main demon by level
+  -- LT + face: the pull
+  { 1, 'LT', X, 'spell', 'Bane of Agony' },
+  { 1, 'LT', Y, 'spell', 'Corruption' },
+  { 1, 'LT', B, 'spell', 'Immolate' },
+  { 1, 'LT', A, 'spell', 'Shoot' },                                      -- wand
+  -- RT + face: keeping going
+  { 1, 'RT', X, 'spell', 'Life Tap' },
+  { 1, 'RT', Y, 'spell', 'Drain Life' },
+  { 1, 'RT', B, 'spell', 'Fear' },
+  { 1, 'RT', A, 'item', STONES },
+  -- LT + D-pad, RT + D-pad: rare
   { 1, 'LT', U, 'spell', 'Shadow Bolt' },
-  { 1, 'LT', R, 'spell', 'Drain Life' },
-  { 1, 'LT', D, 'spell', { 'Siphon Life', 'Drain Soul' } },             -- Drain Soul until 41, then Siphon Life (Drain Soul -> set 2)
+  { 1, 'LT', R, 'spell', { 'Siphon Life', 'Drain Soul' } },              -- Drain Soul until 41, then Siphon Life (Drain Soul -> set 2)
   { 1, 'LT', L, 'spell', { 'Curse of the Elements', 'Curse of Weakness' } },
-  { 1, 'LT', X, 'spell', 'Life Tap' },
-  { 1, 'LT', Y, 'spell', 'Fear' },
-  { 1, 'LT', B, 'spell', 'Will of the Forsaken' },
-  { 1, 'LT', A, 'item', STONES },
-  -- RT: the demon. Face = in the fight, D-pad = summons (out of fights)
-  { 1, 'RT', X, 'macro', 'PetFight' },
-  { 1, 'RT', B, 'macro', 'PetHome' },
-  { 1, 'RT', Y, 'spell', 'Health Funnel' },
-  { 1, 'RT', A, 'macro', 'Meters' },
-  { 1, 'RT', L, 'spell', 'Summon Imp' },
-  { 1, 'RT', U, 'spell', 'Summon Voidwalker' },
-  { 1, 'RT', R, 'spell', SAYAAD },
+  { 1, 'LT', D, 'spell', 'Will of the Forsaken' },
+  { 1, 'RT', U, 'spell', 'Summon Imp' },
+  { 1, 'RT', R, 'spell', 'Summon Voidwalker' },
   { 1, 'RT', D, 'spell', 'Summon Felhunter' },
+  { 1, 'RT', L, 'macro', 'Meters' },
   -- LT+RT: rare, out of fights
   { 1, 'LTRT', U, 'item', 6948 },                                        -- Hearthstone
   { 1, 'LTRT', R, 'spell', 'Find Minerals' },
