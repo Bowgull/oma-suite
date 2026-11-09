@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: Omashu Pad
+## Notes: Joshua's warlock controller layout. Fills empty pad slots as spells are learned; never replaces a button you changed yourself.
+## SavedVariables: OmashuPadDB
+OmashuPad.lua

@@ -1,0 +1,147 @@
+-- Omashu Pad: the warlock controller layout for Bujuju (WoW Forever gamepad UI).
+-- Pad slots (read from the game 2026-11-09): no trigger = 181-184 (D-pad left, up, right, down);
+-- LT = 185-192, RT = 193-200, LT+RT = 201-208, each: D-pad left, up, right, down, then X, Y, B, A.
+local V = 3                                   -- bump to re-apply the whole layout once
+local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
+local BASE = { none = 181, LT = 185, RT = 193, LTRT = 201 }
+
+local MACROS = {                               -- Joshua's two demon buttons (his old "Good Boi", split for the pad)
+  { 'PetFight', '/click PetActionButton9\n/petattack', 'Ability_Warrior_Charge' },   -- defensive + attack my target
+  { 'PetHome',  '/petpassive\n/petfollow', 'Ability_Tracking' },                     -- passive + come back
+}
+local OLD_MACROS = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink' }
+local STONES = { 9421, 5510, 5509, 5511, 5512 }                                       -- Major .. Minor Healthstone
+local WATERS = { 8766, 1645, 1708, 1205, 1179, 159 }                                   -- best vendor water first
+
+-- { bar, button, kind, name or list }   kind: spell | macro | item (id or list of ids)
+-- Build: Affliction (WoW Forever levelling guide). Empty buttons fill in as spells are learned.
+local LAYOUT = {
+  -- no trigger: the fight
+  { 'none', U, 'spell', 'Shadow Bolt' },
+  { 'none', R, 'spell', 'Corruption' },
+  { 'none', L, 'spell', 'Immolate' },
+  { 'none', D, 'spell', 'Shoot' },              -- wand
+  -- LT: banes, curses, drains, staying alive
+  { 'LT', U, 'spell', 'Bane of Agony' },
+  { 'LT', R, 'spell', 'Drain Life' },
+  { 'LT', L, 'spell', { 'Curse of the Elements', 'Curse of Weakness' } },
+  { 'LT', D, 'spell', 'Drain Soul' },
+  { 'LT', X, 'spell', 'Life Tap' },
+  { 'LT', Y, 'spell', 'Fear' },
+  { 'LT', B, 'spell', 'Will of the Forsaken' },
+  { 'LT', A, 'item', STONES },
+  -- RT: the demon
+  { 'RT', U, 'macro', 'PetFight' },
+  { 'RT', D, 'macro', 'PetHome' },
+  { 'RT', L, 'spell', 'Summon Imp' },
+  { 'RT', R, 'spell', 'Summon Voidwalker' },
+  { 'RT', X, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' } },
+  { 'RT', Y, 'spell', 'Summon Felhunter' },
+  { 'RT', B, 'spell', 'Health Funnel' },
+  { 'RT', A, 'spell', 'Create Soulstone' },
+  -- LT+RT: out of fights
+  { 'LTRT', U, 'item', 6948 },                  -- Hearthstone
+  { 'LTRT', R, 'spell', 'Find Minerals' },
+  { 'LTRT', L, 'spell', 'Tailoring' },
+  { 'LTRT', D, 'item', WATERS },
+  { 'LTRT', X, 'item', 4604 },                  -- Forest Mushroom Cap (food)
+  { 'LTRT', Y, 'spell', 'Demon Skin' },
+  { 'LTRT', B, 'spell', 'Cannibalize' },
+  { 'LTRT', A, 'spell', 'Create Healthstone' },
+}
+
+OmashuPadDB = OmashuPadDB or {}
+local function say(m) print('|cffe8c860Omashu:|r ' .. m) end
+local function known(name)
+  if type(name) == 'table' then for _, n in ipairs(name) do local id = known(n); if id then return id end end; return nil end
+  if C_Spell and C_Spell.GetSpellInfo then local i = C_Spell.GetSpellInfo(name); return i and IsPlayerSpell and IsPlayerSpell(i.spellID) and i.spellID end
+  local id = select(7, GetSpellInfo(name)); return id and IsPlayerSpell(id) and id
+end
+local function hasItem(id)
+  if type(id) == 'table' then for _, i in ipairs(id) do if hasItem(i) then return i end end; return nil end
+  return (C_Item and C_Item.GetItemCount or GetItemCount)(id) > 0 and id
+end
+
+local function makeMacros()
+  for _, n in ipairs(OLD_MACROS) do local i = GetMacroIndexByName(n); if i > 0 then DeleteMacro(i) end end
+  for _, m in ipairs(MACROS) do
+    local i = GetMacroIndexByName(m[1])
+    if i == 0 then CreateMacro(m[1], m[3] or 'INV_MISC_QUESTIONMARK', m[2], true) else EditMacro(i, m[1], m[3] or 'INV_MISC_QUESTIONMARK', m[2]) end
+  end
+end
+
+local function put(slot, e)
+  ClearCursor()
+  if e[3] == 'spell' then local id = known(e[4]); if not id then return false end; (C_Spell and C_Spell.PickupSpell or PickupSpell)(id)
+  elseif e[3] == 'macro' then PickupMacro(e[4])
+  elseif e[3] == 'item' then local id = hasItem(e[4]); if not id then return false end; (C_Item and C_Item.PickupItem or PickupItem)(id) end
+  if not GetCursorInfo() then return false end
+  PlaceAction(slot); ClearCursor(); return true
+end
+
+local function apply(full)
+  if InCombatLockdown() then return end
+  makeMacros()
+  local db = OmashuPadDB; db.mine = db.mine or {}
+  if full then                                   -- first time: keep what was there, then lay out everything
+    if not db.before then
+      db.before = {}
+      for s = 181, 208 do if HasAction(s) then local t, id = GetActionInfo(s); db.before[s] = t .. ':' .. tostring(id) end end
+    end
+    for s = 181, 208 do if HasAction(s) then PickupAction(s); ClearCursor() end end
+    db.mine = {}
+  end
+  local placed, waiting = 0, {}
+  for _, e in ipairs(LAYOUT) do
+    local slot = BASE[e[1]] + e[2]
+    if not HasAction(slot) then
+      if put(slot, e) then placed = placed + 1; db.mine[slot] = e[4] else waiting[#waiting + 1] = e[4] end
+    end
+  end
+  db.waiting = waiting
+  if full or placed > 0 then say(('pad layout: %d buttons set%s'):format(placed, #waiting > 0 and (', ' .. #waiting .. ' saved for later') or '')) end
+end
+
+-- RestedXP: this realm keeps changing its name, which gives RestedXP a blank profile. Keep Bujuju's own.
+local function keepRxpProfile()
+  local adb = LibStub and LibStub('AceDB-3.0', true); if not adb or not adb.db_registry then return end
+  for db in pairs(adb.db_registry) do
+    if db.sv == RXPSettings and db.profiles and db.profiles['Bujuju Banton'] and db:GetCurrentProfile() ~= 'Bujuju Banton' then
+      db:SetProfile('Bujuju Banton'); say('RestedXP settings restored')
+    end
+  end
+end
+
+-- Settings Joshua asked for: no auto quest tracking, quest list empty. (Inverted camera is set in Options > Gamepad.)
+local function settings()
+  local db = OmashuPadDB; db.cvars = {}
+  for _, n in ipairs({ 'mouseInvertPitch', 'GamePadCameraPitchSpeed', 'GamePadCameraYawSpeed', 'GamePadInvertPitch', 'GamePadCameraInvertPitch', 'autoQuestWatch', 'autoQuestProgress', 'GamePadEnable' }) do
+    db.cvars[n] = tostring(C_CVar.GetCVar(n))
+  end
+  if db.settingsV ~= V then
+    C_CVar.SetCVar('autoQuestWatch', '0')
+    if C_QuestLog and C_QuestLog.GetNumQuestWatches then
+      for i = C_QuestLog.GetNumQuestWatches(), 1, -1 do local q = C_QuestLog.GetQuestIDForQuestWatchIndex(i); if q then C_QuestLog.RemoveQuestWatch(q) end end
+    end
+    db.settingsV = V
+  end
+end
+
+local busy
+local function later(full) if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply(full) end) end
+
+local ev = CreateFrame('Frame')
+for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'SPELLS_CHANGED', 'LEARNED_SPELL_IN_SKILL_LINE', 'LEARNED_SPELL_IN_TAB', 'BAG_UPDATE_DELAYED', 'PLAYER_REGEN_ENABLED' }) do
+  pcall(ev.RegisterEvent, ev, e)                -- event names differ between WoW versions
+end
+ev:SetScript('OnEvent', function(_, e)
+  if e == 'PLAYER_ENTERING_WORLD' then
+    C_Timer.After(3, function()
+      pcall(keepRxpProfile); pcall(settings)
+      local full = OmashuPadDB.layoutV ~= V
+      apply(full); if full then OmashuPadDB.layoutV = V end
+    end)
+  else later(false) end
+end)
+SLASH_OMASHUPAD1 = '/ompad'
+SlashCmdList.OMASHUPAD = function(m) if m == 'reset' then apply(true) else apply(false) end end

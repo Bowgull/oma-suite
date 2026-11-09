@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: Omashu Dump
+## Notes: Reads spells, macros, action slots and pad bindings into a file so Claude can plan the buttons. Changes nothing.
+## SavedVariables: OmashuDumpDB
+OmashuDump.lua
