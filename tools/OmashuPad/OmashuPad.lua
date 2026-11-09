@@ -1,66 +1,132 @@
--- Omashu Pad: the warlock controller layout for Bujuju (WoW Forever gamepad UI).
--- Pad slots (read from the game 2026-11-09): no trigger = 181-184 (D-pad left, up, right, down);
--- LT = 185-192, RT = 193-200, LT+RT = 201-208, each: D-pad left, up, right, down, then X, Y, B, A.
-local V = 3                                   -- bump to re-apply the whole layout once
+-- Omashu Pad: Bujuju's warlock controller layout (WoW Forever gamepad UI), Affliction levelling.
+--
+-- The gamepad bars have 3 sets (LB+RB + D-pad left/right), 28 slots each, read from the game 2026-11-09:
+--   set 1 = 181-208, set 2 = 209-236, set 3 = 237-264. In each set: no trigger 4 (D-pad), then LT, RT and
+--   LT+RT 8 each, in the order D-pad left, up, right, down, then X, Y, B, A.
+--
+-- Rules (Joshua, 2026-11-09):
+--   1. Fill: a spell or item gets its button as soon as it is learned or in the bags.
+--   2. Upgrade in place: a button with a list (curse, healthstone, water, food, armor, summons) moves to the best one.
+--   3. Respect his changes: the add-on remembers what it put on each button. A button he changed or cleared himself
+--      is his for good; the add-on never touches it again.
+--   4. A new layout version moves only the add-on's own buttons.
+--   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
+local V = 4                                    -- layout version: bump when LAYOUT changes
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
-local BASE = { none = 181, LT = 185, RT = 193, LTRT = 201 }
+local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
+local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
 
 local MACROS = {                               -- Joshua's two demon buttons (his old "Good Boi", split for the pad)
   { 'PetFight', '/click PetActionButton9\n/petattack', 'Ability_Warrior_Charge' },   -- defensive + attack my target
   { 'PetHome',  '/petpassive\n/petfollow', 'Ability_Tracking' },                     -- passive + come back
-  { 'Meters',   '/ommeters', 'INV_Misc_PocketWatch_01' },                               -- damage + threat meters, show/hide
+  { 'Meters',   '/ommeters', 'INV_Misc_PocketWatch_01' },                            -- damage + threat meters, show/hide
 }
 local OLD_MACROS = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink' }
-local STONES = { 9421, 5510, 5509, 5511, 5512 }                                       -- Major .. Minor Healthstone
-local WATERS = { 8766, 1645, 1708, 1205, 1179, 159 }                                   -- best vendor water first
+local STONES = { 9421, 5510, 5509, 5511, 5512 }                    -- Major .. Minor Healthstone, best first
+local WATERS = { 8766, 1645, 1708, 1205, 1179, 159 }                -- vendor water, best first
+local FOODS  = { 8948, 4608, 4607, 4606, 4605, 4604 }               -- vendor mushrooms (Undercity), best first
+local SAYAAD = { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' }
 
--- { bar, button, kind, name or list }   kind: spell | macro | item (id or list of ids)
--- Build: Affliction (WoW Forever levelling guide). Empty buttons fill in as spells are learned.
+-- { set, bar, button, kind, name or list (best first) }    kind: spell | macro | item
 local LAYOUT = {
-  -- no trigger: the fight
-  { 'none', U, 'spell', 'Shadow Bolt' },
-  { 'none', R, 'spell', 'Corruption' },
-  { 'none', L, 'spell', 'Immolate' },
-  { 'none', D, 'spell', 'Shoot' },              -- wand
-  -- LT: banes, curses, drains, staying alive
-  { 'LT', U, 'spell', 'Bane of Agony' },
-  { 'LT', R, 'spell', 'Drain Life' },
-  { 'LT', L, 'spell', { 'Curse of the Elements', 'Curse of Weakness' } },
-  { 'LT', D, 'spell', 'Drain Soul' },
-  { 'LT', X, 'spell', 'Life Tap' },
-  { 'LT', Y, 'spell', 'Fear' },
-  { 'LT', B, 'spell', 'Will of the Forsaken' },
-  { 'LT', A, 'item', STONES },
-  -- RT: the demon
-  { 'RT', U, 'macro', 'PetFight' },
-  { 'RT', D, 'macro', 'PetHome' },
-  { 'RT', L, 'spell', 'Summon Imp' },
-  { 'RT', R, 'spell', 'Summon Voidwalker' },
-  { 'RT', X, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' } },
-  { 'RT', Y, 'spell', 'Summon Felhunter' },
-  { 'RT', B, 'spell', 'Health Funnel' },
-  { 'RT', A, 'macro', 'Meters' },               -- damage + threat meters (Create Soulstone goes elsewhere at 18)
-  -- LT+RT: out of fights
-  { 'LTRT', U, 'item', 6948 },                  -- Hearthstone
-  { 'LTRT', R, 'spell', 'Find Minerals' },
-  { 'LTRT', L, 'spell', 'Tailoring' },
-  { 'LTRT', D, 'item', WATERS },
-  { 'LTRT', X, 'item', 4604 },                  -- Forest Mushroom Cap (food)
-  { 'LTRT', Y, 'spell', 'Demon Skin' },
-  { 'LTRT', B, 'spell', 'Cannibalize' },
-  { 'LTRT', A, 'spell', 'Create Healthstone' },
+  -- SET 1 -- every pull, no trigger: thumbs stay on the sticks
+  { 1, 'none', U, 'spell', 'Bane of Agony' },
+  { 1, 'none', R, 'spell', 'Corruption' },
+  { 1, 'none', L, 'spell', 'Immolate' },
+  { 1, 'none', D, 'spell', 'Shoot' },                                    -- wand
+  -- LT: D-pad = casts (standing still anyway), face = instants (keep moving)
+  { 1, 'LT', U, 'spell', 'Shadow Bolt' },
+  { 1, 'LT', R, 'spell', 'Drain Life' },
+  { 1, 'LT', D, 'spell', { 'Siphon Life', 'Drain Soul' } },             -- Drain Soul until 41, then Siphon Life (Drain Soul -> set 2)
+  { 1, 'LT', L, 'spell', { 'Curse of the Elements', 'Curse of Weakness' } },
+  { 1, 'LT', X, 'spell', 'Life Tap' },
+  { 1, 'LT', Y, 'spell', 'Fear' },
+  { 1, 'LT', B, 'spell', 'Will of the Forsaken' },
+  { 1, 'LT', A, 'item', STONES },
+  -- RT: the demon. Face = in the fight, D-pad = summons (out of fights)
+  { 1, 'RT', X, 'macro', 'PetFight' },
+  { 1, 'RT', B, 'macro', 'PetHome' },
+  { 1, 'RT', Y, 'spell', 'Health Funnel' },
+  { 1, 'RT', A, 'macro', 'Meters' },
+  { 1, 'RT', L, 'spell', 'Summon Imp' },
+  { 1, 'RT', U, 'spell', 'Summon Voidwalker' },
+  { 1, 'RT', R, 'spell', SAYAAD },
+  { 1, 'RT', D, 'spell', 'Summon Felhunter' },
+  -- LT+RT: rare, out of fights
+  { 1, 'LTRT', U, 'item', 6948 },                                        -- Hearthstone
+  { 1, 'LTRT', R, 'spell', 'Find Minerals' },
+  { 1, 'LTRT', L, 'spell', 'Tailoring' },
+  { 1, 'LTRT', D, 'item', WATERS },
+  { 1, 'LTRT', X, 'item', FOODS },
+  { 1, 'LTRT', Y, 'spell', { 'Demon Armor', 'Demon Skin' } },
+  { 1, 'LTRT', B, 'spell', 'Cannibalize' },
+  { 1, 'LTRT', A, 'spell', 'Create Healthstone' },
+  -- SET 2 (LB+RB, D-pad right): travel and utility. Fills in as you level.
+  { 2, 'none', U, 'spell', { 'Summon Dreadsteed', 'Summon Felsteed' } }, -- mount (40)
+  { 2, 'none', R, 'spell', 'Create Soulstone' },                         -- 18
+  { 2, 'none', L, 'spell', 'Ritual of Summoning' },                      -- 20
+  { 2, 'none', D, 'spell', 'Unending Breath' },
+  { 2, 'LT', U, 'spell', 'Drain Soul' },                                 -- soul shards (shares LT+down on set 1 until 41)
+  { 2, 'LT', R, 'spell', 'Death Coil' },
+  { 2, 'LT', L, 'spell', 'Howl of Terror' },
+  { 2, 'LT', D, 'spell', 'Banish' },
+  { 2, 'LT', X, 'spell', 'Shadow Ward' },
+  { 2, 'LT', Y, 'spell', 'Curse of Tongues' },
+  { 2, 'LT', B, 'spell', 'Curse of Recklessness' },
+  { 2, 'LT', A, 'spell', 'Curse of Exhaustion' },
+  { 2, 'RT', U, 'spell', 'Eye of Kilrogg' },
+  { 2, 'RT', R, 'spell', 'Enslave Demon' },
+  { 2, 'RT', L, 'spell', 'Detect Invisibility' },
+  { 2, 'RT', D, 'spell', 'Sense Demons' },
+  { 2, 'RT', X, 'spell', 'Rain of Fire' },
+  { 2, 'RT', Y, 'spell', 'Hellfire' },
+  { 2, 'RT', B, 'spell', 'Searing Pain' },
+  { 2, 'RT', A, 'spell', 'Soul Fire' },
+  { 2, 'LTRT', U, 'spell', 'Create Firestone' },
+  { 2, 'LTRT', R, 'spell', 'Create Spellstone' },
+  { 2, 'LTRT', L, 'spell', 'Inferno' },
+  { 2, 'LTRT', D, 'spell', 'Ritual of Doom' },
+  -- SET 3 stays free for talents and anything later.
 }
 
 OmashuPadDB = OmashuPadDB or {}
 local function say(m) print('|cffe8c860Omashu:|r ' .. m) end
-local function known(name)
-  if type(name) == 'table' then for _, n in ipairs(name) do local id = known(n); if id then return id end end; return nil end
-  if C_Spell and C_Spell.GetSpellInfo then local i = C_Spell.GetSpellInfo(name); return i and IsPlayerSpell and IsPlayerSpell(i.spellID) and i.spellID end
-  local id = select(7, GetSpellInfo(name)); return id and IsPlayerSpell(id) and id
+local spellName = function(id) return (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)) or (GetSpellInfo and GetSpellInfo(id)) end
+local function knownId(name)
+  if type(name) == 'table' then for _, n in ipairs(name) do local id = knownId(n); if id then return id end end; return nil end
+  local id
+  if C_Spell and C_Spell.GetSpellInfo then local i = C_Spell.GetSpellInfo(name); id = i and i.spellID else id = select(7, GetSpellInfo(name)) end
+  return id and IsPlayerSpell and IsPlayerSpell(id) and id or nil
 end
-local function hasItem(id)
-  if type(id) == 'table' then for _, i in ipairs(id) do if hasItem(i) then return i end end; return nil end
-  return (C_Item and C_Item.GetItemCount or GetItemCount)(id) > 0 and id
+local count = C_Item and C_Item.GetItemCount or GetItemCount
+local function bestItem(ids)
+  if type(ids) ~= 'table' then ids = { ids } end
+  for _, i in ipairs(ids) do if count(i) > 0 then return i end end
+end
+local function inList(list, v) if type(list) ~= 'table' then return list == v end; for _, x in ipairs(list) do if x == v then return true end end end
+
+-- What a slot holds, as 'spell:<name>', 'macro:<name>' or 'item:<id>' (spell by NAME so new ranks match).
+local function sigOf(slot)
+  if not HasAction(slot) then return nil end
+  local ty, id = GetActionInfo(slot)
+  if ty == 'spell' then return 'spell:' .. tostring(spellName(id)) end
+  if ty == 'macro' then return 'macro:' .. tostring((GetMacroInfo(id))) end
+  if ty == 'item' then return 'item:' .. tostring(id) end
+  return tostring(ty) .. ':' .. tostring(id)
+end
+-- What a layout entry wants right now: its sig and how to pick it up, or nil if nothing is available yet.
+local function want(e)
+  if e[4] == 'spell' then local id = knownId(e[5]); if id then return 'spell:' .. tostring(spellName(id)), function() (C_Spell and C_Spell.PickupSpell or PickupSpell)(id) end end
+  elseif e[4] == 'macro' then if GetMacroIndexByName(e[5]) > 0 then return 'macro:' .. e[5], function() PickupMacro(e[5]) end end
+  elseif e[4] == 'item' then local i = bestItem(e[5]); if i then return 'item:' .. i, function() (C_Item and C_Item.PickupItem or PickupItem)(i) end end end
+end
+-- Is this sig one of the entry's own options (so the add-on may upgrade it)?
+local function ownsOption(e, sig)
+  if not sig then return false end
+  local k, v = sig:match('^(%a+):(.*)$')
+  if k ~= e[4] then return false end
+  if k == 'item' then return inList(e[5], tonumber(v)) end
+  return inList(e[5], v)
 end
 
 local function makeMacros()
@@ -71,36 +137,54 @@ local function makeMacros()
   end
 end
 
-local function put(slot, e)
-  ClearCursor()
-  if e[3] == 'spell' then local id = known(e[4]); if not id then return false end; (C_Spell and C_Spell.PickupSpell or PickupSpell)(id)
-  elseif e[3] == 'macro' then PickupMacro(e[4])
-  elseif e[3] == 'item' then local id = hasItem(e[4]); if not id then return false end; (C_Item and C_Item.PickupItem or PickupItem)(id) end
+local function place(slot, pickup)
+  ClearCursor(); pickup()
   if not GetCursorInfo() then return false end
   PlaceAction(slot); ClearCursor(); return true
 end
 
-local function apply(full)
+local function apply()
   if InCombatLockdown() then return end
   makeMacros()
-  local db = OmashuPadDB; db.mine = db.mine or {}
-  if full then                                   -- first time: keep what was there, then lay out everything
-    if not db.before then
-      db.before = {}
-      for s = 181, 208 do if HasAction(s) then local t, id = GetActionInfo(s); db.before[s] = t .. ':' .. tostring(id) end end
-    end
-    for s = 181, 208 do if HasAction(s) then PickupAction(s); ClearCursor() end end
-    db.mine = {}
+  local db = OmashuPadDB
+  db.mine = db.mine or {}; db.his = db.his or {}
+  -- One-time: older versions stored names, and everything on 181-208 was the add-on's. Adopt it.
+  if (db.rulesV or 0) < 1 then
+    db.mine, db.his = {}, {}
+    for s = 181, 208 do db.mine[s] = sigOf(s) end
+    db.rulesV = 1
   end
-  local placed, waiting = 0, {}
+  -- Notice his own changes: a slot that no longer holds what the add-on put there is his for good.
+  for s, sig in pairs(db.mine) do
+    if sigOf(s) ~= sig then db.his[s] = sigOf(s) or 'cleared'; db.mine[s] = nil end
+  end
+  -- New layout version: take the add-on's own buttons off; his stay where they are.
+  local moved = 0
+  if db.layoutV ~= V then
+    for s in pairs(db.mine) do if HasAction(s) then PickupAction(s); ClearCursor(); moved = moved + 1 end; db.mine[s] = nil end
+    db.layoutV = V
+  end
+  local placed, upgraded, waiting, blocked = 0, 0, {}, {}
   for _, e in ipairs(LAYOUT) do
-    local slot = BASE[e[1]] + e[2]
-    if not HasAction(slot) then
-      if put(slot, e) then placed = placed + 1; db.mine[slot] = e[4] else waiting[#waiting + 1] = e[4] end
+    local slot = slotOf(e[1], e[2], e[3])
+    if db.his[slot] then
+      blocked[#blocked + 1] = slot
+    else
+      local sig, pickup = want(e)
+      local cur = sigOf(slot)
+      if not sig then
+        if not cur then waiting[#waiting + 1] = type(e[5]) == 'table' and tostring(e[5][1]) or tostring(e[5]) end
+      elseif not cur then
+        if place(slot, pickup) then placed = placed + 1; db.mine[slot] = sigOf(slot) end
+      elseif cur ~= sig and db.mine[slot] == cur and ownsOption(e, cur) then
+        if place(slot, pickup) then upgraded = upgraded + 1; db.mine[slot] = sigOf(slot) end
+      end
     end
   end
-  db.waiting = waiting
-  if full or placed > 0 then say(('pad layout: %d buttons set%s'):format(placed, #waiting > 0 and (', ' .. #waiting .. ' saved for later') or '')) end
+  db.waiting, db.blocked = waiting, blocked
+  if placed + upgraded + moved > 0 then
+    say(('pad: %d set, %d upgraded%s'):format(placed, upgraded, #waiting > 0 and (', ' .. #waiting .. ' waiting for later levels') or ''))
+  end
 end
 
 -- RestedXP: this realm keeps changing its name, which gives RestedXP a blank profile. Keep Bujuju's own.
@@ -185,8 +269,9 @@ local function memory()
   m.TOTAL = math.floor(total); OmashuPadDB.memory = m
 end
 
+
 local busy
-local function later(full) if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply(full) end) end
+local function later() if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply() end) end
 
 local ev = CreateFrame('Frame')
 for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'SPELLS_CHANGED', 'LEARNED_SPELL_IN_SKILL_LINE', 'LEARNED_SPELL_IN_TAB', 'BAG_UPDATE_DELAYED', 'PLAYER_REGEN_ENABLED' }) do
@@ -195,11 +280,15 @@ end
 ev:SetScript('OnEvent', function(_, e)
   if e == 'PLAYER_ENTERING_WORLD' then
     C_Timer.After(3, function()
-      pcall(keepRxpProfile); pcall(settings); pcall(hideTracker); pcall(setMeters, false); C_Timer.After(30, function() pcall(memory) end)
-      local full = OmashuPadDB.layoutV ~= V
-      apply(full); if full then OmashuPadDB.layoutV = V end
+      pcall(keepRxpProfile); pcall(settings); pcall(hideTracker); pcall(setMeters, false)
+      C_Timer.After(30, function() pcall(memory) end)
+      apply()
     end)
-  else later(false) end
+  else later() end
 end)
+-- /ompad: re-check now.  /ompad mine: hand every pad button back to the add-on (forgets which were his).
 SLASH_OMASHUPAD1 = '/ompad'
-SlashCmdList.OMASHUPAD = function(m) if m == 'reset' then apply(true) else apply(false) end end
+SlashCmdList.OMASHUPAD = function(m)
+  if m == 'mine' then OmashuPadDB.his = {}; OmashuPadDB.rulesV = 0 end
+  apply()
+end
