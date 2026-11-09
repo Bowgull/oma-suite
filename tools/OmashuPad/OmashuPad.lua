@@ -112,19 +112,30 @@ local function keepRxpProfile()
   end
 end
 
--- Settings Joshua asked for: no auto quest tracking, quest list empty. (Inverted camera is set in Options > Gamepad.)
+-- Quests stay tracked (Joshua wants them, 2026-11-09); only the side panel is kept off the screen.
+-- The quest log (LB+RB, D-pad up) still shows them. Undoes the earlier "tracking off" (settings v1-v2).
 local function settings()
-  local db = OmashuPadDB; db.cvars = {}
-  for _, n in ipairs({ 'mouseInvertPitch', 'GamePadCameraPitchSpeed', 'GamePadCameraYawSpeed', 'GamePadInvertPitch', 'GamePadCameraInvertPitch', 'autoQuestWatch', 'autoQuestProgress', 'GamePadEnable' }) do
-    db.cvars[n] = tostring(C_CVar.GetCVar(n))
-  end
-  if db.settingsV ~= V then
-    C_CVar.SetCVar('autoQuestWatch', '0')
-    if C_QuestLog and C_QuestLog.GetNumQuestWatches then
-      for i = C_QuestLog.GetNumQuestWatches(), 1, -1 do local q = C_QuestLog.GetQuestIDForQuestWatchIndex(i); if q then C_QuestLog.RemoveQuestWatch(q) end end
+  local db = OmashuPadDB
+  if (db.settingsV or 0) < 4 then
+    C_CVar.SetCVar('autoQuestWatch', '1')
+    local n, ok, notes = C_QuestLog.GetNumQuestLogEntries(), 0, {}
+    for i = 1, n do
+      local q = C_QuestLog.GetInfo(i)
+      if q and not q.isHeader and q.questID then
+        local a = pcall(C_QuestLog.AddQuestWatch, q.questID)
+        if not C_QuestLog.GetQuestWatchType(q.questID) and AddQuestWatch then pcall(AddQuestWatch, i) end
+        if C_QuestLog.GetQuestWatchType(q.questID) then ok = ok + 1 else notes[#notes + 1] = q.title .. (q.isHidden and ' (hidden)' or '') end
+      end
     end
-    db.settingsV = V
+    db.retrack = { entries = n, watched = ok, missed = notes, cvar = C_CVar.GetCVar('autoQuestWatch') }
+    if ok > 0 then db.settingsV = 4 end
   end
+end
+local function hideTracker()
+  if C_QuestLog and C_QuestLog.GetNumQuestWatches then OmashuPadDB.tracked = C_QuestLog.GetNumQuestWatches() end   -- for checking
+  local f = ObjectiveTrackerFrame or WatchFrame; if not f then return end
+  f:SetAlpha(0)
+  if not f.omashuHooked then f.omashuHooked = true; f:HookScript('OnShow', function(s) s:SetAlpha(0) end) end
 end
 
 local busy
@@ -137,7 +148,7 @@ end
 ev:SetScript('OnEvent', function(_, e)
   if e == 'PLAYER_ENTERING_WORLD' then
     C_Timer.After(3, function()
-      pcall(keepRxpProfile); pcall(settings)
+      pcall(keepRxpProfile); pcall(settings); pcall(hideTracker)
       local full = OmashuPadDB.layoutV ~= V
       apply(full); if full then OmashuPadDB.layoutV = V end
     end)
