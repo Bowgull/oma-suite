@@ -1,33 +1,35 @@
--- Omashu chat for the phone remote.
--- TEST BUILD (2026-11-09): draws one fixed test line as a strip of coloured blocks at the bottom-left edge of the
--- screen, so Joshua can see how visible it is and Couch Mode can prove it decodes it exactly.
--- Code: blocks of 4x2 screen pixels. Block 1 magenta, block 2 cyan (where it starts), then 6 bits per block:
--- 2 bits in each of red, green, blue, as 0 / 85 / 170 / 255. The bytes: length (1 byte), then the UTF-8 text.
-local TEST = "TEST [Guild] Bujuju Banton: hello from the strip! éè ✓"
-local W, H = 4, 2   -- block size in screen pixels
-
-local function on() if LoggingChat and not LoggingChat() then LoggingChat(true) end end
+-- Omashu chat for the phone remote: new chat goes out as a thin strip of coloured blocks along the bottom-left
+-- edge of the screen, and Couch Mode reads it back letter for letter. WoW's own chat log can't be used: WoW writes
+-- it only when the game closes (tested 2026-11-09).
+--
+-- The strip: blocks of 2x2 screen pixels on the bottom two rows. Block 1 magenta, block 2 cyan (the start), then
+-- 6 bits per block, 2 in each of red, green and blue as 0 / 85 / 170 / 255. The bytes:
+--   flags (1: chat box open) | how many lines (1) | each line: number (2) + length (2) + UTF-8 |
+--   check (2: sum of every byte before it)
+-- It always shows the NEWEST lines that fit (300 bytes, at most ~40% of the screen width), so a line stays on the strip for several looks and
+-- Couch Mode loses nothing if it misses a moment; it keeps the lines whose number it hasn't had yet.
+-- Lines are in WoWChatLog.txt's own format (that's what Aang reads).
+local W, H, ROOM, GAP = 2, 2, 300, 0.15   -- block size (px), bytes of lines on the strip, seconds between redraws
 
 local strip = CreateFrame("Frame", "OmashuStrip", UIParent)
 strip:SetFrameStrata("TOOLTIP"); strip:SetFrameLevel(10000)
 strip:SetIgnoreParentScale(true); strip:SetScale(1)
-local blocks = {}
+local blocks, recent, nextId, drawnAt, dirty, lastFlags = {}, {}, 0, 0, true, nil
 
-local function draw(text)
-  local _, ph = GetPhysicalScreenSize()
-  local px = 768 / ph / strip:GetEffectiveScale()   -- one screen pixel, in this frame's units (the screen is 768 units tall at scale 1)
-  local bytes = { #text }
-  for i = 1, #text do bytes[#bytes + 1] = text:byte(i) end
-  local syms, acc, nb = {}, 0, 0
+local function u16(t, n) t[#t + 1] = math.floor(n / 256) % 256; t[#t + 1] = n % 256 end
+local function draw(bytes)
+  local sum = 0
+  for _, b in ipairs(bytes) do sum = sum + b end
+  u16(bytes, sum % 65536)
+  local cols, acc, nb = { {1, 0, 1}, {0, 1, 1} }, 0, 0
+  local function sym(s) cols[#cols + 1] = { math.floor(s / 16) / 3, (math.floor(s / 4) % 4) / 3, (s % 4) / 3 } end
   for _, b in ipairs(bytes) do
     acc = acc * 256 + b; nb = nb + 8
-    while nb >= 6 do nb = nb - 6; local s = math.floor(acc / 2 ^ nb); syms[#syms + 1] = s; acc = acc - s * 2 ^ nb end
+    while nb >= 6 do nb = nb - 6; local s = math.floor(acc / 2 ^ nb); sym(s); acc = acc - s * 2 ^ nb end
   end
-  if nb > 0 then syms[#syms + 1] = acc * 2 ^ (6 - nb) end
-  local cols = { {1, 0, 1}, {0, 1, 1} }
-  for _, s in ipairs(syms) do
-    cols[#cols + 1] = { math.floor(s / 16) / 3, (math.floor(s / 4) % 4) / 3, (s % 4) / 3 }
-  end
+  if nb > 0 then sym(acc * 2 ^ (6 - nb)) end
+  local _, ph = GetPhysicalScreenSize()
+  local px = 768 / ph / strip:GetEffectiveScale()   -- one screen pixel in this frame's units
   strip:ClearAllPoints(); strip:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
   strip:SetSize(#cols * W * px, H * px)
   for i, c in ipairs(cols) do
@@ -40,11 +42,67 @@ local function draw(text)
     t:SetSize(W * px, H * px); t:SetColorTexture(c[1], c[2], c[3], 1); t:Show()
   end
   for i = #cols + 1, #blocks do blocks[i]:Hide() end
-  strip:Show()
+end
+
+local function boxOpen() return ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() and 1 or 0 end
+
+-- The newest lines that fit, oldest first.
+local function packet(flags)
+  local pick, used = {}, 0
+  for i = #recent, 1, -1 do
+    local l = recent[i]
+    if used + #l.text + 4 > ROOM then break end
+    table.insert(pick, 1, l); used = used + #l.text + 4
+  end
+  local bytes = { flags, #pick }
+  for _, l in ipairs(pick) do
+    u16(bytes, l.id); u16(bytes, #l.text)
+    for i = 1, #l.text do bytes[#bytes + 1] = l.text:byte(i) end
+  end
+  return bytes
+end
+
+strip:SetScript("OnUpdate", function()
+  local now, flags = GetTime(), boxOpen()
+  if flags ~= lastFlags then dirty = true end
+  if dirty and now - drawnAt >= GAP then draw(packet(flags)); drawnAt = now; dirty = false; lastFlags = flags end
+end)
+
+-- Chat events, written the way WoWChatLog.txt writes them (that's what Aang reads).
+local LABEL = {
+  CHAT_MSG_GUILD = "Guild", CHAT_MSG_OFFICER = "Officer", CHAT_MSG_PARTY = "Party", CHAT_MSG_PARTY_LEADER = "Party Leader",
+  CHAT_MSG_RAID = "Raid", CHAT_MSG_RAID_LEADER = "Raid Leader", CHAT_MSG_RAID_WARNING = "Raid Warning",
+  CHAT_MSG_INSTANCE_CHAT = "Instance", CHAT_MSG_INSTANCE_CHAT_LEADER = "Instance Leader",
+}
+local function short(name) return (Ambiguate and name and Ambiguate(name, "short")) or name or "" end
+local function body(event, text, who, _, _, _, _, _, chanNum, chanName)
+  who = short(who)
+  if LABEL[event] then return "[" .. LABEL[event] .. "] " .. who .. ": " .. text end
+  if event == "CHAT_MSG_CHANNEL" then return "[" .. chanNum .. ". " .. chanName .. "] " .. who .. ": " .. text end
+  if event == "CHAT_MSG_SAY" then return who .. " says: " .. text end
+  if event == "CHAT_MSG_YELL" then return who .. " yells: " .. text end
+  if event == "CHAT_MSG_WHISPER" then return who .. " whispers: " .. text end
+  if event == "CHAT_MSG_WHISPER_INFORM" then return "To " .. who .. ": " .. text end
+  if event == "CHAT_MSG_EMOTE" then return who .. " " .. text end
+  if event == "CHAT_MSG_ACHIEVEMENT" or event == "CHAT_MSG_GUILD_ACHIEVEMENT" then return (text:gsub("%%s", who)) end
+  return text   -- system, text emotes
 end
 
 local f = CreateFrame("Frame")
-f:RegisterEvent("PLAYER_ENTERING_WORLD")
-f:RegisterEvent("DISPLAY_SIZE_CHANGED")
-f:RegisterEvent("UI_SCALE_CHANGED")
-f:SetScript("OnEvent", function() on(); draw(TEST) end)
+for _, e in ipairs({ "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_CHANNEL",
+  "CHAT_MSG_EMOTE", "CHAT_MSG_TEXT_EMOTE", "CHAT_MSG_SYSTEM", "CHAT_MSG_ACHIEVEMENT", "CHAT_MSG_GUILD_ACHIEVEMENT",
+  "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER",
+  "CHAT_MSG_RAID_WARNING", "CHAT_MSG_INSTANCE_CHAT", "CHAT_MSG_INSTANCE_CHAT_LEADER" }) do f:RegisterEvent(e) end
+f:RegisterEvent("PLAYER_ENTERING_WORLD"); f:RegisterEvent("DISPLAY_SIZE_CHANGED"); f:RegisterEvent("UI_SCALE_CHANGED")
+f:SetScript("OnEvent", function(_, event, ...)
+  if event:sub(1, 9) ~= "CHAT_MSG_" then dirty = true; return end   -- screen changed: redraw
+  local ok, b = pcall(body, event, ...)
+  if not ok or type(b) ~= "string" or b == "" then return end
+  local t = GetTime()
+  local text = date("%m/%d %H:%M:%S") .. string.format(".%03d", math.floor((t % 1) * 1000)) .. "  " .. b
+  if #text > ROOM - 4 then text = text:sub(1, ROOM - 4) end
+  nextId = (nextId % 65535) + 1
+  recent[#recent + 1] = { id = nextId, text = text }
+  if #recent > 40 then table.remove(recent, 1) end
+  dirty = true
+end)
