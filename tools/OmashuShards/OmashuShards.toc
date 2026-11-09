@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: Omashu Shards
+## Notes: Five cut gems under the pet frame, readable from the couch: your soul shards. Count beside them past five.
+## SavedVariables: OmashuShardsDB
+OmashuShards.lua

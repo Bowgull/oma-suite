@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8">
+<style>html,body{margin:0;background:transparent}svg{display:block}</style>
+<!-- The sprite sheet, 512x256, drawn at 2x (gem 72x88). Cells: lit (0,0) empty (80,0) amber (160,0) dark-flash gem (240,0) glow (320,0 96x112) flash (0,96 96x96) spark (104,96 16x16) -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="256" viewBox="0 0 512 256">
+<defs>
+  <filter id="bloom" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8"/></filter>
+  <radialGradient id="flash" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#f2dcf2" stop-opacity="1"/><stop offset=".55" stop-color="#f2dcf2" stop-opacity=".5"/><stop offset="1" stop-color="#f2dcf2" stop-opacity="0"/></radialGradient>
+</defs>
+<script><![CDATA[
+const O='20,6 80,6 94,22 94,36 50,118 6,36 6,22';
+const LIT=[['20,6 80,6 86,16 14,16','#eab4ea'],['14,16 86,16 94,22 94,36 6,36 6,22','#bf4bdc'],['20,6 14,16 6,22','#d686eb'],['80,6 86,16 94,22','#ba5bdf'],['6,36 34,36 50,118','#7a1aa8'],['34,36 66,36 50,118','#eb93e3'],['66,36 82,36 50,118','#5a0f80'],['82,36 94,36 50,118','#3a0a5c']];
+// k: 72 px wide gem over 100 units = 0.72; strokes in units so that 3 px (at 1x) = 6 px here = 8.3 units outside -> stroke 17 units centred.
+function lit(){return LIT.map(f=>`<polygon points="${f[0]}" fill="${f[1]}"/>`).join('')+`<rect x="24" y="9" width="28" height="8" fill="#ebebeb" opacity=".8"/><polygon points="${O}" fill="none" stroke="#000" stroke-width="22" stroke-linejoin="round" opacity=".5"/><polygon points="${O}" fill="none" stroke="#1e0328" stroke-width="17" stroke-linejoin="round"/>`}
+function empty(){return `<polygon points="${O}" fill="#1a1620"/><polygon points="${O}" fill="none" stroke="#000" stroke-width="19" stroke-linejoin="round" opacity=".5"/><polygon points="${O}" fill="none" stroke="#7c7690" stroke-width="14" stroke-linejoin="round" opacity=".8"/>`}
+function amber(){return `<polygon points="${O}" fill="#6a3a12"/><polygon points="${O}" fill="none" stroke="#000" stroke-width="20" stroke-linejoin="round" opacity=".5"/><polygon points="${O}" fill="none" stroke="#EEA040" stroke-width="17" stroke-linejoin="round"/>`}
+function dark(){return lit()+`<polygon points="${O}" fill="#3a0a4a" opacity=".85"/>`}
+const g=(x,y,inner)=>`<g transform="translate(${x+4} ${y+4}) scale(0.72)">${inner}</g>`;   // 4 px margin inside each 80x96 cell
+let s='';
+s+=g(0,0,lit()); s+=g(80,0,empty()); s+=g(160,0,amber()); s+=g(240,0,dark());
+s+=`<g transform="translate(${320+12} ${0+8}) scale(0.72)"><polygon points="${O}" fill="#b03ae0" filter="url(#bloom)"/></g>`;   // glow 96x112 cell at (320,0)
+s+=`<ellipse cx="48" cy="144" rx="46" ry="46" fill="url(#flash)"/>`;                                                             // flash 96x96 at (0,96)
+s+=`<rect x="106" y="98" width="12" height="12" fill="#ffffff"/>`;                                                                   // spark 16x16 cell at (104,96), white (tinted in game)
+document.currentScript.parentNode.innerHTML+=s;
+]]></script>
+</svg>
