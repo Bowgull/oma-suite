@@ -319,6 +319,11 @@ local function metersShown()
   if ft and ft.frame and ft.frame:IsShown() then return true end
   local w = detailsWin(); return w and w.IsEnabled and w:IsEnabled() or false
 end
+-- ForeverThreat shows itself when a fight starts; Joshua wants the meters on his button only (2026-11-09).
+local function meterButtonOnly()
+  local ft = _G.ForeverThreat
+  if ft and ft.db then ft.db.autoShowInCombat = false; ft.db.autoShowOnlyWithThreat = false end
+end
 local function setMeters(on)
   if SlashCmdList.DETAILS then pcall(SlashCmdList.DETAILS, on and 'show' or 'hide') end
   if SlashCmdList.FOREVERTHREAT then pcall(SlashCmdList.FOREVERTHREAT, on and 'show' or 'hide') end
@@ -349,7 +354,7 @@ end
 ev:SetScript('OnEvent', function(_, e)
   if e == 'PLAYER_ENTERING_WORLD' then
     C_Timer.After(3, function()
-      pcall(keepRxpProfile); pcall(settings); pcall(hideTracker); pcall(setMeters, false)
+      pcall(keepRxpProfile); pcall(settings); pcall(hideTracker); pcall(meterButtonOnly); pcall(setMeters, false)
       C_Timer.After(30, function() pcall(memory) end)
       apply()
     end)
