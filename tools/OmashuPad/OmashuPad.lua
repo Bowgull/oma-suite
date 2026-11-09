@@ -10,6 +10,7 @@
 --   3. Respect his changes: the add-on remembers what it put on each button. A button he changed or cleared himself
 --      is his for good; the add-on never touches it again.
 --   4. A new layout version moves only the add-on's own buttons.
+--   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
 local V = 5                                    -- layout version: bump when LAYOUT changes
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
@@ -179,8 +180,16 @@ local function sigOf(slot)
   return tostring(ty) .. ':' .. tostring(id)
 end
 -- What a layout entry wants right now: its sig and how to pick it up, or nil if nothing is available yet.
+local fakeKnown = nil                                                    -- set only by /ompad sim
+local function knownSpell(name)
+  if fakeKnown then
+    for _, n in ipairs(type(name) == 'table' and name or { name }) do if fakeKnown[n] then return n end end
+    return nil
+  end
+  local id = knownId(name); if id then return spellName(id), id end
+end
 local function want(e)
-  if e[4] == 'spell' then local id = knownId(e[5]); if id then return 'spell:' .. tostring(spellName(id)), function() (C_Spell and C_Spell.PickupSpell or PickupSpell)(id) end end
+  if e[4] == 'spell' then local n, id = knownSpell(e[5]); if n then return 'spell:' .. tostring(n), function() (C_Spell and C_Spell.PickupSpell or PickupSpell)(id) end end
   elseif e[4] == 'macro' then if GetMacroIndexByName(e[5]) > 0 then return 'macro:' .. e[5], function() PickupMacro(e[5]) end end
   elseif e[4] == 'item' then local i = bestItem(e[5]); if i then return 'item:' .. i, function() (C_Item and C_Item.PickupItem or PickupItem)(i) end end
   elseif e[4] == 'food' or e[4] == 'drink' then
@@ -212,6 +221,57 @@ local function place(slot, pickup)
   PlaceAction(slot); ClearCursor(); return true
 end
 
+-- The rules run on a "board": the real action bars, or a copy in the simulation.
+local realBoard = {
+  get = function(slot) return sigOf(slot) end,
+  put = function(slot, sig, pickup) return place(slot, pickup) end,
+  clear = function(slot) if HasAction(slot) then PickupAction(slot); ClearCursor() end end,
+}
+local PAD_FIRST, PAD_LAST = 181, 264
+
+-- Rule 5 (2026-11-09, Joshua: "is summon demon on there twice?"): nothing the add-on places appears twice.
+-- LAYOUT order is priority: if an earlier button already holds a spell or item, a later button for the same thing
+-- stays empty (and the add-on takes its own copy off). So the main-demon button wins and the RT summons skip it;
+-- set 1's Drain Soul wins until Siphon Life replaces it, then set 2's Drain Soul fills in.
+local function runRules(board, st)
+  local placed, upgraded, cleared, waiting, blocked, claimed = 0, 0, 0, {}, {}, {}
+  for _, e in ipairs(LAYOUT) do
+    local slot = slotOf(e[1], e[2], e[3])
+    local cur = board.get(slot)
+    if st.his[slot] then
+      blocked[#blocked + 1] = slot
+      if cur and not claimed[cur] then claimed[cur] = slot end
+    else
+      local sig, pickup = want(e)
+      if sig and claimed[sig] then
+        if cur and st.mine[slot] == cur then board.clear(slot); st.mine[slot] = nil; cleared = cleared + 1 end
+      else
+        if not sig then
+          if not cur then waiting[#waiting + 1] = type(e[5]) == 'table' and tostring(e[5][1]) or tostring(e[5]) end
+        elseif not cur then
+          if board.put(slot, sig, pickup) then placed = placed + 1; st.mine[slot] = board.get(slot) end
+        elseif cur ~= sig and st.mine[slot] == cur and ownsOption(e, cur) then
+          if board.put(slot, sig, pickup) then upgraded = upgraded + 1; st.mine[slot] = board.get(slot) end
+        end
+        local now = board.get(slot)
+        if now and not claimed[now] then claimed[now] = slot end
+      end
+    end
+  end
+  return placed, upgraded, cleared, waiting, blocked
+end
+
+-- Self-check after every pass: any spell or item on two pad buttons where at least one is the add-on's = a bug.
+local function duplicates(board, mine)
+  local where, dups = {}, {}
+  for s = PAD_FIRST, PAD_LAST do local sig = board.get(s); if sig then where[sig] = where[sig] or {}; table.insert(where[sig], s) end end
+  for sig, slots in pairs(where) do
+    if #slots > 1 then local ours = false; for _, s in ipairs(slots) do if mine[s] then ours = true end end
+      if ours then dups[#dups + 1] = sig .. ' on ' .. table.concat(slots, ',') end end
+  end
+  table.sort(dups); return dups
+end
+
 local function apply()
   if InCombatLockdown() then return end
   makeMacros()
@@ -233,27 +293,58 @@ local function apply()
     for s in pairs(db.mine) do if HasAction(s) then PickupAction(s); ClearCursor(); moved = moved + 1 end; db.mine[s] = nil end
     db.layoutV = V
   end
-  local placed, upgraded, waiting, blocked = 0, 0, {}, {}
-  for _, e in ipairs(LAYOUT) do
-    local slot = slotOf(e[1], e[2], e[3])
-    if db.his[slot] then
-      blocked[#blocked + 1] = slot
-    else
-      local sig, pickup = want(e)
-      local cur = sigOf(slot)
-      if not sig then
-        if not cur then waiting[#waiting + 1] = type(e[5]) == 'table' and tostring(e[5][1]) or tostring(e[5]) end
-      elseif not cur then
-        if place(slot, pickup) then placed = placed + 1; db.mine[slot] = sigOf(slot) end
-      elseif cur ~= sig and db.mine[slot] == cur and ownsOption(e, cur) then
-        if place(slot, pickup) then upgraded = upgraded + 1; db.mine[slot] = sigOf(slot) end
-      end
-    end
-  end
+  local placed, upgraded, cleared, waiting, blocked = runRules(realBoard, db)
   db.waiting, db.blocked = waiting, blocked
-  if placed + upgraded + moved > 0 then
-    say(('pad: %d set, %d upgraded%s'):format(placed, upgraded, #waiting > 0 and (', ' .. #waiting .. ' waiting for later levels') or ''))
+  local dups = duplicates(realBoard, db.mine)
+  db.check = { at = date('%Y-%m-%d %H:%M:%S'), dups = dups }
+  if #dups > 0 then say('|cffff6060duplicate buttons:|r ' .. table.concat(dups, '; ')) end
+  if placed + upgraded + moved + cleared > 0 then
+    say(('pad: %d set, %d upgraded%s%s'):format(placed, upgraded, cleared > 0 and (', ' .. cleared .. ' doubled one taken off') or '',
+      #waiting > 0 and (', ' .. #waiting .. ' waiting for later levels') or ''))
   end
+end
+
+-- /ompad sim: replays levelling from 7 to 41 on a COPY of the bars (nothing on screen changes) and checks each step:
+-- no duplicates, every known demon reachable once, Joshua's own buttons untouched. Results in OmashuPadDB.sim.
+local SIM_STEPS = {
+  { 7,  { 'Shadow Bolt', 'Immolate', 'Corruption', 'Life Tap', 'Summon Imp', 'Demon Skin', 'Shoot', 'Will of the Forsaken', 'Cannibalize', 'Tailoring', 'Find Minerals' } },
+  { 10, { 'Bane of Agony', 'Fear', 'Curse of Weakness', 'Drain Soul', 'Summon Voidwalker', 'Create Healthstone' } },
+  { 12, { 'Health Funnel' }, 'his' },                                       -- here Joshua puts his own thing on RT up
+  { 20, { 'Drain Life', 'Summon Sayaad', 'Ritual of Summoning', 'Create Soulstone', 'Unending Breath', 'Demon Armor' } },
+  { 30, { 'Summon Felhunter', 'Banish' } },
+  { 41, { 'Siphon Life', 'Curse of the Elements', 'Summon Felsteed' } },
+}
+local function simulate()
+  local bars, st = {}, { mine = {}, his = {} }
+  for s = PAD_FIRST, PAD_LAST do bars[s] = sigOf(s) end
+  for s, v in pairs(OmashuPadDB.mine or {}) do st.mine[s] = v end
+  for s, v in pairs(OmashuPadDB.his or {}) do st.his[s] = v end
+  local board = { get = function(s) return bars[s] end, put = function(s, sig) bars[s] = sig; return true end, clear = function(s) bars[s] = nil end }
+  local known, report, ok = {}, {}, true
+  local DEMONS = { 'Summon Imp', 'Summon Voidwalker', 'Summon Sayaad', 'Summon Felhunter' }
+  for _, step in ipairs(SIM_STEPS) do
+    for _, n in ipairs(step[2]) do known[n] = true end
+    if step[3] == 'his' then local s = slotOf(1, 'RT', U); bars[s] = 'spell:Joshua own choice'; st.mine[s] = nil; st.his[s] = bars[s] end
+    fakeKnown = known
+    local okRun, err = pcall(runRules, board, st)
+    fakeKnown = nil
+    if not okRun then ok = false; report[#report + 1] = ('lvl %d: ERROR %s'):format(step[1], tostring(err)); break end
+    local dups = duplicates(board, st.mine)
+    local demons = {}
+    for _, d in ipairs(DEMONS) do if known[d] then local n = 0; for s = PAD_FIRST, PAD_LAST do if bars[s] == 'spell:' .. d then n = n + 1 end end
+      -- exactly once, unless Joshua took that demon's own button for something else (then 0 is right)
+      local own = ({ ['Summon Imp'] = slotOf(1, 'RT', U), ['Summon Voidwalker'] = slotOf(1, 'RT', R), ['Summon Felhunter'] = slotOf(1, 'RT', D) })[d]
+      local excused = n == 0 and own and st.his[own]
+      demons[#demons + 1] = d:gsub('Summon ', '') .. '=' .. n .. (excused and ' (his button)' or ''); if n > 1 or (n == 0 and not excused) then ok = false end end end
+    local hisOk = not st.his[slotOf(1, 'RT', U)] or bars[slotOf(1, 'RT', U)] == 'spell:Joshua own choice'
+    if #dups > 0 or not hisOk then ok = false end
+    report[#report + 1] = ('lvl %d: main=%s | RT up=%s right=%s down=%s | LT right=%s | set2 LT up=%s | demons %s | dups %s | his %s'):format(step[1],
+      tostring(bars[slotOf(1, 'none', R)]), tostring(bars[slotOf(1, 'RT', U)]), tostring(bars[slotOf(1, 'RT', R)]), tostring(bars[slotOf(1, 'RT', D)]),
+      tostring(bars[slotOf(1, 'LT', R)]), tostring(bars[slotOf(2, 'LT', U)]), table.concat(demons, ' '), #dups == 0 and 'none' or table.concat(dups, '; '),
+      hisOk and 'kept' or 'TOUCHED')
+  end
+  OmashuPadDB.sim = { at = date('%Y-%m-%d %H:%M:%S'), pass = ok, steps = report }
+  say('simulation ' .. (ok and '|cff60ff60passed|r' or '|cffff6060FAILED|r') .. ' (' .. #report .. ' steps, details saved)')
 end
 
 -- RestedXP: this realm keeps changing its name, which gives RestedXP a blank profile. Keep Bujuju's own.
@@ -360,9 +451,10 @@ ev:SetScript('OnEvent', function(_, e)
     end)
   else later() end
 end)
--- /ompad: re-check now.  /ompad mine: hand every pad button back to the add-on (forgets which were his).
+-- /ompad: re-check now.  /ompad sim: replay levelling on a copy and check the rules.  /ompad mine: hand every pad button back to the add-on (forgets which were his).
 SLASH_OMASHUPAD1 = '/ompad'
 SlashCmdList.OMASHUPAD = function(m)
+  if m == 'sim' then simulate(); return end
   if m == 'mine' then OmashuPadDB.his = {}; OmashuPadDB.rulesV = 0 end
   apply()
 end
