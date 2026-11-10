@@ -21,7 +21,7 @@ local NUM_FONT = STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 
 -- Blizzard's own nameplate aura size, so nothing needs tuning: AURA_ITEM_HEIGHT 25 x Nameplate Size Huge (1.6) x
 -- Debuff Scale 140% (1.4) = 56 units, square, no gaps; at that scale Blizzard puts 6 per row and grows rows upward.
-local S = 25 * 1.6 * 1.4
+local S = 25 * 1.6                -- 2026-11-10 Joshua: 56 was too big; Blizzard Huge at 100% = 40
 local PER_ROW = 6
 local OS = S * 0.6                  -- other players' DoTs: 60% size
 local OTHERS_ALPHA = 0.55           -- and 55% alpha
@@ -350,13 +350,12 @@ local function place(anchor, plate)
   local bar = uf and uf.HealthBarsContainer
   local pad = tonumber(C_CVar.GetCVar('nameplateDebuffPadding') or '') or 0
   if bar then
-    local dy = pad + GAP
-    if not nameInsideBar() and uf.name then
-      local ok, shown, nt, bt = pcall(function() return uf.name:IsShown(), uf.name:GetTop(), bar:GetTop() end)
-      if ok and not secret(shown) and shown and nt and bt and not secret(nt) and not secret(bt) then dy = (nt - bt) + pad + GAP end
-    end
-    anchor:SetPoint('BOTTOMLEFT', bar, 'TOPLEFT', 0, dy)
-    anchor:SetPoint('BOTTOMRIGHT', bar, 'TOPRIGHT', 0, dy)
+    -- 2026-11-10: reading the name's top came back secret/empty in a real fight, so the row sat on the bar and covered
+    -- the name (Joshua's photo). Blizzard anchors its debuff row TO the name frame, which needs no numbers: do the same.
+    local above = bar
+    if not nameInsideBar() and uf.name then above = uf.name end
+    anchor:SetPoint('BOTTOM', above, 'TOP', 0, pad + GAP)
+    anchor:SetPoint('LEFT', bar, 'LEFT'); anchor:SetPoint('RIGHT', bar, 'RIGHT')
     anchor:SetHeight(1)
   else
     anchor:SetPoint('BOTTOM', plate, 'CENTER', 0, S * 0.5)
