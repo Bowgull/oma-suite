@@ -159,7 +159,8 @@ local function refreshFull(count)
 end
 local function refreshZero(count)
   local g = gems[1]
-  if count == 0 and drainSoul then
+  -- 2026-11-10 Joshua: "It's annoying turn off the glow". Off unless /omshards hint on.
+  if count == 0 and drainSoul and db and db.zeroHint then
     g.amber:Show(); if reduced() then g.zero:Stop(); g.amber:SetAlpha(.6) elseif not g.zero:IsPlaying() then g.zero:Play() end
   else g.zero:Stop(); g.amber:Hide() end
 end
@@ -221,6 +222,7 @@ SlashCmdList.OMASHUSHARDS = function(msg)
     elseif arg == 'two' then db.fake = (last or 0) + 2 elseif arg == 'off' then db.fake = nil
     elseif tonumber(arg) then db.fake = tonumber(arg) else say('/omshards test gain|spend|two|zero|full|seven|<n>|off'); return end
     update('test ' .. arg); say('test: count ' .. tostring(db.fake == nil and 'real' or db.fake))
+  elseif cmd == 'hint' then db.zeroHint = (arg == 'on'); if last then refreshZero(last) end; say('empty-shard hint ' .. (db.zeroHint and 'on' or 'off'))
   elseif cmd == 'motion' then db.reduced = (arg == 'off'); say('motion ' .. (db.reduced and 'reduced' or 'full'))
   elseif cmd == 'sound' then db.sound = (arg ~= 'off'); say('chime ' .. (db.sound and 'on' or 'off'))
   elseif cmd == 'nopet' then testNoPet = true; place(); say('no-pet spot for 15 s'); C_Timer.After(15, function() testNoPet = false; place() end)
@@ -243,5 +245,5 @@ SlashCmdList.OMASHUSHARDS = function(msg)
     while q and depth < 4 do rect('player' .. depth .. ':' .. tostring(q.GetName and q:GetName()), q); q = q.GetParent and q:GetParent(); depth = depth + 1 end
     db.probe = out; say('probe saved: ' .. #out .. ' frames (/reload to write)')
   elseif cmd == 'log' then for i = math.min(10, #(db.log or {})), 1, -1 do print(db.log[i]) end
-  else say('/omshards test ... | motion on|off | sound on|off | place | log') end
+  else say('/omshards test ... | motion on|off | sound on|off | hint on|off | place | log') end
 end

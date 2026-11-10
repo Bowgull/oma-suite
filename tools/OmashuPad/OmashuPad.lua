@@ -543,3 +543,38 @@ end
 
 -- Bags and map on LT/LB + View (sheet 16) removed 2026-11-10: Forever keeps View and Menu for itself in every
 -- combination, so those bindings never fire. Bags and map stay in the Menu wheel.
+
+-- ---------- Auction house: aux on top, bags out of the way (Joshua 2026-11-10: "Yes for everything else") ----------
+-- WoW opens all bags with the auction house, and KroGamepadBags' window then covers aux. When aux opens, close the bag
+-- window once (its own OnHide does all its cleanup; ns.Close is the same frame:Hide()). LB + RB + B still opens the bags
+-- on purpose afterwards: we only close it in the first second after aux appears.
+local ahWatch = CreateFrame('Frame')
+local function bagsOffForAux()
+  local aux, bags = _G.aux_frame, _G.KroGamepadBagsFrame
+  if InCombatLockdown() or not (aux and aux:IsShown() and bags and bags:IsShown()) then return end
+  bags:Hide()
+end
+ahWatch:RegisterEvent('AUCTION_HOUSE_SHOW')
+ahWatch:SetScript('OnEvent', function()
+  for _, t in ipairs({ 0.1, 0.4, 0.9 }) do C_Timer.After(t, bagsOffForAux) end
+end)
+
+-- ---------- Selling junk and repairing: Leatrix does both (Joshua 2026-11-10: "Yes for everything else") ----------
+-- One seller only: Leatrix's "sell junk" on, RestedXP's off, so nothing sells twice; Leatrix "repair" on.
+-- Done once (OmashuPadDB.vendorV); RestedXP reads its setting at each vendor visit, Leatrix after the next reload.
+-- After this the switches are his: changing them in Leatrix or RestedXP is never undone.
+local VENDOR_V = 1
+local vendorEv = CreateFrame('Frame'); vendorEv:RegisterEvent('PLAYER_LOGIN')
+vendorEv:SetScript('OnEvent', function()
+  OmashuPadDB = OmashuPadDB or {}
+  if (OmashuPadDB.vendorV or 0) >= VENDOR_V then return end
+  local done = {}
+  if type(LeaPlusDB) == 'table' then LeaPlusDB.AutoSellJunk = 'On'; LeaPlusDB.AutoRepairGear = 'On'; done[#done + 1] = 'Leatrix sells junk and repairs' end
+  if type(RXPSettings) == 'table' and type(RXPSettings.profiles) == 'table' then
+    for _, prof in pairs(RXPSettings.profiles) do if type(prof) == 'table' then prof.autoSellJunk = false end end
+    done[#done + 1] = "RestedXP's junk selling off"
+  end
+  OmashuPadDB.vendorV = VENDOR_V
+  if #done > 0 then say(table.concat(done, '; ') .. ' (Leatrix needs one /reload)') end
+end)
+
