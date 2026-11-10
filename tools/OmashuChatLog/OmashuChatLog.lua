@@ -106,3 +106,51 @@ f:SetScript("OnEvent", function(_, event, ...)
   if #recent > 40 then table.remove(recent, 1) end
   dirty = true
 end)
+
+-- ---------- Guild, who's on (phone sheet 11, Joshua 2026-11-10) ----------
+-- The online guild list rides the same strip as chat lines, one member per line, trickled out (one line every half
+-- second) so a burst never pushes chat off the strip:   {omashu-guild} <list> <i>/<n> Name|level|CLASS|zone
+-- <list> numbers each full list; Aang swaps its list in only once it has all n lines of one. "<list> 0/0" = nobody
+-- (or not in a guild). Sent only when the list changed; WoW is asked for a fresh roster every 30 s.
+local TAG, queue, lastSig, listNo, trickleAt = "{omashu-guild} ", {}, nil, 0, 0
+local function stamp() local t = GetTime(); return date("%m/%d %H:%M:%S") .. string.format(".%03d", math.floor((t % 1) * 1000)) .. "  " end
+local function push(text)
+  if #text > ROOM - 4 then text = text:sub(1, ROOM - 4) end
+  nextId = (nextId % 65535) + 1
+  recent[#recent + 1] = { id = nextId, text = text }
+  if #recent > 40 then table.remove(recent, 1) end
+  dirty = true
+end
+local function clean(s) return (tostring(s or ""):gsub("[|\r\n]", " ")) end
+local function onlineList()
+  local out, me = {}, UnitName("player")
+  if not (IsInGuild and IsInGuild()) then return out end
+  for i = 1, (GetNumGuildMembers() or 0) do
+    local name, _, _, level, _, zone, _, _, online, _, class = GetGuildRosterInfo(i)
+    if name and online then out[#out + 1] = { n = short(name), l = tonumber(level) or 0, c = class or "", z = zone or "" } end
+  end
+  table.sort(out, function(a, b)
+    if (a.n == me) ~= (b.n == me) then return b.n == me end      -- you at the bottom
+    if a.l ~= b.l then return a.l > b.l end                      -- highest level first
+    return a.n < b.n
+  end)
+  return out
+end
+local function sendList()
+  local list, parts = onlineList(), {}
+  for _, m in ipairs(list) do parts[#parts + 1] = m.n .. "|" .. m.l .. "|" .. m.c .. "|" .. clean(m.z) end
+  local sig = table.concat(parts, ";")
+  if sig == lastSig then return end
+  lastSig = sig; listNo = (listNo % 9999) + 1; queue = {}
+  if #list == 0 then queue[1] = TAG .. listNo .. " 0/0" end
+  for i, p in ipairs(parts) do queue[#queue + 1] = TAG .. listNo .. " " .. i .. "/" .. #parts .. " " .. p end
+end
+local g = CreateFrame("Frame")
+g:RegisterEvent("PLAYER_ENTERING_WORLD"); g:RegisterEvent("GUILD_ROSTER_UPDATE"); g:RegisterEvent("PLAYER_GUILD_UPDATE")
+g:SetScript("OnEvent", function(_, e) if e == "PLAYER_ENTERING_WORLD" then lastSig = nil end; pcall(sendList) end)
+local asked = 0
+g:SetScript("OnUpdate", function()
+  local now = GetTime()
+  if now - asked > 30 then asked = now; if C_GuildInfo and C_GuildInfo.GuildRoster then pcall(C_GuildInfo.GuildRoster) elseif GuildRoster then pcall(GuildRoster) end end
+  if #queue > 0 and now - trickleAt >= 0.5 then trickleAt = now; push(stamp() .. table.remove(queue, 1)) end
+end)
