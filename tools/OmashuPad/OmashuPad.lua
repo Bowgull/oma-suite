@@ -435,6 +435,65 @@ local function memory()
 end
 
 
+-- one-off probe of RestedXP's window (its own frames only)
+local function rxpProbe()
+  local f = _G.RXPFrame; if not f then OmashuPadDB.rxpProbe = 'no frame'; return end
+  local out, H = {}, UIParent:GetHeight()
+  local function px(top, s) return math.floor(1080 - top * s * 1080 / 768 + .5) end
+  local function row(name, fr)
+    local ok, l, b, tp = pcall(function() return fr:GetLeft(), fr:GetBottom(), fr:GetTop() end)
+    if ok and l and fr:IsVisible() then local s = fr:GetEffectiveScale()
+      out[#out + 1] = ('%s top %dpx bottom %dpx left %d scale %.2f'):format(name, px(tp, s), px(b, s), math.floor(l * s * 1080 / 768), fr:GetScale()) end
+  end
+  row('RXPFrame', f)
+  local np, rel, rp, x, y = f:GetPoint(1); out[#out + 1] = ('point %s %s %s %.1f %.1f'):format(tostring(np), tostring(rel and rel.GetName and rel:GetName()), tostring(rp), x or 0, y or 0)
+  local function walk(fr, depth, path)
+    if depth > 3 then return end
+    for i, c in ipairs({ fr:GetChildren() }) do
+      local n = (c.GetName and c:GetName()) or (path .. '.' .. i); row(n, c); walk(c, depth + 1, n)
+    end
+  end
+  walk(f, 1, 'RXPFrame')
+  OmashuPadDB.rxpProbe = out
+end
+-- RestedXP auto-fit (Joshua, 2026-11-09): its bottom bar is pinned and the steps stack upward, so a long step group
+-- can climb into the shard gems. Twice a second: if the topmost step is above LIMIT px from the screen top, shrink the
+-- whole window just enough (keeping the bottom bar where it is); grow back when there is room again. Never below 85%.
+local LIMIT, ROOM, MINF = 300, 60, .85
+local fit = { base = nil, last = 0 }
+local function pxTop(fr) local tp = fr:GetTop(); if not tp then return nil end; return 1080 - tp * fr:GetEffectiveScale() * 1080 / 768 end
+local function rxpTopPx(f)
+  local best = pxTop(f)
+  for _, c in ipairs({ f:GetChildren() }) do
+    if c:IsVisible() then local p = pxTop(c); if p and (not best or p < best) then best = p end
+      for _, g in ipairs({ c:GetChildren() }) do if g:IsVisible() then local q = pxTop(g); if q and q < best then best = q end end end end
+  end
+  return best
+end
+local function rxpFit()
+  local f = _G.RXPFrame; if not f or not f:IsVisible() then return end
+  local s = f:GetScale(); fit.base = fit.base or s
+  if s > fit.base * 1.001 or s < fit.base * MINF * .999 then fit.base = s end            -- RestedXP (or Joshua) changed its size: follow it
+  local top = rxpTopPx(f); local bottom = f:GetBottom() and (1080 - f:GetBottom() * f:GetEffectiveScale() * 1080 / 768)
+  if not top or not bottom or bottom - top < 10 then return end
+  local want = s
+  if top < LIMIT then want = s * (bottom - LIMIT) / (bottom - top)
+  elseif top > LIMIT + ROOM and s < fit.base then want = math.min(fit.base, s * (bottom - LIMIT - ROOM / 2) / (bottom - top)) end
+  want = math.max(fit.base * MINF, math.min(fit.base, want))
+  if math.abs(want - s) < .01 then return end
+  -- keep the bottom-left corner where it is on screen while the scale changes
+  local u = UIParent:GetEffectiveScale(); local e = f:GetEffectiveScale()
+  local l, b = f:GetLeft() * e / u, f:GetBottom() * e / u
+  f:SetScale(want); f:ClearAllPoints(); f:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', l / want, b / want)
+  OmashuPadDB.rxpFit = ('%s top %dpx -> scale %.2f (base %.2f)'):format(date('%H:%M:%S'), top, want, fit.base)
+end
+local fitTicker = CreateFrame('Frame'); local acc = 0
+fitTicker:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc < .5 then return end; acc = 0; pcall(rxpFit) end)
+SLASH_OMASHURXP1 = '/omrxp'
+SlashCmdList.OMASHURXP = function(m)
+  local n = tonumber((m or ''):match('limit%s+(%d+)')); if n then LIMIT = n; say('RestedXP fit line ' .. n .. ' px'); return end
+  rxpProbe()
+end
 local busy
 local function later() if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply() end) end
 
