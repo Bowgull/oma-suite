@@ -26,13 +26,22 @@ local function markAll()
   if type(pool) == 'table' then for _, sf in ipairs(pool) do mark(sf); mark(sf.number, 'all') end end
 end
 
-local function show()
+-- Only while you use it (Joshua 2026-11-10: with the box always on WoW's window list, backing out of any menu, and
+-- Start's wheel, landed on the guide box, because WoW then counts the UI as focused). Now: press View with nothing
+-- else open and WoW says "no frame to focus"; right after that we put the box on the list AND focus it. Leaving it
+-- (B, or View again) takes it off the list. Any other window opening takes it off too. Nothing stays registered.
+local function othersOpen()
+  local m = mgr(); if not (m and m.shownFrames) then return false end
+  for _, x in ipairs(m.shownFrames) do if x ~= _G.RXPFrame then return true end end
+  return false
+end
+local function show(focus)
   local m, f = mgr(), _G.RXPFrame
-  if not (ready() and f and f:IsShown()) then return end
+  if not (ready() and f and f:IsShown()) or othersOpen() then return end
   if InCombatLockdown() then pending = 'show'; return end
   pending = nil; markAll()
   if reg then m:FrameHidden(f) end
-  m:FrameShown(f, false, false)   -- not a popup; do not focus it now (View does that)
+  m:FrameShown(f, false, focus and true or false)
   reg = true
 end
 local function hide()
@@ -45,22 +54,28 @@ end
 local ev = CreateFrame('Frame')
 ev:RegisterEvent('PLAYER_ENTERING_WORLD'); ev:RegisterEvent('PLAYER_REGEN_ENABLED')
 ev:SetScript('OnEvent', function(_, e)
-  if e == 'PLAYER_REGEN_ENABLED' then if pending == 'show' then show() elseif pending == 'hide' then hide() end; return end
-  local f = _G.RXPFrame
-  if f and not f.omashuHooked then
+  if e == 'PLAYER_REGEN_ENABLED' then if pending == 'show' then show(true) elseif pending == 'hide' then hide() end; return end
+  local f, m = _G.RXPFrame, mgr()
+  if f and m and not f.omashuHooked then
     f.omashuHooked = true
-    f:HookScript('OnShow', function() C_Timer.After(0.2, show) end)
     f:HookScript('OnHide', hide)
     -- Blizzard's "close everything" path calls HideUIPanel on every registered window: the guide box must come back
     hooksecurefunc('HideUIPanel', function(frame) if frame == _G.RXPFrame and reg then C_Timer.After(0, function() _G.RXPFrame:Show() end) end end)
+    -- View (ToggleUIFocus -> SetUIFocusState): with nothing open WoW refuses; then the box goes on and gets focus
+    hooksecurefunc(m, 'SetUIFocusState', function(self, want)
+      if want then
+        if not reg and not self.isUIFocused and #self.shownFrames == 0 then C_Timer.After(0, function() show(true) end) end
+      elseif reg then C_Timer.After(0, hide) end
+    end)
+    -- another window opened while the box was on the list: off the list, so backing out never lands on it
+    hooksecurefunc(m, 'FrameShown', function(_, frame) if frame ~= _G.RXPFrame and reg then C_Timer.After(0, hide) end end)
+    C_Timer.NewTicker(2, markAll)   -- step frames are created as the guide moves on
   end
-  C_Timer.After(1, show)
-  C_Timer.NewTicker(2, markAll)   -- step frames are created as the guide moves on
 end)
 
 SLASH_OMASHUGUIDE1 = '/omguide'
 SlashCmdList.OMASHUGUIDE = function(msg)
-  if msg == 'off' then hide(); say('off'); return elseif msg == 'on' then show(); say('on'); return end
+  if msg == 'off' then hide(); say('off'); return elseif msg == 'on' then show(true); say('on'); return end
   local m, f = mgr(), _G.RXPFrame
   local inList = m and m.shownFrames and f and tIndexOf(m.shownFrames, f) or nil
   local active = m and m.GetActiveFrame and m:GetActiveFrame(); active = active and active.GetName and active:GetName() or tostring(active)
