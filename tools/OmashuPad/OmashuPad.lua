@@ -12,7 +12,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local V = 7                                    -- layout version: bump when LAYOUT changes
+local V = 8                                    -- layout version: bump when LAYOUT changes
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
 local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
@@ -57,19 +57,22 @@ local LAYOUT = {
   { 1, 'LT', R, 'spell', 'Death Coil' },
   { 1, 'LT', L, 'spell', 'Howl of Terror' },
   { 1, 'LT', D, 'spell', 'Shadow Ward' },
-  -- LT + RT: out of the fight
-  { 1, 'LTRT', U, 'spell', 'Summon Imp' },
-  { 1, 'LTRT', R, 'spell', 'Summon Voidwalker' },
-  { 1, 'LTRT', D, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' } },
-  { 1, 'LTRT', L, 'spell', 'Summon Felhunter' },
+  -- LT + RT: out of the fight. v8 (Joshua 2026-11-10, "Is there a way to get them on page one?" / "Sounds good"):
+  -- Hearthstone and the professions here; ONE demon button that follows your newest demon; every demon has its own
+  -- button on set 2 for when you want a different one (rule 5 skips the set-2 copy of the one this button shows).
+  { 1, 'LTRT', U, 'item', 6948 },                                          -- Hearthstone
+  { 1, 'LTRT', R, 'spell', 'Find Minerals' },
+  { 1, 'LTRT', L, 'spell', 'Tailoring' },
+  { 1, 'LTRT', D, 'spell', { 'Summon Felhunter', 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus', 'Summon Voidwalker', 'Summon Imp' } },
   { 1, 'LTRT', X, 'food', FOODS },
   { 1, 'LTRT', Y, 'drink', WATERS },
   { 1, 'LTRT', B, 'spell', { 'Demon Armor', 'Demon Skin' } },
   { 1, 'LTRT', A, 'spell', 'Create Healthstone' },
   -- SET 2 (LB+RB, D-pad right): travel and utility. Fills in as you level.
-  { 2, 'LT', U, 'item', 6948 },                                          -- Hearthstone (moved from set 1 in v6)
-  { 2, 'LTRT', X, 'spell', 'Find Minerals' },
-  { 2, 'LTRT', Y, 'spell', 'Tailoring' },
+  { 2, 'LTRT', U, 'spell', 'Summon Imp' },                               -- every demon, one each (v8)
+  { 2, 'LTRT', R, 'spell', 'Summon Voidwalker' },
+  { 2, 'LTRT', D, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' } },
+  { 2, 'LTRT', L, 'spell', 'Summon Felhunter' },
   { 2, 'none', U, 'spell', { 'Summon Dreadsteed', 'Summon Felsteed' } }, -- mount (40)
   { 2, 'none', R, 'spell', 'Create Soulstone' },                         -- 18
   { 2, 'none', L, 'spell', 'Ritual of Summoning' },                      -- 20
@@ -87,11 +90,11 @@ local LAYOUT = {
   { 2, 'LT', Y, 'spell', 'Hellfire' },
   { 2, 'LT', B, 'spell', 'Searing Pain' },
   { 2, 'LT', A, 'spell', 'Soul Fire' },
-  { 2, 'LTRT', U, 'spell', 'Create Firestone' },
-  { 2, 'LTRT', R, 'spell', 'Create Spellstone' },
-  { 2, 'LTRT', L, 'spell', 'Inferno' },
-  { 2, 'LTRT', D, 'spell', 'Ritual of Doom' },
-  -- SET 3 stays free for talents and anything later.
+  { 2, 'LTRT', X, 'spell', 'Create Firestone' },                        -- 28
+  { 2, 'LTRT', Y, 'spell', 'Create Spellstone' },                        -- 36
+  { 2, 'LT', U, 'spell', 'Inferno' },                                    -- 50
+  { 3, 'LTRT', U, 'spell', 'Ritual of Doom' },                           -- 60
+  -- SET 3 otherwise free for talents and anything later.
 }
 
 OmashuPadDB = OmashuPadDB or {}
@@ -337,7 +340,7 @@ local function simulate()
     local demons = {}
     for _, d in ipairs(DEMONS) do if known[d] then local n = 0; for s = PAD_FIRST, PAD_LAST do if bars[s] == 'spell:' .. d then n = n + 1 end end
       -- exactly once, unless Joshua took that demon's own button for something else (then 0 is right)
-      local own = ({ ['Summon Imp'] = slotOf(1, 'LTRT', U), ['Summon Voidwalker'] = slotOf(1, 'LTRT', R), ['Summon Sayaad'] = slotOf(1, 'LTRT', D), ['Summon Felhunter'] = slotOf(1, 'LTRT', L) })[d]
+      local own = ({ ['Summon Imp'] = slotOf(2, 'LTRT', U), ['Summon Voidwalker'] = slotOf(2, 'LTRT', R), ['Summon Sayaad'] = slotOf(2, 'LTRT', D), ['Summon Felhunter'] = slotOf(2, 'LTRT', L) })[d]
       local excused = n == 0 and own and st.his[own]
       demons[#demons + 1] = d:gsub('Summon ', '') .. '=' .. n .. (excused and ' (his button)' or ''); if n > 1 or (n == 0 and not excused) then ok = false end end end
     local hisOk = not st.his[slotOf(1, 'LTRT', U)] or bars[slotOf(1, 'LTRT', U)] == 'spell:Joshua own choice'
