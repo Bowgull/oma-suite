@@ -12,7 +12,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local V = 5                                    -- layout version: bump when LAYOUT changes
+local V = 6                                    -- layout version: bump when LAYOUT changes
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
 local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
@@ -29,55 +29,57 @@ local FOODS  = { 8948, 4608, 4607, 4606, 4605, 4604 }               -- vendor mu
 
 -- { set, bar, button, kind, name or list (best first) }    kind: spell | macro | item
 local LAYOUT = {
-  -- SET 1 (v5, Joshua 2026-11-09): the face buttons (with a trigger) hold the most-used actions; the bare D-pad is the demon.
-  -- No trigger, D-pad: the demon
-  { 1, 'none', U, 'macro', 'PetFight' },                                 -- defensive + attack my target
-  { 1, 'none', D, 'macro', 'PetHome' },                                  -- passive + follow
-  { 1, 'none', L, 'spell', 'Health Funnel' },                            -- your health -> the demon
-  { 1, 'none', R, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus', 'Summon Voidwalker', 'Summon Imp' } }, -- main demon by level
+  -- SET 1 (v6, Joshua 2026-11-09: "the buttons I want to press most are the face buttons"). Eight most-pressed actions on
+  -- trigger + face buttons (bare face buttons are Blizzard's: jump, back, interact, inspect). A whole pull = hold LT, X Y B A.
   -- LT + face: the pull
-  { 1, 'LT', X, 'spell', 'Bane of Agony' },
+  { 1, 'LT', X, 'macro', 'PetFight' },                                   -- demon: defensive + attack my target
   { 1, 'LT', Y, 'spell', 'Corruption' },
-  { 1, 'LT', B, 'spell', 'Immolate' },
+  { 1, 'LT', B, 'spell', 'Bane of Agony' },
   { 1, 'LT', A, 'spell', 'Shoot' },                                      -- wand
-  -- RT + face: keeping going
+  -- RT + face: keeping it going
   { 1, 'RT', X, 'spell', 'Life Tap' },
   { 1, 'RT', Y, 'spell', 'Drain Life' },
-  { 1, 'RT', B, 'spell', 'Fear' },
-  { 1, 'RT', A, 'item', STONES },
-  -- LT + D-pad, RT + D-pad: rare
-  { 1, 'LT', U, 'spell', 'Shadow Bolt' },
-  { 1, 'LT', R, 'spell', { 'Siphon Life', 'Drain Soul' } },              -- Drain Soul until 41, then Siphon Life (Drain Soul -> set 2)
+  { 1, 'RT', B, 'spell', 'Immolate' },
+  { 1, 'RT', A, 'spell', 'Fear' },
+  -- bare D-pad: support
+  { 1, 'none', U, 'macro', 'PetHome' },                                  -- demon: passive + follow
+  { 1, 'none', R, 'item', STONES },                                      -- Healthstone
+  { 1, 'none', L, 'spell', 'Health Funnel' },
+  { 1, 'none', D, 'spell', 'Shadow Bolt' },
+  -- LT + D-pad
+  { 1, 'LT', U, 'spell', { 'Siphon Life', 'Drain Soul' } },              -- Drain Soul until 41, then Siphon Life (Drain Soul -> set 2)
   { 1, 'LT', L, 'spell', { 'Curse of the Elements', 'Curse of Weakness' } },
   { 1, 'LT', D, 'spell', 'Will of the Forsaken' },
-  { 1, 'RT', U, 'spell', 'Summon Imp' },
-  { 1, 'RT', R, 'spell', 'Summon Voidwalker' },
-  { 1, 'RT', D, 'spell', 'Summon Felhunter' },
-  { 1, 'RT', L, 'macro', 'Meters' },
-  -- LT+RT: rare, out of fights
-  { 1, 'LTRT', U, 'item', 6948 },                                        -- Hearthstone
-  { 1, 'LTRT', R, 'spell', 'Find Minerals' },
-  { 1, 'LTRT', L, 'spell', 'Tailoring' },
-  { 1, 'LTRT', D, 'drink', WATERS },                                     -- smart: best drink in the bags (fallback list)
-  { 1, 'LTRT', X, 'food', FOODS },                                       -- smart: best food in the bags (fallback list)
-  { 1, 'LTRT', Y, 'spell', { 'Demon Armor', 'Demon Skin' } },
-  { 1, 'LTRT', B, 'spell', 'Cannibalize' },
+  { 1, 'LT', R, 'macro', 'Meters' },
+  -- RT + D-pad: Cannibalize, and room for the emergency spells you learn later
+  { 1, 'RT', U, 'spell', 'Cannibalize' },
+  { 1, 'RT', R, 'spell', 'Death Coil' },
+  { 1, 'RT', L, 'spell', 'Howl of Terror' },
+  { 1, 'RT', D, 'spell', 'Shadow Ward' },
+  -- LT + RT: out of the fight
+  { 1, 'LTRT', U, 'spell', 'Summon Imp' },
+  { 1, 'LTRT', R, 'spell', 'Summon Voidwalker' },
+  { 1, 'LTRT', D, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' } },
+  { 1, 'LTRT', L, 'spell', 'Summon Felhunter' },
+  { 1, 'LTRT', X, 'food', FOODS },
+  { 1, 'LTRT', Y, 'drink', WATERS },
+  { 1, 'LTRT', B, 'spell', { 'Demon Armor', 'Demon Skin' } },
   { 1, 'LTRT', A, 'spell', 'Create Healthstone' },
   -- SET 2 (LB+RB, D-pad right): travel and utility. Fills in as you level.
+  { 2, 'RT', U, 'item', 6948 },                                          -- Hearthstone (moved from set 1 in v6)
+  { 2, 'LTRT', X, 'spell', 'Find Minerals' },
+  { 2, 'LTRT', Y, 'spell', 'Tailoring' },
   { 2, 'none', U, 'spell', { 'Summon Dreadsteed', 'Summon Felsteed' } }, -- mount (40)
   { 2, 'none', R, 'spell', 'Create Soulstone' },                         -- 18
   { 2, 'none', L, 'spell', 'Ritual of Summoning' },                      -- 20
   { 2, 'none', D, 'spell', 'Unending Breath' },
   { 2, 'LT', U, 'spell', 'Drain Soul' },                                 -- soul shards (shares LT+down on set 1 until 41)
-  { 2, 'LT', R, 'spell', 'Death Coil' },
-  { 2, 'LT', L, 'spell', 'Howl of Terror' },
   { 2, 'LT', D, 'spell', 'Banish' },
-  { 2, 'LT', X, 'spell', 'Shadow Ward' },
   { 2, 'LT', Y, 'spell', 'Curse of Tongues' },
   { 2, 'LT', B, 'spell', 'Curse of Recklessness' },
   { 2, 'LT', A, 'spell', 'Curse of Exhaustion' },
-  { 2, 'RT', U, 'spell', 'Eye of Kilrogg' },
   { 2, 'RT', R, 'spell', 'Enslave Demon' },
+  { 2, 'LT', R, 'spell', 'Eye of Kilrogg' },
   { 2, 'RT', L, 'spell', 'Detect Invisibility' },
   { 2, 'RT', D, 'spell', 'Sense Demons' },
   { 2, 'RT', X, 'spell', 'Rain of Fire' },
@@ -320,11 +322,12 @@ local function simulate()
   for s, v in pairs(OmashuPadDB.mine or {}) do st.mine[s] = v end
   for s, v in pairs(OmashuPadDB.his or {}) do st.his[s] = v end
   local board = { get = function(s) return bars[s] end, put = function(s, sig) bars[s] = sig; return true end, clear = function(s) bars[s] = nil end }
+  if (OmashuPadDB.layoutV or 0) ~= V then for s in pairs(st.mine) do bars[s] = nil; st.mine[s] = nil end end
   local known, report, ok = {}, {}, true
   local DEMONS = { 'Summon Imp', 'Summon Voidwalker', 'Summon Sayaad', 'Summon Felhunter' }
   for _, step in ipairs(SIM_STEPS) do
     for _, n in ipairs(step[2]) do known[n] = true end
-    if step[3] == 'his' then local s = slotOf(1, 'RT', U); bars[s] = 'spell:Joshua own choice'; st.mine[s] = nil; st.his[s] = bars[s] end
+    if step[3] == 'his' then local s = slotOf(1, 'LTRT', U); bars[s] = 'spell:Joshua own choice'; st.mine[s] = nil; st.his[s] = bars[s] end
     fakeKnown = known
     local okRun, err = pcall(runRules, board, st)
     fakeKnown = nil
@@ -333,14 +336,15 @@ local function simulate()
     local demons = {}
     for _, d in ipairs(DEMONS) do if known[d] then local n = 0; for s = PAD_FIRST, PAD_LAST do if bars[s] == 'spell:' .. d then n = n + 1 end end
       -- exactly once, unless Joshua took that demon's own button for something else (then 0 is right)
-      local own = ({ ['Summon Imp'] = slotOf(1, 'RT', U), ['Summon Voidwalker'] = slotOf(1, 'RT', R), ['Summon Felhunter'] = slotOf(1, 'RT', D) })[d]
+      local own = ({ ['Summon Imp'] = slotOf(1, 'LTRT', U), ['Summon Voidwalker'] = slotOf(1, 'LTRT', R), ['Summon Sayaad'] = slotOf(1, 'LTRT', D), ['Summon Felhunter'] = slotOf(1, 'LTRT', L) })[d]
       local excused = n == 0 and own and st.his[own]
       demons[#demons + 1] = d:gsub('Summon ', '') .. '=' .. n .. (excused and ' (his button)' or ''); if n > 1 or (n == 0 and not excused) then ok = false end end end
-    local hisOk = not st.his[slotOf(1, 'RT', U)] or bars[slotOf(1, 'RT', U)] == 'spell:Joshua own choice'
+    local hisOk = not st.his[slotOf(1, 'LTRT', U)] or bars[slotOf(1, 'LTRT', U)] == 'spell:Joshua own choice'
     if #dups > 0 or not hisOk then ok = false end
-    report[#report + 1] = ('lvl %d: main=%s | RT up=%s right=%s down=%s | LT right=%s | set2 LT up=%s | demons %s | dups %s | his %s'):format(step[1],
-      tostring(bars[slotOf(1, 'none', R)]), tostring(bars[slotOf(1, 'RT', U)]), tostring(bars[slotOf(1, 'RT', R)]), tostring(bars[slotOf(1, 'RT', D)]),
-      tostring(bars[slotOf(1, 'LT', R)]), tostring(bars[slotOf(2, 'LT', U)]), table.concat(demons, ' '), #dups == 0 and 'none' or table.concat(dups, '; '),
+    report[#report + 1] = ('lvl %d: LT face %s/%s/%s/%s | RT face %s/%s/%s/%s | LT up=%s | set2 LT up=%s | demons %s | dups %s | his %s'):format(step[1],
+      tostring(bars[slotOf(1, 'LT', X)]), tostring(bars[slotOf(1, 'LT', Y)]), tostring(bars[slotOf(1, 'LT', B)]), tostring(bars[slotOf(1, 'LT', A)]),
+      tostring(bars[slotOf(1, 'RT', X)]), tostring(bars[slotOf(1, 'RT', Y)]), tostring(bars[slotOf(1, 'RT', B)]), tostring(bars[slotOf(1, 'RT', A)]),
+      tostring(bars[slotOf(1, 'LT', U)]), tostring(bars[slotOf(2, 'LT', U)]), table.concat(demons, ' '), #dups == 0 and 'none' or table.concat(dups, '; '),
       hisOk and 'kept' or 'TOUCHED')
   end
   OmashuPadDB.sim = { at = date('%Y-%m-%d %H:%M:%S'), pass = ok, steps = report }
