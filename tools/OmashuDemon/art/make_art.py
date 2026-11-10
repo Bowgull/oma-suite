@@ -22,7 +22,9 @@ def bloom(d, a, yy):
     if t < .35: k = .9 + (.38 - .9) * t / .35; col = mix((166, 92, 255), (140, 70, 230), t / .35)
     else: k = .38 * (1 - (t - .35) / .65) ** 1.4; col = mix((140, 70, 230), (120, 50, 200), (t - .35) / .65)
     soft = min(1, (d - r0) / .04)                       # 1 px soft inner edge so it never shows a seam
-    return (*col, round(255 * k * soft))
+    # x1.8: measured in game 2026-11-10 the bloom read about half as strong as the approved sheet (WoW's
+    # texture blend on the dark frame art eats it), so it is lifted to match the sheet, capped at full.
+    return (*col, min(255, round(255 * k * soft * 1.8)))
 def rim(d, a, yy):
     rr, hw = 39 / 36, 1.25 / 36
     k = max(0.0, 1 - abs(d - rr) / hw)

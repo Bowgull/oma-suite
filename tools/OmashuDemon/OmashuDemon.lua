@@ -47,7 +47,10 @@ local function update()
   local shown = UnitExists('pet') and portrait and PetFrame and PetFrame:IsVisible()
   if not shown then root:Hide(); breathe:Stop(); sweep:Stop(); return end
   if not root:IsShown() then
-    local r = (portrait:GetWidth() or 0) / 2
+    -- r = the gold ring's centre radius, which is what the art is drawn around (mockup: band 34-38 px, r 36).
+    -- PetPortrait is only the picture inside the ring: measured in game 2026-11-10, its half-width lands at
+    -- 23.7 px on the TV while the gold band runs 34-38 px, so r = half-width x 36/23.7 = x1.52.
+    local r = (portrait:GetWidth() or 0) / 2 * 1.52
     if r <= 0 then return end
     root:ClearAllPoints(); root:SetPoint('CENTER', portrait, 'CENTER'); root:SetSize(4.4 * r, 4.4 * r)
     root:Show(); breathe:Play(); sweep:Play()
