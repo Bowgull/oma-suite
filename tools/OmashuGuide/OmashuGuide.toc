@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Omashu Guide
+## Notes: Lets the controller reach the RestedXP guide box: View focuses it, D-pad moves, A ticks a step.
+## Author: Omashu
+## Version: 1
+## Dependencies: RXPGuides
+
+OmashuGuide.lua
