@@ -157,3 +157,59 @@ g:SetScript("OnUpdate", function()
   if now - asked > 30 then asked = now; if C_GuildInfo and C_GuildInfo.GuildRoster then pcall(C_GuildInfo.GuildRoster) elseif GuildRoster then pcall(GuildRoster) end end
   if #queue > 0 and now - trickleAt >= 0.5 then trickleAt = now; push(stamp() .. table.remove(queue, 1)) end
 end)
+
+-- ---------- TEST 2026-11-10: can the phone drive the Group Finder? (sheet 13) ----------
+-- A: a typed slash command calls C_LFGList.Search directly (expected: blocked, needs a real key press).
+-- B: a real key press (CTRL-SHIFT-F9 / F10, sent like Couch Mode sends keys) on a secure button that /clicks
+--    Blizzard's own Group Finder buttons. Results and any "blocked" events go to OmashuPadDB.lfgTest (/reload to save).
+local T = CreateFrame("Frame")
+local function tlog(s) OmashuPadDB = OmashuPadDB or {}; OmashuPadDB.lfgTest = OmashuPadDB.lfgTest or {}; local l = OmashuPadDB.lfgTest; l[#l + 1] = date("%H:%M:%S ") .. tostring(s); if #l > 80 then table.remove(l, 1) end; print("|cffe8c860Omashu LFG test:|r " .. tostring(s)) end
+local function sec(v) return (issecretvalue and issecretvalue(v)) and "SECRET" or v end
+for _, e in ipairs({ "LFG_LIST_SEARCH_RESULTS_RECEIVED", "LFG_LIST_SEARCH_FAILED", "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do pcall(T.RegisterEvent, T, e) end
+T:SetScript("OnEvent", function(_, e, a, b) tlog(e .. " " .. tostring(a) .. " " .. tostring(b)) end)
+local function mkBtn(name, macro)
+  local btn = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
+  btn:SetAttribute("type", "macro"); btn:SetAttribute("macrotext", macro); btn:RegisterForClicks("AnyUp", "AnyDown")
+  btn:HookScript("OnClick", function() tlog("pressed " .. name) end)
+  return btn
+end
+mkBtn("OmashuLFGOpen", "/click LFDMicroButton")
+mkBtn("OmashuLFGRefresh", "/click LFGBrowseFrameRefreshButton")
+local keys = CreateFrame("Frame"); keys:RegisterEvent("PLAYER_ENTERING_WORLD")
+keys:SetScript("OnEvent", function()
+  if InCombatLockdown() then return end
+  SetOverrideBindingClick(keys, true, "CTRL-SHIFT-F9", "OmashuLFGOpen")
+  SetOverrideBindingClick(keys, true, "CTRL-SHIFT-F10", "OmashuLFGRefresh")
+end)
+local function readResults()
+  if not C_LFGList.GetSearchResults then tlog("no GetSearchResults"); return end
+  local n, list = C_LFGList.GetSearchResults(); tlog("results: " .. tostring(n))
+  for k = 1, math.min(4, n or 0) do
+    local id = list[k]; local ok, i = pcall(C_LFGList.GetSearchResultInfo, id)
+    if ok and i then
+      local acts = i.activityIDs and table.concat(i.activityIDs, ",") or tostring(i.activityID)
+      local an = ""; if C_LFGList.GetActivityInfoTable and i.activityIDs and i.activityIDs[1] then local a = C_LFGList.GetActivityInfoTable(i.activityIDs[1]); an = a and a.fullName or "" end
+      local cm = i.comment; local cmInfo = (issecretvalue and issecretvalue(cm)) and "SECRET" or (type(cm) .. " len " .. tostring(cm and #cm) .. " text '" .. tostring(cm):sub(1, 40) .. "'")
+      tlog(("#%d act %s %s leader %s members %s age %s comment %s"):format(k, acts, an, tostring(sec(i.leaderName)), tostring(sec(i.numMembers)), tostring(sec(i.age)), cmInfo))
+      for m = 1, math.min(5, i.numMembers or 0) do
+        local ok2, p = pcall(C_LFGList.GetSearchResultPlayerInfo, id, m)
+        if ok2 and type(p) == "table" then tlog(("   %s lvl %s %s role %s"):format(tostring(sec(p.name)), tostring(sec(p.level)), tostring(sec(p.classFilename)), tostring(sec(p.assignedRole))))
+        else local ok3, r, c, cl, sp, lv = pcall(C_LFGList.GetSearchResultMemberInfo, id, m); tlog("   member(old) " .. tostring(ok3) .. " " .. tostring(r) .. " " .. tostring(c) .. " " .. tostring(lv)) end
+      end
+    else tlog("#" .. k .. " info failed " .. tostring(i)) end
+  end
+end
+SLASH_OMASHULFG1 = "/omlfg"
+SlashCmdList.OMASHULFG = function(m)
+  if m == "cats" then
+    local ok, cats = pcall(C_LFGList.GetAvailableCategories); tlog("cats " .. tostring(ok) .. " " .. (type(cats) == "table" and table.concat(cats, ",") or tostring(cats)))
+  elseif m == "search" then
+    local ok, cats = pcall(C_LFGList.GetAvailableCategories); local c = ok and type(cats) == "table" and cats[1] or 2
+    local ok2, err = pcall(C_LFGList.Search, c); tlog("typed search cat " .. tostring(c) .. ": " .. tostring(ok2) .. " " .. tostring(err))
+  elseif m == "fps" then
+    local t = {}; for _, c in ipairs({ "useMaxFPS", "maxFPS", "vsync", "graphicsQuality", "graphicsViewDistance", "graphicsShadowQuality", "graphicsSSAO", "renderScale", "gxWindow", "gxMaximize", "GxApi", "maxFPSBk", "useMaxFPSBk" }) do t[#t + 1] = c .. "=" .. tostring(C_CVar.GetCVar(c)) end
+    tlog(("fps %.1f | %s"):format(GetFramerate(), table.concat(t, " ")))
+  elseif m == "read" then readResults()
+  elseif m == "frame" then tlog("LFGBrowseFrame " .. tostring(_G.LFGBrowseFrame) .. " shown " .. tostring(_G.LFGBrowseFrame and _G.LFGBrowseFrame:IsShown()) .. " refresh " .. tostring(_G.LFGBrowseFrameRefreshButton) .. " micro " .. tostring(_G.LFDMicroButton))
+  else tlog("/omlfg cats|search|read|frame") end
+end
