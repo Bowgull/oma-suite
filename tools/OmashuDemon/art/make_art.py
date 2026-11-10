@@ -46,3 +46,26 @@ def sheen(d, a, yy):
 for name, f in (('bloom', bloom), ('rim', rim), ('sheen', sheen)):
     im = ring_img(f); im.save(name + '.tga'); im.save(name + '.png')
     print(name, im.getbbox())
+
+# ---- edge (sheet 17, approved 2026-11-10 "Yes the purple is perfect"): a soul-purple screen-edge band, same size as
+# Blizzard's red low-health edge. 16:9 texture stretched over the whole screen; band = 16% of the height on every side,
+# #a65cff at the edge -> #5a2aa0 at 30% in -> clear at the band's inner edge; the corners a little stronger (radial).
+def make_edge():
+    W, H = 1024, 576; d = round(H * .16)
+    c1, c2 = (166, 92, 255), (90, 42, 160)
+    im = Image.new('RGBA', (W, H)); px = im.load()
+    def band(t):                       # t: 0 at the edge .. 1 at the inner edge of the band
+        if t >= 1: return 0.0
+        return .95 - .4 * (t / .3) if t < .3 else .55 * (1 - (t - .3) / .7)
+    for y in range(H):
+        for x in range(W):
+            dx, dy = min(x, W - 1 - x), min(y, H - 1 - y)
+            t = min(dx, dy) / d
+            a = band(t)
+            cd = math.hypot(dx, dy) / (d * 1.15)          # the corner glow
+            if cd < 1: a = max(a, .95 * (1 - cd) if cd < .5 else .55 * (1 - cd) / .5 * 1.0)
+            tt = min(1.0, t if t < 1 else 1.0)
+            col = tuple(round(c1[i] + (c2[i] - c1[i]) * min(1, tt / .3)) for i in range(3))
+            px[x, y] = (*col, round(255 * min(1, a)))
+    im.save('edge.tga'); im.save('edge.png')
+make_edge()
