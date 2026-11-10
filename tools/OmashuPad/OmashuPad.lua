@@ -489,6 +489,9 @@ local function rxpFit()
 end
 local fitTicker = CreateFrame('Frame'); local acc = 0
 fitTicker:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc < .5 then return end; acc = 0; pcall(rxpFit) end)
+-- Controller bar fade: REMOVED 2026-11-09. Setting the alpha of GamepadMainActionBarFrame (a protected Blizzard frame)
+-- from add-on code tainted the gamepad UI: the game menu and chat Enter were then blocked ("Interface action failed
+-- because of an AddOn"). The code is in git history (commit before this note). Do not touch that frame.
 SLASH_OMASHURXP1 = '/omrxp'
 SlashCmdList.OMASHURXP = function(m)
   local n = tonumber((m or ''):match('limit%s+(%d+)')); if n then LIMIT = n; say('RestedXP fit line ' .. n .. ' px'); return end
