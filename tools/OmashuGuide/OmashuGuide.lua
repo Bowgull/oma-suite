@@ -79,5 +79,8 @@ SlashCmdList.OMASHUGUIDE = function(msg)
   local m, f = mgr(), _G.RXPFrame
   local inList = m and m.shownFrames and f and tIndexOf(m.shownFrames, f) or nil
   local active = m and m.GetActiveFrame and m:GetActiveFrame(); active = active and active.GetName and active:GetName() or tostring(active)
+  local names = {}
+  if m and m.shownFrames then for _, x in ipairs(m.shownFrames) do names[#names + 1] = (x.GetName and x:GetName()) or tostring(x) end end
+  say('known windows: ' .. (#names > 0 and table.concat(names, ', ') or 'none') .. ' | UI focused ' .. tostring(m and m.isUIFocused))
   say(('registered %s | in Blizzard list %s | windows known %s | active %s | gamepad UI %s'):format(tostring(reg), tostring(inList ~= nil), tostring(m and m.shownFrames and #m.shownFrames), tostring(active), tostring(ready() and true or false)))
 end
