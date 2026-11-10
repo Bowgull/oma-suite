@@ -1,0 +1,4 @@
+## Interface: 16001
+## Title: Omashu Art Test
+## Notes: Throwaway: draws "does it die" options on the real target frame with Blizzard's own art, for screenshots.
+OmashuArtTest.lua
