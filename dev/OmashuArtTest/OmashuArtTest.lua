@@ -49,10 +49,52 @@ local function drawSkull()
   lv:SetAlpha(0); hiddenLevel = lv
   say('skull uses ' .. tostring(used))
 end
+
+-- /omart grid: candidate Blizzard skull / crossbones art in a grid, labelled, for one screenshot. /omart off hides it.
+local CANDS = {
+  { 'f', 'Interface\\WorldStateFrame\\SkullBones' },
+  { 'f', 'Interface\\TargetingFrame\\UI-RaidTargetingIcon_8' },
+  { 'f', 'Interface\\TargetingFrame\\UI-TargetingFrame-Skull' },
+  { 'f', 'Interface\\WorldMap\\Skull_64' },
+  { 'f', 'Interface\\WorldMap\\Skull_64Red' },
+  { 'f', 'Interface\\WorldMap\\Skull_64Grey' },
+  { 'f', 'Interface\\Icons\\INV_Misc_Bone_HumanSkull_01' },
+  { 'f', 'Interface\\Icons\\INV_Misc_Bone_Skull_02' },
+  { 'f', 'Interface\\Icons\\INV_Misc_Bone_Skull_01' },
+  { 'f', 'Interface\\Icons\\Ability_Rogue_FeignDeath' },
+  { 'f', 'Interface\\Icons\\Achievement_BG_KillXEnemies_GeneralsRoom' },
+  { 'f', 'Interface\\Icons\\INV_Misc_Bone_01' },
+  { 'f', 'Interface\\Icons\\INV_Misc_Bone_02' },
+  { 'f', 'Interface\\Icons\\INV_Misc_Bone_ElfSkull_01' },
+  { 'a', 'UI-HUD-UnitFrame-Target-HighLevelTarget_Icon' },
+  { 'a', 'ui-hud-nameplates-levelindicator-skull' },
+  { 'a', 'DungeonSkull' },
+  { 'a', 'poi-graveyard-neutral' },
+  { 'a', 'Skull' },
+  { 'a', 'worldquest-icon-pvp-ffa' },
+}
+local grid
+local function showGrid()
+  if not grid then
+    grid = CreateFrame('Frame', nil, UIParent); grid:SetFrameStrata('DIALOG'); grid:SetSize(1000, 560); grid:SetPoint('CENTER')
+    local bg = grid:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(); bg:SetColorTexture(.05, .04, .06, .95)
+    for i, c in ipairs(CANDS) do
+      local col, row = (i - 1) % 5, math.floor((i - 1) / 5)
+      local t = grid:CreateTexture(nil, 'ARTWORK'); t:SetSize(96, 96); t:SetPoint('TOPLEFT', 40 + col * 190, -20 - row * 135)
+      local ok
+      if c[1] == 'a' then ok = atlasOK(c[2]); if ok then t:SetAtlas(c[2]) end else ok = t:SetTexture(c[2]) end
+      local fs = grid:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall'); fs:SetWidth(180); fs:SetPoint('TOP', t, 'BOTTOM', 0, -2)
+      fs:SetText(i .. ' ' .. c[2]:gsub('^.*\\', '') .. (ok == false and ' (missing)' or ''))
+    end
+  end
+  grid:Show()
+end
+
 SLASH_OMASHUART1 = '/omart'
 SlashCmdList.OMASHUART = function(m)
   if InCombatLockdown() then say('out of combat only'); return end
-  off()
+  off(); if grid then grid:Hide() end
+  if m == 'grid' then showGrid(); return end
   if m == 'probe' then
     for _, a in ipairs({ CUT_ATLAS[1], CUT_ATLAS[2], '!raidframe-absorb-edge', SKULL[1], SKULL[2], 'UI-HUD-UnitFrame-SmallCircle' }) do say(a .. ' = ' .. tostring(atlasOK(a))) end
     local b = findBar(); say('bar ' .. tostring(b and (b:GetName() or b:GetDebugName()) or 'none')); local l = findLevel(); say('level ' .. tostring(l and (l:GetName() or l:GetDebugName()) or 'none'))
