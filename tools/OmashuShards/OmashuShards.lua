@@ -106,18 +106,27 @@ countText = root:CreateFontString(nil, 'OVERLAY'); countText:SetFont(STANDARD_TE
 countText:SetPoint('LEFT', root, 'RIGHT', 10 * PX, -2 * PX); countText:SetTextColor(.94, .94, .94); countText:Hide()
 
 -- ---------- placing the row: 10 px under the pet frame, left edge on the pet portrait; never anchored to it ----------
+local testNoPet = false   -- /omshards nopet: show the no-pet spot for 15 s
 local function place()
-  if InCombatLockdown() then return end
+  -- our own plain frame: fine to move in combat too (a pet summoned mid-fight)
   local s = UIParent:GetEffectiveScale()
   -- Scale the row so 1 unit = 1 TV pixel, measured NOW (at file load the UI scale isn't applied yet: that put the row
   -- 25 px high on 2026-11-09). Physical px = units * effective scale * (screen height / 768).
   local _, ph = GetPhysicalScreenSize(); ph = (ph and ph > 0) and ph or 1080
   root:SetScale((768 / ph) / UIParent:GetEffectiveScale())
-  -- The gamepad UI draws its own pet frame (stock PetFrame stays hidden). Its bottom is at 225 px with the 150% Couch
-  -- layout, so the row's top goes 12 px under it, left edge on the pet portrait.
-  local x, y = 232, -237
-  root:ClearAllPoints(); root:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', x, y)
-  if db then db.placed = ('%.0f,%.0f'):format(x, y) end
+  -- 2026-11-10 (Joshua: follow the pet frame; no pet = slide up under you). Measured with /omshards probe: the row's
+  -- old spot (232,237 TV px) is the pet portrait's bottom-left (235,237) less 3 px. So: pinned to PetPortrait while
+  -- the pet is out (it moves when the pet frame moves); with no pet, up where the pet frame's top is (157 px), just
+  -- under your own bars, pinned to the frame that holds the pet frame. Only OUR frame is anchored; theirs untouched.
+  local pet, holder = _G.PetPortrait, _G.PlayerBottomManagedFrameContainer or _G.PlayerFrame
+  root:ClearAllPoints()
+  if pet and pet:IsVisible() and not testNoPet then
+    root:SetPoint('TOPLEFT', pet, 'BOTTOMLEFT', -3, 0); if db then db.placed = 'under pet' end
+  elseif holder and holder == _G.PlayerBottomManagedFrameContainer then
+    root:SetPoint('TOPLEFT', holder, 'TOPLEFT', 59, 0); if db then db.placed = 'under you' end
+  else
+    root:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 232, -157); if db then db.placed = 'fixed, under you' end
+  end
 end
 
 -- ---------- states ----------
@@ -186,7 +195,7 @@ end
 
 -- ---------- events ----------
 local ev = CreateFrame('Frame')
-for _, e in ipairs({ 'PLAYER_LOGIN', 'PLAYER_ENTERING_WORLD', 'BAG_UPDATE_DELAYED', 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'SPELLS_CHANGED', 'EDIT_MODE_LAYOUTS_UPDATED', 'UI_SCALE_CHANGED', 'DISPLAY_SIZE_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
+for _, e in ipairs({ 'PLAYER_LOGIN', 'PLAYER_ENTERING_WORLD', 'BAG_UPDATE_DELAYED', 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'SPELLS_CHANGED', 'EDIT_MODE_LAYOUTS_UPDATED', 'UI_SCALE_CHANGED', 'DISPLAY_SIZE_CHANGED', 'UNIT_PET', 'PET_UI_UPDATE' }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript('OnEvent', function(_, e)
   if e ~= 'PLAYER_LOGIN' and not db then return end
   if e == 'PLAYER_LOGIN' then
@@ -198,7 +207,7 @@ ev:SetScript('OnEvent', function(_, e)
   elseif e == 'PLAYER_REGEN_DISABLED' then inCombat = true; if last then refreshFull(last) end
   elseif e == 'PLAYER_REGEN_ENABLED' then inCombat = false; place(); if last then refreshFull(last) end
   elseif e == 'SPELLS_CHANGED' then checkDrainSoul(); if last then refreshZero(last) end
-  else place() end
+  else place(); C_Timer.After(0.3, place) end   -- pet in or out: the pet frame settles a moment later
 end)
 
 -- ---------- /omshards: test and options ----------
@@ -214,7 +223,25 @@ SlashCmdList.OMASHUSHARDS = function(msg)
     update('test ' .. arg); say('test: count ' .. tostring(db.fake == nil and 'real' or db.fake))
   elseif cmd == 'motion' then db.reduced = (arg == 'off'); say('motion ' .. (db.reduced and 'reduced' or 'full'))
   elseif cmd == 'sound' then db.sound = (arg ~= 'off'); say('chime ' .. (db.sound and 'on' or 'off'))
+  elseif cmd == 'nopet' then testNoPet = true; place(); say('no-pet spot for 15 s'); C_Timer.After(15, function() testNoPet = false; place() end)
   elseif cmd == 'place' then place(); say('placed at ' .. tostring(db.placed))
+  elseif cmd == 'probe' then   -- where the pet and player frames are, in TV pixels (top-left origin), for placing the row
+    local _, ph = GetPhysicalScreenSize(); ph = (ph and ph > 0) and ph or 1080
+    local out = {}
+    local function rect(name, f)
+      if not f or not f.GetRect then return end
+      local ok, l, b, w, h = pcall(f.GetRect, f); if not ok or not l then out[#out + 1] = name .. ' no rect'; return end
+      local k = f:GetEffectiveScale() * ph / 768
+      local parent = f.GetParent and f:GetParent(); local pn = parent and parent.GetName and parent:GetName() or tostring(parent)
+      out[#out + 1] = ('%s x=%.0f top=%.0f w=%.0f h=%.0f shown=%s parent=%s'):format(name, l * k, ph - (b + h) * k, w * k, h * k, tostring(f:IsVisible()), tostring(pn))
+    end
+    local p = _G.PetPortrait; local depth = 0
+    while p and depth < 6 do rect('pet' .. depth .. ':' .. tostring(p.GetName and p:GetName()), p); p = p.GetParent and p:GetParent(); depth = depth + 1 end
+    -- named frames only: walking every global set off WoW's "blocked action" warning on 2026-11-09
+    for _, name in ipairs({ 'PlayerFrame', 'PetFrame', 'PlayerPortrait', 'TargetFrame' }) do rect(name, _G[name]) end
+    local q = _G.PlayerPortrait; depth = 0
+    while q and depth < 4 do rect('player' .. depth .. ':' .. tostring(q.GetName and q:GetName()), q); q = q.GetParent and q:GetParent(); depth = depth + 1 end
+    db.probe = out; say('probe saved: ' .. #out .. ' frames (/reload to write)')
   elseif cmd == 'log' then for i = math.min(10, #(db.log or {})), 1, -1 do print(db.log[i]) end
   else say('/omshards test ... | motion on|off | sound on|off | place | log') end
 end

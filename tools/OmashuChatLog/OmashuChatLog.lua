@@ -111,7 +111,7 @@ end)
 -- The online guild list rides the same strip as chat lines, one member per line, trickled out (one line every half
 -- second) so a burst never pushes chat off the strip:   {omashu-guild} <list> <i>/<n> Name|level|CLASS|zone
 -- <list> numbers each full list; Aang swaps its list in only once it has all n lines of one. "<list> 0/0" = nobody
--- (or not in a guild). Sent only when the list changed; WoW is asked for a fresh roster every 30 s.
+-- (or not in a guild). Sent when the list changes and again every 60 s; WoW is asked for a fresh roster every 30 s.
 local TAG, queue, lastSig, listNo, trickleAt = "{omashu-guild} ", {}, nil, 0, 0
 local function stamp() local t = GetTime(); return date("%m/%d %H:%M:%S") .. string.format(".%03d", math.floor((t % 1) * 1000)) .. "  " end
 local function push(text)
@@ -151,6 +151,9 @@ g:SetScript("OnEvent", function(_, e) if e == "PLAYER_ENTERING_WORLD" then lastS
 local asked = 0
 g:SetScript("OnUpdate", function()
   local now = GetTime()
+  -- every 60 s the whole list goes again even if unchanged: a reader that missed part of it (Couch Mode restarting,
+  -- a reload) still gets a complete list within a minute (2026-11-10: lines 1-4 of 7 were missed after a reload)
+  if now - (g.full or 0) > 60 and #queue == 0 then g.full = now; lastSig = nil; pcall(sendList) end
   if now - asked > 30 then asked = now; if C_GuildInfo and C_GuildInfo.GuildRoster then pcall(C_GuildInfo.GuildRoster) elseif GuildRoster then pcall(GuildRoster) end end
   if #queue > 0 and now - trickleAt >= 0.5 then trickleAt = now; push(stamp() .. table.remove(queue, 1)) end
 end)
