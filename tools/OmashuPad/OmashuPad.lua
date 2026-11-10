@@ -537,3 +537,19 @@ SlashCmdList.OMASHUPAD = function(m)
   if m == 'mine' then OmashuPadDB.his = {}; OmashuPadDB.rulesV = 0 end
   apply()
 end
+
+-- ---------- Bags and map (sheet 16, Joshua 2026-11-10: "View") ----------
+-- Forever's pad turns LT into Shift and LB into Ctrl, so LT + View = SHIFT-PADBACK, LB + View = CTRL-PADBACK.
+-- Override bindings (ours only, nothing saved to his key file); set out of combat, redone after every fight.
+local menuKeys = CreateFrame('Frame')
+local function bindMenuKeys()
+  if InCombatLockdown() then return end
+  ClearOverrideBindings(menuKeys)
+  if _G.KGB_ToggleBags then SetOverrideBindingClick(menuKeys, false, 'SHIFT-PADBACK', 'KGB_ToggleBags')   -- KroGamepadBags
+  else SetOverrideBinding(menuKeys, false, 'SHIFT-PADBACK', 'OPENALLBAGS') end
+  SetOverrideBinding(menuKeys, false, 'CTRL-PADBACK', 'TOGGLEWORLDMAP')
+  OmashuPadDB.menuKeys = { bags = GetBindingAction('SHIFT-PADBACK', true), map = GetBindingAction('CTRL-PADBACK', true),
+    kro = _G.KGB_ToggleBags and true or false, at = date('%Y-%m-%d %H:%M:%S') }
+end
+menuKeys:RegisterEvent('PLAYER_ENTERING_WORLD'); menuKeys:RegisterEvent('PLAYER_REGEN_ENABLED')
+menuKeys:SetScript('OnEvent', function() C_Timer.After(1, bindMenuKeys) end)
