@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: Omashu Settings (mockup)
+## Notes: Throwaway: the proposed Omashu settings page, built from Blizzard's own controls. Switches do nothing. /ommock opens it.
+## SavedVariables: OmashuSettingsMockDB
+OmashuSettingsMock.lua
