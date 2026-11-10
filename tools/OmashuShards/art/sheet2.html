@@ -1,0 +1,68 @@
+<!doctype html><meta charset="utf-8">
+<style>html,body{margin:0;background:transparent}svg{display:block}</style>
+<!-- OmashuShards sprite sheet v2: direction A "Soul gem" (mockup 13, approved 2026-11-09). 512x256, drawn at 2x.
+     Cells: lit (0,0) empty (80,0) amber (160,0) dark-flash (240,0) [80x96, gem 72x86 inside]; glow (320,0 96x112);
+     flash (0,96 96x96); spark (104,96 16x16). Same layout as v1, so the add-on code doesn't change. -->
+<svg id="s" xmlns="http://www.w3.org/2000/svg" width="512" height="256" viewBox="0 0 512 256"></svg>
+<script>
+let uid=0;
+// the kite cut (A, B): 100 x 120 box, wide crown, long pavilion to the point
+const KITE={o:'16,30 32,8 68,8 84,30 50,116', table:'36,14 64,14 70,28 30,28', cl:'16,30 32,8 36,14 30,28', cr:'84,30 68,8 64,14 70,28', pl:'16,30 30,28 50,116', pc1:'30,28 50,28 50,116', pc2:'50,28 70,28 50,116', pr:'70,28 84,30 50,116', crownTop:'32,8 68,8 64,14 36,14'};
+function soulGem(lit, opts={}){
+  const id='g'+(uid++), k=KITE;
+  const c=lit?{rim:'#1a0422',f1:'#5b1477',f2:'#8a2bb0',f3:'#b54fd8',f4:'#e8a2f2',core:'#fff1fb',glow:'#d873ff'}
+             :{rim:'#08060b',f1:'#141019',f2:'#1d1824',f3:'#272131',f4:'#3a3346',core:'#4a4358',glow:'#000'};
+  let s=`<defs>
+    <radialGradient id="${id}core" cx="46%" cy="42%" r="58%"><stop offset="0" stop-color="${c.core}"/><stop offset=".28" stop-color="${c.f4}"/><stop offset=".62" stop-color="${c.f3}" stop-opacity=".0"/></radialGradient>
+    <linearGradient id="${id}L" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c.f3}"/><stop offset="1" stop-color="${c.f1}"/></linearGradient>
+    <linearGradient id="${id}C1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.f4}"/><stop offset=".55" stop-color="${c.f3}"/><stop offset="1" stop-color="${c.f2}"/></linearGradient>
+    <linearGradient id="${id}C2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.f3}"/><stop offset=".6" stop-color="${c.f2}"/><stop offset="1" stop-color="${c.f1}"/></linearGradient>
+    <linearGradient id="${id}R" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c.f2}"/><stop offset="1" stop-color="${c.f1}"/></linearGradient>
+    <linearGradient id="${id}T" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${lit?'#ffe3ff':'#4a4358'}"/><stop offset="1" stop-color="${c.f3}"/></linearGradient>
+    <filter id="${id}b" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5"/></filter>
+    <filter id="${id}h" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="9"/></filter>
+    <clipPath id="${id}clip"><polygon points="${k.o}"/></clipPath>
+  </defs>`;
+  if(lit) s+=`<polygon class="halo" points="${k.o}" fill="${c.glow}" opacity=".55" filter="url(#${id}h)" transform="translate(50 62) scale(1.05) translate(-50 -62)"/>`;
+  s+=`<g clip-path="url(#${id}clip)">
+    <polygon points="${k.pl}" fill="url(#${id}L)"/><polygon points="${k.pc1}" fill="url(#${id}C1)"/><polygon points="${k.pc2}" fill="url(#${id}C2)"/><polygon points="${k.pr}" fill="url(#${id}R)"/>
+    <polygon points="${k.cl}" fill="${c.f3}"/><polygon points="${k.cr}" fill="${c.f2}"/><polygon points="${k.crownTop}" fill="${c.f4}" opacity="${lit?.9:.6}"/><polygon points="${k.table}" fill="url(#${id}T)"/>
+    <rect x="0" y="0" width="100" height="120" fill="url(#${id}core)" opacity="${lit?1:.35}"/>`;
+  if(lit){
+    // the soul inside: a bright mist rising from the point, a few motes
+    s+=`<ellipse cx="50" cy="62" rx="15" ry="26" fill="#ffd9ff" opacity=".55" filter="url(#${id}b)"/>
+        <ellipse cx="48" cy="50" rx="7" ry="12" fill="#ffffff" opacity=".8" filter="url(#${id}b)"/>
+        <circle cx="58" cy="74" r="1.5" fill="#fff" opacity=".8"/><circle cx="41" cy="84" r="1.1" fill="#fff" opacity=".6"/><circle cx="55" cy="92" r=".9" fill="#fff" opacity=".5"/>`;
+  }
+  // facet edges: thin light lines on the lit side, dark on the shadow side
+  s+=`<g fill="none" stroke-width=".9">
+      <polyline points="30,28 50,116" stroke="${lit?'#ffd9ff':'#6a6178'}" opacity=".55"/><polyline points="50,28 50,116" stroke="${lit?'#fff':'#6a6178'}" opacity="${lit?.35:.25}"/>
+      <polyline points="70,28 50,116" stroke="#000" opacity=".35"/><polyline points="30,28 70,28" stroke="${lit?'#fff':'#6a6178'}" opacity=".5"/>
+      <polyline points="36,14 64,14" stroke="#fff" opacity="${lit?.6:.2}"/></g>
+    <polygon points="34,16 46,16 40,26 30,26" fill="#fff" opacity="${lit?.75:.18}"/>
+  </g>`;
+  // rim light on the left edge, outline outside
+  s+=`<polyline points="50,116 16,30 32,8" fill="none" stroke="${lit?'#f6c8ff':'#8a8398'}" stroke-width="2" opacity="${lit?.85:.55}" stroke-linejoin="round"/>
+      <polygon points="${k.o}" fill="none" stroke="${c.rim}" stroke-width="5.5" stroke-linejoin="round"/>
+      <polygon points="${k.o}" fill="none" stroke="#000" stroke-width="7.5" stroke-linejoin="round" opacity=".35"/>`;
+  if(lit && opts.spark!==false) s+=`<path d="M27 14 l1.6 4.6 4.6 1.6 -4.6 1.6 -1.6 4.6 -1.6 -4.6 -4.6 -1.6 4.6 -1.6z" fill="#fff"/>`;
+  return s;
+}
+
+const SV=document.getElementById('s');
+const cell=(x,y,inner)=>`<g transform="translate(${x+4} ${y+4}) scale(0.72)">${inner}</g>`;
+let out='';
+out+=cell(0,0,soulGem(true,{spark:true}).replace(/<polygon class="halo"[^>]*\/>/,''));   // the halo is its own sprite in game
+out+=cell(80,0,soulGem(false));
+// amber: the dormant gem with a warm rim (zero shards)
+out+=cell(160,0,soulGem(false)+`<polygon points="${KITE.o}" fill="#6a3a12" opacity=".45"/><polygon points="${KITE.o}" fill="none" stroke="#EEA040" stroke-width="6" stroke-linejoin="round"/>`);
+// dark flash: the lit gem pushed down to deep plum (first 60 ms of a spend)
+out+=cell(240,0,soulGem(true,{spark:false}).replace(/<polygon class="halo"[^>]*\/>/,'')+`<polygon points="${KITE.o}" fill="#3a0a4a" opacity=".85"/>`);
+// glow: the gem's silhouette, blurred, violet (drawn additive in game)
+out+=`<defs><filter id="gb" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
+  <radialGradient id="fl" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#f2dcf2"/><stop offset=".55" stop-color="#f2dcf2" stop-opacity=".5"/><stop offset="1" stop-color="#f2dcf2" stop-opacity="0"/></radialGradient></defs>
+  <g transform="translate(332 10) scale(0.72)"><polygon points="${KITE.o}" fill="#c060ff" filter="url(#gb)"/><polygon points="${KITE.o}" fill="#e8a2f2" opacity=".35" filter="url(#gb)" transform="translate(50 62) scale(.6) translate(-50 -62)"/></g>
+  <ellipse cx="48" cy="144" rx="46" ry="46" fill="url(#fl)"/>
+  <path d="M112 98 l1.6 4.6 4.6 1.6 -4.6 1.6 -1.6 4.6 -1.6 -4.6 -4.6 -1.6 4.6 -1.6z" fill="#ffffff"/>`;
+SV.innerHTML=out;
+</script>
