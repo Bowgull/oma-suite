@@ -522,6 +522,18 @@ end)
 SLASH_OMASHUPAD1 = '/ompad'
 SlashCmdList.OMASHUPAD = function(m)
   if m == 'sim' then simulate(); return end
+  if m == 'keys' then   -- every gamepad button (and LB/RB/LT/RT/View combos) -> what it's bound to, saved for Claude to read
+    local names = { 'PADA', 'PADB', 'PADX', 'PADY', 'PADLSHOULDER', 'PADRSHOULDER', 'PADLTRIGGER', 'PADRTRIGGER',
+      'PADLSTICK', 'PADRSTICK', 'PADBACK', 'PADFORWARD', 'PADSYSTEM', 'PADSOCIAL', 'PADDUP', 'PADDDOWN', 'PADDLEFT', 'PADDRIGHT',
+      'PADPADDLE1', 'PADPADDLE2', 'PADPADDLE3', 'PADPADDLE4' }
+    local mods = { '', 'SHIFT-', 'CTRL-', 'ALT-', 'CTRL-SHIFT-', 'ALT-SHIFT-', 'ALT-CTRL-' }
+    local out = {}
+    for _, md in ipairs(mods) do for _, n in ipairs(names) do local a = GetBindingAction(md .. n); if a and a ~= '' then out[md .. n] = a end end end
+    local cv = {}
+    for _, c in ipairs({ 'GamePadEmulateShift', 'GamePadEmulateCtrl', 'GamePadEmulateAlt', 'GamePadEnable' }) do cv[c] = C_CVar.GetCVar(c) end
+    OmashuPadDB.keys, OmashuPadDB.keyCVars = out, cv
+    say('pad keys saved; /reload to write them to the file (an add-on can\'t reload by itself).'); return
+  end
   if m == 'mine' then OmashuPadDB.his = {}; OmashuPadDB.rulesV = 0 end
   apply()
 end
