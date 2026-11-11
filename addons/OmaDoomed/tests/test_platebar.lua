@@ -92,7 +92,7 @@ return {
     DOTS.nameplate1 = { { name = 'Corruption', damage = 30, expiresAt = 5 }, { name = 'Immolate', damage = 40, expiresAt = 99, provisional = true } }
     W.advance(1.0)
     T.ok(fills[2].rec.shown, 'Immolate fill shown while casting')
-    T.near(fills[2].rec.value, 30 + 40 * .5, 2, 'halfway through the cast: half filled, from the green outward')
+    T.near(fills[2].rec.value, 40 * .5, 2, 'halfway through the cast: half of its own piece, filled from its far edge toward the green')
     T.near(made[2].rec.color[1], 160 / 255 * .45, 1e-6, 'the piece itself sits dim')
     T.ok(not fills[1].rec.shown, 'Corruption (not being cast) has no fill')
     UnitCastingInfo = function() return nil end

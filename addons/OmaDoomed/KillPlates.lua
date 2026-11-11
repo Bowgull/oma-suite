@@ -29,11 +29,15 @@ local function piecesFor(hb)
   local fill = hb:GetStatusBarTexture(); if not fill then return nil end
   set = { clip = CreateFrame('Frame', nil, hb), fill = fill }
   set.clip:SetAllPoints(hb); set.clip:SetClipsChildren(true); set.clip:SetFrameLevel(hb:GetFrameLevel() + 2)
-  local function bar(level)
+  local function bar(level, from)
     local b = CreateFrame('StatusBar', nil, set.clip)
-    b:SetReverseFill(true); b:SetStatusBarTexture(TEX); b:SetMinMaxValues(0, 1); b:SetValue(0)
+    b:SetStatusBarTexture(TEX); b:SetMinMaxValues(0, 1); b:SetValue(0)
     local t = b:GetStatusBarTexture(); if type(t) == "table" and t.SetDesaturated then t:SetDesaturated(true) end
-    b:SetPoint('TOPRIGHT', fill, 'TOPRIGHT'); b:SetPoint('BOTTOMRIGHT', fill, 'BOTTOMRIGHT')
+    if from then   -- fills rightward from a piece's far edge
+      b:SetPoint('TOPLEFT', from, 'TOPLEFT'); b:SetPoint('BOTTOMLEFT', from, 'BOTTOMLEFT')
+    else           -- fills leftward from the health's end
+      b:SetReverseFill(true); b:SetPoint('TOPRIGHT', fill, 'TOPRIGHT'); b:SetPoint('BOTTOMRIGHT', fill, 'BOTTOMRIGHT')
+    end
     b:SetFrameLevel(level); b:Hide()
     return b
   end
@@ -41,7 +45,10 @@ local function piecesFor(hb)
   for i = 1, MAX do
     local lv = set.clip:GetFrameLevel() + 2 * (MAX - i)   -- the piece nearest the green on top
     set[i] = bar(lv)
-    set.charge[i] = bar(lv + 1)   -- Charging: fills over this piece in its landed colour, under the piece before it
+    -- Charging: fills over this piece in its landed colour from its far edge toward the green, the same way as the
+    -- target frame (Joshua 2026-11-11: "why is precast charge two different directions?")
+    local far = set[i]:GetStatusBarTexture()
+    set.charge[i] = bar(lv + 1, type(far) == 'table' and far or nil)
     -- Drifting stripes / Motes: laid across the whole bar (its width is known) and cut to this piece by a stencil
     -- hung on the piece's two edges (a piece's own width is hidden in combat), as on the target frame
     local ov = CreateFrame('Frame', nil, set.clip); ov:SetAllPoints(hb); ov:SetFrameLevel(lv + 1)
@@ -80,7 +87,7 @@ local function chargeStep()
       if v >= 1 then charging[b] = nil end
     else
       local pr = math.max(0, math.min(1, (now - c.s) / (c.e - c.s)))
-      if c.look == 'charging' then c.ch:SetValue(c.before + c.dmg * pr)
+      if c.look == 'charging' then c.ch:SetValue(c.dmg * pr)
       elseif c.look == 'smoulder' then local k = .3 + .7 * pr ^ 1.6; b:SetStatusBarColor(col[1] * k, col[2] * k, col[3] * k, 1)
       elseif c.look == 'stripes' then
         local bw, bh = c.hb:GetWidth(), c.hb:GetHeight(); local o = (now * .35) % 1
