@@ -134,7 +134,7 @@ local function build()
     s.ghost = art:CreateTexture(nil, 'ARTWORK', nil, 5); barTex(s.ghost); s.ghost:Hide()   -- the bite: solid, its own colour
     -- while you cast it (DoesItDie marks it provisional): Blizzard's own shield stripes and shield edge glow, tinted
     s.pre = art:CreateTexture(nil, 'ARTWORK', nil, 4); s.pre:SetTexture('Interface/RaidFrame/Shield-Overlay', 'REPEAT', 'REPEAT')
-    s.pre:SetHorizTile(true); s.pre:SetVertTile(true); s.pre:SetDesaturated(true); s.pre:Hide()   -- the art is shield-blue: grey it, then tint
+    s.pre:SetHorizTile(true); s.pre:SetVertTile(true); s.pre:SetDesaturated(true); s.pre:SetBlendMode('ADD'); s.pre:Hide()   -- the art is shield-blue: grey it, then tint
     s.preGlow = art:CreateTexture(nil, 'OVERLAY', nil, 3); s.preGlow:SetTexture('Interface/RaidFrame/Shield-Overshield'); s.preGlow:SetBlendMode('ADD'); s.preGlow:SetDesaturated(true); s.preGlow:Hide()
     if P.barMask then s.pre:AddMaskTexture(P.barMask); s.preGlow:AddMaskTexture(P.barMask) end
     -- the light it casts: 9 screen px onto each neighbour, fading out (left fade, core, right fade), the bar's own shape
@@ -237,6 +237,8 @@ function P.onHealth()
 end
 P.predK = {}
 P.landAt = {}
+P.shownBy = {}               -- DoT name -> its piece's size on screen
+P.wasPre = {}
 local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
 local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
@@ -250,8 +252,11 @@ local function biteNow(name, now)    -- what is still left of a bite (0 when don
   local b = P.bites[name]; if not b then return 0, 0 end
   local a = now - b.at
   if a >= .7 then P.bites[name] = nil; return 0, 0 end
-  local left = a < .06 and b.amt or b.amt * math.exp(-(a - .06) / .11)   -- glides shut like Blizzard's smooth bars
-  local flare = a < .06 and a / .06 or math.exp(-(a - .06) / .14)
+  -- 2026-11-11 'it flashes then almost jumps': the glide started at full speed the instant the light peaked. Now it
+  -- starts from rest, is quickest midway and settles (smootherstep over 0.5 s); the light swells instead of flashing.
+  local k = math.max(0, math.min(1, a / .5)); k = k * k * k * (k * (k * 6 - 15) + 10)
+  local left = b.amt * (1 - k)
+  local flare = a < .12 and 1 - (1 - a / .12) ^ 2 or math.exp(-(a - .12) / .2)   -- swells in 120 ms, fades
   return left, flare
 end
 
@@ -276,15 +281,20 @@ local function render()
   clip:Show()
   local now = GetTime()
   local run, slide = 0, 0
+  local seen = {}
   for i, s in ipairs(segs) do
     local d = dots[i]
     if d then
       local bl, flare = biteNow(d.name, now); slide = slide + bl
       local before = run                                 -- where this piece starts, from the bar's end
       local pr = P.pred[d.name]
-      run = run + math.max(0, d.damage - (pr and pr.est or 0)) + bl
-      -- a new DoT grows in; shrinking happens only through bites
-      if run > s.shown then s.shown = s.shown + (run - s.shown) * (1 - math.exp(-(P.dt or .033) * 9)) else s.shown = run end
+      -- each DoT remembers its OWN size (2026-11-11: sizes were kept per slot, so when a DoT ended the others moved up a
+      -- slot, took the wrong size and regrew: the green jumped out). A new or refreshed DoT grows in; shrinking is bites.
+      local want = math.max(0, d.damage - (pr and pr.est or 0)) + bl
+      local sh = P.shownBy[d.name] or 0
+      if want > sh then sh = sh + (want - sh) * (1 - math.exp(-(P.dt or .033) * 9)) else sh = want end
+      P.shownBy[d.name] = sh; seen[d.name] = true
+      run = run + sh; s.shown = run
       local left = d.expires and (d.expires - now)
       local lowNow = left and left > 0 and left <= LOW
       local c = colorOf(d.name)
@@ -293,10 +303,10 @@ local function render()
       if d.provisional and (test or ns.db.doomedPrecast) then   -- still being cast (test only until Joshua picks a look): dark underneath, Blizzard's stripes and edge glow in its ring colour
         s.base:SetVertexColor(c[1] * .6, c[2] * .6, c[3] * .6); s.lift:SetVertexColor(0, 0, 0)
         s.pre:SetVertexColor(tn[1], tn[2], tn[3], 1); s.pre:Show()
-        s.preGlow:SetVertexColor(tn[1], tn[2], tn[3], .9); s.preGlow:Show()
-        s.wasPre = d.name
+        s.preGlow:SetVertexColor(tn[1], tn[2], tn[3], .6); s.preGlow:Show()
+        P.wasPre[d.name] = true
       else
-        if s.wasPre == d.name then P.landAt[d.name] = now end; s.wasPre = nil
+        if P.wasPre[d.name] then P.landAt[d.name] = now; P.wasPre[d.name] = nil end
         s.pre:Hide(); s.preGlow:Hide()
         local la = P.landAt[d.name] and (now - P.landAt[d.name]) or 9   -- it landed: the stripes fill in with one soft light
         local lf = la < .5 and math.exp(-la / .14) or 0
@@ -305,9 +315,9 @@ local function render()
       end
       if bl > 0 then
         local tone = lowNow and RINGGOLD or (RINGTONE[d.name] or c)
-        local hot = mix(colorOf(d.name), { math.min(1, tone[1] * 1.1), math.min(1, tone[2] * 1.1), math.min(1, tone[3] * 1.1) }, .6)
+        local hot = mix(colorOf(d.name), tone, .45)
         local base = colorOf(d.name); local ember = mix(base, EMPTY, .75)
-        local col = (now - P.bites[d.name].at) < .06 and mix(base, hot, flare) or mix(ember, hot, flare)
+        local col = (now - P.bites[d.name].at) < .12 and mix(base, hot, flare) or mix(ember, hot, flare)
         s.gtarget = before + bl; s.ghost:SetVertexColor(math.min(1, col[1] * 1.85), math.min(1, col[2] * 1.85), math.min(1, col[3] * 1.85)); s.ghost:Show()   -- 1.85: base 1.15 + lift .7, as the pieces
         local a = flare * .4
         s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
@@ -320,7 +330,7 @@ local function render()
         s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
       end
     else
-      s.shown = run; s.pre:Hide(); s.preGlow:Hide(); s.wasPre = nil; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
+      s.shown = run; s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
     end
     local on = d and true or false
     local mode = ns.db.doomedJoin or 'crease'
@@ -332,6 +342,7 @@ local function render()
   -- the pieces hang one status bar deeper than the health's end, and WoW lays each level out a frame later; so the end
   -- takes its new value one frame late too, or on every tick the pieces slipped 2 px for a frame (filmed 2026-11-11)
   P.base:SetMinMaxValues(0, maxv); P.base:SetValue(hp)
+  for name in pairs(P.shownBy) do if not seen[name] then P.shownBy[name] = nil end end
   -- every edge in one pass, all one link from the health's end
   setMark(P.E[0], slide, maxv)
   for i, s in ipairs(segs) do
@@ -448,7 +459,7 @@ function P.start()
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
-  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
+  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); wipe(P.shownBy); wipe(P.wasPre); P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
   ev:SetScript('OnUpdate', function(_, dt) P.dt = dt; local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
