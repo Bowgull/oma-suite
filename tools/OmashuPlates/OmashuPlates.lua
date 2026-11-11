@@ -39,14 +39,20 @@ local function hex(h) return { tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3
 -- Agony is Curse of Agony 980; ASSUMED, not checked in game). Belt and braces: at login we also add whatever ID the
 -- game returns for each name, and we learn the exact ID every time you cast one (UNIT_SPELLCAST_SUCCEEDED).
 local SPELLS = {
-  { key = 'corruption', names = { 'Corruption' }, color = hex('7fe36a'),
+  -- colours: one set shared with OmaDoomed (sheet 25, approved 2026-11-11): Corruption teal (green vanished inside the
+  -- green health bar), Immolate a touch lighter, Siphon Life deeper, so no two merge; gold only means 'ending soon'
+  { key = 'corruption', names = { 'Corruption' }, color = hex('5fd8e8'),
     ids = { 172, 6222, 6223, 7648, 11671, 11672, 25311, 27216 } },
   { key = 'agony', names = { 'Bane of Agony', 'Curse of Agony' }, color = hex('c46cff'),
     ids = { 980, 1014, 6217, 11711, 11712, 11713, 27218 } },
-  { key = 'immolate', names = { 'Immolate' }, color = hex('ff8a2a'),
+  { key = 'immolate', names = { 'Immolate' }, color = hex('ff9640'),
     ids = { 348, 707, 1094, 2941, 11665, 11667, 11668, 25309, 27215 } },
-  { key = 'siphon', names = { 'Siphon Life' }, color = hex('ff4060'),   -- blood red: the "fourth colour" (my pick)
+  { key = 'siphon', names = { 'Siphon Life' }, color = hex('d63048'),
     ids = { 18265, 18879, 18880, 18881, 27264, 30911 } },
+  -- channels keep the same ring and timer as before (Joshua: "the original version of the channel was excellent"),
+  -- only their own colour: bone white (sheet 28, "Bone white")
+  { key = 'channel', names = { 'Drain Soul', 'Drain Life', 'Drain Mana' }, color = hex('ece2c6'),
+    ids = { 1120, 8288, 8289, 11675, 27217, 689, 699, 709, 7651, 11699, 11700, 27219, 27220, 5138, 6226, 11703, 11704, 27221 } },
 }
 
 local OWN = 'HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY'        -- PLAYER = you, your pet or vehicle (AuraUtil.lua)

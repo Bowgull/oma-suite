@@ -9,10 +9,16 @@
 local ADDON, ns = ...
 local P = {}; ns.parts.doomed = P
 
-local COLOR = {   -- each DoT at the green's strength (sheet 22): gold, violet, ember, blood
-  ['Corruption'] = { .70, .56, .12 }, ['Curse of Agony'] = { .47, .22, .75 }, ['Bane of Agony'] = { .47, .22, .75 },
-  ['Immolate'] = { .77, .36, .12 }, ['Siphon Life'] = { .73, .17, .25 },
+local COLOR = {   -- sheet 25 (approved 2026-11-11): one colour per DoT, shared with the nameplate rings, at the green's strength
+  ['Corruption'] = { 40 / 255, 150 / 255, 168 / 255 }, ['Curse of Agony'] = { 120 / 255, 56 / 255, 192 / 255 },
+  ['Bane of Agony'] = { 120 / 255, 56 / 255, 192 / 255 }, ['Immolate'] = { 206 / 255, 106 / 255, 36 / 255 },
+  ['Siphon Life'] = { 160 / 255, 30 / 255, 50 / 255 },
 }
+local GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- gold means only 'ending soon' (last 3 s); at the green's strength like the other pieces
+local LOW = 3
+local function breath(x)              -- the rings' own breath (OmashuPlates): 1 at 3 s, 0.3 at 2.25 s, 1 at 1.5 s ...
+  local ph = (LOW - x) / 1.5 % 1; return .3 + .7 * (math.cos(ph * 2 * math.pi) * .5 + .5)
+end
 local OTHER = { .55, .45, .65 }
 local FILL = 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health'
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
@@ -26,7 +32,7 @@ local segs = {}
 local win, longBar, mark
 local last = {}                      -- damage per DoT name last time (a drop = a tick: flash)
 local test
-local JOIN = { fade = 6, thin = 2, none = 0 }   -- join width in screen px (choosing by eye, 2026-11-11)
+local JOIN = { crease = 4, fade = 6, thin = 2, none = 0 }   -- sheet 25: 'crease' = hard join + soft dark crease (Blizzard's way)
 
 local function atlasOK(n) return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(n) ~= nil end
 -- the bar's own grain: a thin middle slice of Blizzard's health texture (the whole texture stretched into a short piece
@@ -72,6 +78,10 @@ local function build()
     s.flash = art:CreateTexture(nil, 'OVERLAY', nil, 1); barTex(s.flash); s.flash:SetVertexColor(1, 1, 1); s.flash:SetBlendMode('ADD'); s.flash:SetAlpha(0)
     s.join = art:CreateTexture(nil, 'ARTWORK', nil, 3); barTex(s.join)      -- the fade into the next piece
     s.joinLift = art:CreateTexture(nil, 'ARTWORK', nil, 4); barTex(s.joinLift); s.joinLift:SetBlendMode('ADD')   -- same brightening as the pieces, or the fade reads as a dark seam
+    -- the crease uses the bar's own texture tinted black, so it has the bar's exact shape and never runs onto the brass
+    -- borders into the name banner or the mana bar (a plain square did, Joshua 2026-11-11)
+    s.creaseL = art:CreateTexture(nil, 'OVERLAY', nil, 0); barTex(s.creaseL)
+    s.creaseR = art:CreateTexture(nil, 'OVERLAY', nil, 0); barTex(s.creaseR)
     local g = s.flash:CreateAnimationGroup()
     local a1 = g:CreateAnimation('Alpha'); a1:SetFromAlpha(0); a1:SetToAlpha(.42); a1:SetDuration(.08); a1:SetOrder(1)
     local a2 = g:CreateAnimation('Alpha'); a2:SetFromAlpha(.42); a2:SetToAlpha(0); a2:SetDuration(.45); a2:SetOrder(2); a2:SetSmoothing('OUT')
@@ -85,7 +95,14 @@ local function build()
     end
     -- the join sits on this piece's right edge, fading from this colour into the previous (nearer the green) one
     if i > 1 then
-      for _, t in ipairs({ s.join, s.joinLift }) do t:SetPoint('TOP', segs[i - 1].edge, 'TOPLEFT'); t:SetPoint('BOTTOM', segs[i - 1].edge, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end   -- 6 screen px: what the 2-game-pixel fade looked like on sheet 22 (seen ~3x); 2 px read as a hard cut on the TV
+      for _, t in ipairs({ s.join, s.joinLift }) do t:SetPoint('TOP', segs[i - 1].edge, 'TOPLEFT'); t:SetPoint('BOTTOM', segs[i - 1].edge, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
+      -- the crease: 2 screen px of soft dark either side of the join, darkest (45%) on it
+      s.creaseL:SetPoint('TOPRIGHT', segs[i - 1].edge, 'TOPLEFT'); s.creaseL:SetPoint('BOTTOMRIGHT', segs[i - 1].edge, 'BOTTOMLEFT'); s.creaseL:SetWidth(px(2, hb))
+      s.creaseR:SetPoint('TOPLEFT', segs[i - 1].edge, 'TOPLEFT'); s.creaseR:SetPoint('BOTTOMLEFT', segs[i - 1].edge, 'BOTTOMLEFT'); s.creaseR:SetWidth(px(2, hb))
+      if CreateColor then
+        s.creaseL:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, .45))
+        s.creaseR:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, .45), CreateColor(0, 0, 0, 0))
+      end   -- 6 screen px: what the 2-game-pixel fade looked like on sheet 22 (seen ~3x); 2 px read as a hard cut on the TV
     end
   end
   -- one shine along the top of all the pieces (sheet 22: "fade and shine")
@@ -127,8 +144,13 @@ local function draw(dots, maxv, hp)
     if d then
       run = run + d.damage; s.target = run
       local c = colorOf(d.name)
-      s.base:SetVertexColor(c[1] * 1.15, c[2] * 1.15, c[3] * 1.15)
-      s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
+      local left = d.expires and (d.expires - GetTime())
+      local a = 1
+      local lowNow = left and left > 0 and left <= LOW
+      -- ending soon: gold, breathing in brightness on the rings' beat (fading it see-through let the green show: lime)
+      if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
+      s.base:SetVertexColor(c[1] * 1.15, c[2] * 1.15, c[3] * 1.15, a)
+      s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7, a)
       local n = segs[i - 1] and dots[i - 1] and colorOf(dots[i - 1].name)
       if n and CreateColor then
         s.join:SetGradient('HORIZONTAL', CreateColor(c[1] * 1.15, c[2] * 1.15, c[3] * 1.15, 1), CreateColor(n[1] * 1.15, n[2] * 1.15, n[3] * 1.15, 1))
@@ -140,7 +162,9 @@ local function draw(dots, maxv, hp)
       s.target = run
     end
     local on = d and true or false
-    local jw = JOIN[ns.db.doomedJoin or 'fade'] or 6
+    local mode = ns.db.doomedJoin or 'crease'
+    local jw = mode == 'crease' and 0 or (JOIN[mode] or 0)
+    s.creaseL:SetShown(on and i > 1 and mode == 'crease'); s.creaseR:SetShown(on and i > 1 and mode == 'crease')
     if jw > 0 then s.join:SetWidth(px(jw, hb)); s.joinLift:SetWidth(px(jw, hb)) end
     s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(on); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
   end
@@ -173,7 +197,8 @@ local function update()
       d.next = d.next or now + every
       if now >= d.next then d.next = now + every; d.left = (d.left or d[2]) - d[2] / 6; if d.left <= 0 then d.left = d[2] end end
     end
-    local dots = {}; for _, d in ipairs(test.dots) do dots[#dots + 1] = { name = d[1], damage = m * (d.left or d[2]) } end
+    -- test: Immolate stays in its last 3 s (gold, breathing like its ring's test); the others have time left
+    local dots = {}; for _, d in ipairs(test.dots) do dots[#dots + 1] = { name = d[1], damage = m * (d.left or d[2]), expires = d[1] == 'Immolate' and (now + 3 - (now % 3) - .01) or now + 12 } end
     if build() then   -- pretend the mob is at 62% (or 20%): the pieces start there, the rest of the bar shows empty
       local W = hb:GetWidth()
       holder:ClearAllPoints(); holder:SetPoint('TOPRIGHT', hb, 'TOPLEFT', W * frac, 0); holder:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMLEFT', W * frac, 0)
@@ -185,7 +210,7 @@ local function update()
   local list = DoesItDie.GetDoTs('target')
   table.sort(list, function(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end)   -- runs out first = nearest the green
   local dots = {}
-  for _, e in ipairs(list) do if (e.damage or 0) > 0 then dots[#dots + 1] = { name = e.name, damage = e.damage } end end
+  for _, e in ipairs(list) do if (e.damage or 0) > 0 then dots[#dots + 1] = { name = e.name, damage = e.damage, expires = e.expiresAt } end end
   local ok, err = pcall(draw, dots, UnitHealthMax('target'), UnitHealth('target'))
   if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide() end
 end
