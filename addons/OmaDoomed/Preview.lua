@@ -258,8 +258,8 @@ function ns.previewDraw()
         w:ClearAllPoints()
         if home == 1 then w:SetPoint('BOTTOMLEFT', P.plate, 'TOP', -60 + n, other and 0 or -6)
         else w:SetSize(z * .56, z * .56); w.ic:SetSize(z * .56 * .756, z * .56 * .756); w.num:SetFont(STANDARD_TEXT_FONT, math.floor(z * .56 * .58 + .5), 'THICKOUTLINE')
-          w:SetPoint('TOPLEFT', frame, 'BOTTOMLEFT', (bar.x or 20) + n, -3) end   -- sheet 42 B: under the frame, 40 px
-        n = n + (home == 2 and z * .56 or z) + 3
+          w:SetPoint('TOPLEFT', frame, 'BOTTOMLEFT', (bar.x or 20) + n, -5) end   -- sheet 42 B: under the frame, 40 px
+        n = n + (home == 2 and z * .56 + 3 or z + 3)
         w:Show()
       else w:Hide() end
     end

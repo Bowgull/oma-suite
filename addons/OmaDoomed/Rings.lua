@@ -27,7 +27,9 @@ local S = 25 * 1.6                -- 2026-11-10 Joshua: 56 was too big; Blizzard
 local PER_ROW = 6
 local FRAME_ROW = 5                 -- target frame row (Haunt / Target frame): 5 rings fit under the bars, before the level badge
 local FRAME_SCALE = 0.56            -- sheet 42 B: 40 px under the frame (they were 72 px over it: "too big")
-local FRAME_GAP = 3                 -- between the bars' bottom edge and the rings
+local FRAME_GAP = 6                 -- between the bars' bottom edge and the rings (2026-11-11: was 3, the rings kissed the frame; ~5 px)
+local FRAME_SPACE = 3               -- between rings in the row (they touched: "19" and "14" ran together)
+local FRAME_LEFT = 7                -- the first ring's edge lines up with the frame's brass border (it stuck out ~7 px)
 local OS = S * 0.6                  -- other players' DoTs: 60% size
 local OTHERS_ALPHA = 0.55           -- and 55% alpha (settings 'Other players' DoTs' replaces it when the rings load)
 local OTHERS_GAP = S * 6 / 70       -- mockup: 6 units gap on a 70-unit cell
@@ -393,7 +395,7 @@ end
 function ns.eyesUnits() local out = {}; for unit, p in pairs(active) do if p.eyes then out[#out + 1] = unit end end; return out end
 
 
-local function setupContainer(c, kind)
+local function setupContainer(c, kind, gap)   -- gap: space between rings (the target frame row only)
   pcall(c.SetEditModePreviewEnabled, c, false)    -- no fake auras on every plate when Edit Mode opens
   c:SetFlowLayoutAnchorPoint('BOTTOMLEFT')
   c:SetFlowLayoutGrowthDirection(1, 1)             -- AnchorUtil.FlowDirection.Right, .Up: left to right, then upward
@@ -402,7 +404,7 @@ local function setupContainer(c, kind)
     if g.key ~= 'others' or othersOK then
       local ok, err = pcall(c.AddAuraGroup, c, g.key, g.filter, {
         initializeFrame = g[kind], candidateFilters = filtersFor(g.key), sortMethod = SORT,
-        maxFrameCount = g.max, layout = g.layout })
+        maxFrameCount = g.max, layout = g.layout or (gap and { groupSpacing = gap }) or nil })
       if not ok then
         log(kind .. ' group ' .. g.key .. ' failed: ' .. tostring(err))
         if g.key == 'others' then othersOK = false else error(err) end
@@ -411,15 +413,15 @@ local function setupContainer(c, kind)
   end
 end
 
-local function newPair()
+local function newPair(gap)
   if InCombatLockdown() or #pairsAll >= POOL_MAX then return nil end
   local ok, p = pcall(function()
     local anchor = CreateFrame('Frame', nil, holder); anchor:SetSize(1, 1); anchor:Hide()
     local ring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
-    setupContainer(ring, 'ring')
+    setupContainer(ring, 'ring', gap)
     -- main is a CHILD of ring: that alone keeps every main button drawn above the ring's backing disc
     local main = CreateFrame('AuraContainer', nil, ring, 'CustomAuraContainerTemplate')
-    setupContainer(main, 'main')
+    setupContainer(main, 'main', gap)
     if not othersOK then pcall(ring.SetAuraGroupEnabled, ring, 'others', false)       -- keep both layouts identical
     elseif not db.others then pcall(ring.SetAuraGroupEnabled, ring, 'others', false); pcall(main.SetAuraGroupEnabled, main, 'others', false) end
     ring:SetPoint('BOTTOM', anchor, 'BOTTOM'); main:SetPoint('BOTTOM', anchor, 'BOTTOM')
@@ -588,7 +590,7 @@ local function channelGroup(p, on)
 end
 local function makeFramePair()
   if framePair or InCombatLockdown() or not TargetFrame then return end
-  local p = newPair(); if not p then return end
+  local p = newPair(FRAME_SPACE); if not p then return end
   for i, q in ipairs(free) do if q == p then table.remove(free, i) break end end
   framePair = p
   p.anchor:SetParent(TargetFrame); p.anchor:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
@@ -598,12 +600,12 @@ local function makeFramePair()
   local main = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
   local low = main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
   p.anchor:ClearAllPoints(); p.anchor:SetSize(S * FRAME_ROW, 1)
-  if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', 0, -(S + FRAME_GAP))
+  if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', FRAME_LEFT, -(S + FRAME_GAP))
   else p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14) end
   p.frameScale = FRAME_SCALE
   p.pt = 'BOTTOMLEFT'
   for _, c in ipairs({ p.ring, p.main }) do
-    c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, S * FRAME_ROW + 0.01)
+    c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, (S + FRAME_SPACE) * FRAME_ROW + 0.01)
   end
   channelGroup(p, db.where ~= 'split')   -- in Haunt your channel stays over the mob (chanPair), not on the frame
   p.ring:SetUnit('target'); p.main:SetUnit('target')
