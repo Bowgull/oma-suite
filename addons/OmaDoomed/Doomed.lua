@@ -75,16 +75,26 @@ local function build()
   -- the same SetValue pass, every frame. Health may be a hidden number: only a status bar is handed it.
   P.base = CreateFrame('StatusBar', nil, clip); P.base:SetPoint('TOPLEFT', hb, 'TOPLEFT'); P.base:SetPoint('BOTTOMLEFT', hb, 'BOTTOMLEFT'); P.base:SetWidth(hb:GetWidth())
   P.base:SetStatusBarTexture(WHITE); P.base:SetStatusBarColor(0, 0, 0, 0); P.base:SetMinMaxValues(0, 1); P.base:SetValue(0)
-  local baseEdge = P.base:GetStatusBarTexture(); nosnap(baseEdge)
+  local baseEdge = P.base:GetStatusBarTexture(); nosnap(baseEdge); P.hungOn = fill
   -- 2026-11-11 'jittery, like rubber bands': the pieces used to hang off a chain (health's end -> slide bar -> holder ->
   -- piece bar -> edge), and WoW settles each link of a chain on its own, so mid-slide the pieces wobbled against the
   -- green. Now every edge is a "mark" hung straight off the health's end, one link deep, all moved in the same pass:
   -- the way Blizzard's own smooth bars work (one value glides, everything is drawn from it).
   local W = hb:GetWidth()
+  P.marks = {}
+  P.baseEdge = baseEdge
+  local function hang(m, edge)
+    m.L:ClearAllPoints(); m.L:SetPoint('TOPRIGHT', edge, 'TOPRIGHT'); m.L:SetPoint('BOTTOMRIGHT', edge, 'BOTTOMRIGHT')
+    m.R:ClearAllPoints(); m.R:SetPoint('TOPLEFT', edge, 'TOPRIGHT'); m.R:SetPoint('BOTTOMLEFT', edge, 'BOTTOMRIGHT')
+  end
+  -- 2026-11-11 'the green peeks out': in a real fight the pieces sit on Blizzard's own drawn health (their fill), so
+  -- anyone's damage, and Blizzard's own easing of the bar, move green and pieces together
+  function P.hangOn(edge) if P.hungOn == edge then return end; P.hungOn = edge; for _, m in ipairs(P.marks) do hang(m, edge) end end
   local function newMark()
     local m = {}
-    m.L = CreateFrame('StatusBar', nil, clip); m.L:SetPoint('TOPRIGHT', baseEdge, 'TOPRIGHT'); m.L:SetPoint('BOTTOMRIGHT', baseEdge, 'BOTTOMRIGHT'); m.L:SetWidth(W); m.L:SetReverseFill(true)
-    m.R = CreateFrame('StatusBar', nil, clip); m.R:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); m.R:SetPoint('BOTTOMLEFT', baseEdge, 'BOTTOMRIGHT'); m.R:SetWidth(W)
+    m.L = CreateFrame('StatusBar', nil, clip); m.L:SetWidth(W); m.L:SetReverseFill(true)
+    m.R = CreateFrame('StatusBar', nil, clip); m.R:SetWidth(W)
+    hang(m, P.hungOn or fill); P.marks[#P.marks + 1] = m
     for _, b in ipairs({ m.L, m.R }) do b:SetStatusBarTexture(WHITE); b:SetStatusBarColor(0, 0, 0, 0); b:SetMinMaxValues(0, 1); b:SetValue(0) end
     m.lt, m.rt = m.L:GetStatusBarTexture(), m.R:GetStatusBarTexture(); nosnap(m.lt); nosnap(m.rt)
     m.f = CreateFrame('Frame', nil, clip); m.f:SetWidth(.001)
@@ -191,6 +201,29 @@ local function colorOf(name) return COLOR[name] or OTHER end
 -- bite flares hot in that DoT's colour (60 ms), holds (to 160 ms), then cools to an ember while the gap closes, fast
 -- then settling (340 ms); it lights 9 px of its neighbours. The green never moves. Its ring breathes the same instant.
 P.bites = {}                         -- DoT name -> { amt, at }
+P.pred = {}                          -- DoT name -> { est, at, k }: a tick shown on its beat, waiting for DoesItDie's number
+local BEAT = { ['Corruption'] = 3, ['Curse of Agony'] = 2, ['Bane of Agony'] = 2, ['Immolate'] = 3, ['Siphon Life'] = 3 }
+-- the health just changed: if a DoT is due to tick right now (its beat, within 0.25 s), start its bite this frame
+function P.onHealth()
+  if not cur or test then return end
+  local now = GetTime()
+  for _, d in ipairs(cur.dots) do
+    local beat = d.appliedAt and (BEAT[d.name] or 3)
+    if beat and not d.provisional then
+      local k = math.floor((now - d.appliedAt) / beat + .5)
+      if k >= 1 and math.abs(now - (d.appliedAt + k * beat)) < .25 and (P.predK[d.name] or 0) < k then
+        P.predK[d.name] = k
+        local ticksLeft = math.max(1, math.floor(((d.expires or now) - (d.appliedAt + k * beat)) / beat + .5) + 1)
+        local est = d.damage / ticksLeft
+        local was = biteNow(d.name, now)
+        P.bites[d.name] = { amt = was + est, at = now }
+        P.pred[d.name] = { est = est, at = now }
+        if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end
+      end
+    end
+  end
+end
+P.predK = {}
 local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
 local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
@@ -235,7 +268,8 @@ local function render()
     if d then
       local bl, flare = biteNow(d.name, now); slide = slide + bl
       local before = run                                 -- where this piece starts, from the bar's end
-      run = run + d.damage + bl
+      local pr = P.pred[d.name]
+      run = run + math.max(0, d.damage - (pr and pr.est or 0)) + bl
       -- a new DoT grows in; shrinking happens only through bites
       if run > s.shown then s.shown = s.shown + (run - s.shown) * (1 - math.exp(-(P.dt or .033) * 9)) else s.shown = run end
       local left = d.expires and (d.expires - now)
@@ -294,23 +328,23 @@ local function draw(dots, maxv, hp)
   local now = GetTime()
   local drop = false
   for _, d in ipairs(dots) do if last[d.name] and d.damage < last[d.name] - .5 then drop = true end end
-  -- WoW lowers the health about 0.2 s before DoesItDie reports the tick that did it (filmed in a real fight,
-  -- 2026-11-11), so the pieces jumped left and the slide started late. Hold our health's end until the tick
-  -- arrives, then move both in the same frame. Anything that isn't a tick (a melee hit) shows after 0.35 s.
-  if drop then P.lastDrop = now end
-  if P.holdAt and not drop and now - P.holdAt < .35 and P.hasHeld and now - (P.lastDrop or -9) > .35 then
-    hp = P.hpHeld
-  else
-    P.hpHeld = hp; P.hasHeld = true; P.holdAt = nil
-  end
   for _, d in ipairs(dots) do
     if last[d.name] and d.damage < last[d.name] - .5 then
-      local was = biteNow(d.name, now)
-      P.bites[d.name] = { amt = was + last[d.name] - d.damage, at = now }
-      if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end   -- its ring, same instant
+      local real = last[d.name] - d.damage
+      local pr = P.pred[d.name]
+      if pr and now - pr.at < 1 then
+        -- already showing: this tick was predicted on its beat. Only the size is corrected (a small change).
+        local b = P.bites[d.name]; if b then b.amt = math.max(0, b.amt + real - pr.est) end
+        P.pred[d.name] = nil
+      else
+        local was = biteNow(d.name, now)
+        P.bites[d.name] = { amt = was + real, at = now }
+        if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end   -- its ring, same instant
+      end
     end
     last[d.name] = d.damage
   end
+  for name, pr in pairs(P.pred) do if now - pr.at >= 1 then P.pred[name] = nil end end   -- not a tick after all
   cur = { dots = dots, maxv = maxv, hp = hp }
   render()
 end
@@ -337,14 +371,14 @@ local function update()
       if left > 0 then dots[#dots + 1] = { name = d.n, damage = left, expires = test.t0 + d.dur } end
     end
     table.sort(dots, function(a, b) return a.expires < b.expires end)
-    if build() then P.lost:Show() end   -- the empty bar past the fake health (P.base carries its end)
+    if build() then P.lost:Show(); P.hangOn(P.baseEdge) end   -- the empty bar past the fake health (P.base carries its end)
     return draw(dots, m, hp)
   end
   if not UnitExists('target') or UnitIsDead('target') or not (DoesItDie and DoesItDie.GetDoTs) then cur = nil; return hide() end
   local list = DoesItDie.GetDoTs('target')
   table.sort(list, function(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end)   -- runs out first = nearest the green
   local dots = {}
-  for _, e in ipairs(list) do if (e.damage or 0) > 0 then dots[#dots + 1] = { name = e.name, damage = e.damage, expires = e.expiresAt } end end
+  for _, e in ipairs(list) do if (e.damage or 0) > 0 then dots[#dots + 1] = { name = e.name, damage = e.damage, expires = e.expiresAt, appliedAt = e.appliedAt, provisional = e.provisional } end end
   local ok, err = pcall(draw, dots, UnitHealthMax('target'), UnitHealth('target'))
   if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide() end
 end
@@ -366,7 +400,7 @@ function P.start()
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
-  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then P.holdAt = P.holdAt or GetTime() end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; P.hpHeld = nil; P.hasHeld = nil; P.holdAt = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
+  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
   ev:SetScript('OnUpdate', function(_, dt) P.dt = dt; local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
@@ -376,7 +410,7 @@ end
 -- /omadoomed test       fake DoTs on your current target (live)   /omadoomed test die   (doomed)   ... test off
 function P.slash(m)
   local j = m:match('^join (%a+)'); if j and JOIN[j] then ns.db.doomedJoin = j; ns.say('Doomed join: ' .. j); return update() end
-  if m == 'test off' then test = nil; if built then P.lost:Hide() end; ns.say('Doomed test off'); return update() end
+  if m == 'test off' then test = nil; if built then P.lost:Hide(); P.hangOn(fill) end; ns.say('Doomed test off'); return update() end
   if m:match('^test') then
     test = {}; wipe(last); wipe(P.bites)
     ns.say('Doomed test on your target (Bujuju\'s real ticks, sheet 30). /omadoomed test off'); return update()
