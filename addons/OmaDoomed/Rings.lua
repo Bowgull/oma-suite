@@ -43,11 +43,11 @@ local function hex(h) return { tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3
 local SPELLS = {
   -- colours: one set shared with OmaDoomed (sheet 25, approved 2026-11-11): Corruption teal (green vanished inside the
   -- green health bar), Immolate a touch lighter, Siphon Life deeper, so no two merge; gold only means 'ending soon'
-  { key = 'corruption', names = { 'Corruption' }, color = hex('5fd8e8'),
+  { key = 'corruption', names = { 'Corruption' }, color = hex('b078ff'),
     ids = { 172, 6222, 6223, 7648, 11671, 11672, 25311, 27216 } },
-  { key = 'agony', names = { 'Bane of Agony', 'Curse of Agony' }, color = hex('c46cff'),
+  { key = 'agony', names = { 'Bane of Agony', 'Curse of Agony' }, color = hex('f05496'),
     ids = { 980, 1014, 6217, 11711, 11712, 11713, 27218 } },
-  { key = 'immolate', names = { 'Immolate' }, color = hex('ff9640'),
+  { key = 'immolate', names = { 'Immolate' }, color = hex('ff8a3d'),
     ids = { 348, 707, 1094, 2941, 11665, 11667, 11668, 25309, 27215 } },
   { key = 'siphon', names = { 'Siphon Life' }, color = hex('d63048'),
     ids = { 18265, 18879, 18880, 18881, 27264, 30911 } },

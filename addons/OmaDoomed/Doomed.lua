@@ -9,10 +9,10 @@
 local ADDON, ns = ...
 local P = {}; ns.parts.doomed = P
 
-local COLOR = {   -- sheet 25 (approved 2026-11-11): one colour per DoT, shared with the nameplate rings, at the green's strength
-  ['Corruption'] = { 40 / 255, 150 / 255, 168 / 255 }, ['Curse of Agony'] = { 120 / 255, 56 / 255, 192 / 255 },
-  ['Bane of Agony'] = { 120 / 255, 56 / 255, 192 / 255 }, ['Immolate'] = { 206 / 255, 106 / 255, 36 / 255 },
-  ['Siphon Life'] = { 160 / 255, 30 / 255, 50 / 255 },
+local COLOR = {   -- sheet 34 B 'shadow and fire' (Joshua 2026-11-11: "shadow and fire for sure"): deep pieces, bright only on the tick and the rings
+  ['Corruption'] = { 78 / 255, 40 / 255, 136 / 255 }, ['Curse of Agony'] = { 128 / 255, 30 / 255, 74 / 255 },
+  ['Bane of Agony'] = { 128 / 255, 30 / 255, 74 / 255 }, ['Immolate'] = { 160 / 255, 66 / 255, 22 / 255 },
+  ['Siphon Life'] = { 110 / 255, 20 / 255, 30 / 255 },
 }
 local GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- gold means only 'ending soon' (last 3 s); at the green's strength like the other pieces
 local LOW = 3
@@ -27,7 +27,7 @@ local MARK_W, MARK_H = 78, 54          -- screen pixels at 1080p (sheet 23: the 
 local MAX = 6
 
 local hb, fill, portrait, built
-local clip, holder, shine
+local clip, shine
 local segs = {}
 local win, longBar, mark
 local last = {}                      -- damage per DoT name last time (a drop = a tick: flash)
@@ -76,19 +76,28 @@ local function build()
   P.base = CreateFrame('StatusBar', nil, clip); P.base:SetPoint('TOPLEFT', hb, 'TOPLEFT'); P.base:SetPoint('BOTTOMLEFT', hb, 'BOTTOMLEFT'); P.base:SetWidth(hb:GetWidth())
   P.base:SetStatusBarTexture(WHITE); P.base:SetStatusBarColor(0, 0, 0, 0); P.base:SetMinMaxValues(0, 1); P.base:SetValue(0)
   local baseEdge = P.base:GetStatusBarTexture(); nosnap(baseEdge)
-  P.slide = CreateFrame('StatusBar', nil, clip); P.slide:SetWidth(hb:GetWidth())
-  P.slide:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); P.slide:SetPoint('BOTTOMLEFT', baseEdge, 'BOTTOMRIGHT')
-  P.slide:SetStatusBarTexture(WHITE); P.slide:SetStatusBarColor(0, 0, 0, 0); P.slide:SetMinMaxValues(0, 1); P.slide:SetValue(0)
-  local slideEdge = P.slide:GetStatusBarTexture(); nosnap(slideEdge)
-  holder = CreateFrame('Frame', nil, clip)
-  holder:SetPoint('TOPRIGHT', slideEdge, 'TOPRIGHT'); holder:SetPoint('BOTTOMRIGHT', slideEdge, 'BOTTOMRIGHT'); holder:SetWidth(hb:GetWidth())
+  -- 2026-11-11 'jittery, like rubber bands': the pieces used to hang off a chain (health's end -> slide bar -> holder ->
+  -- piece bar -> edge), and WoW settles each link of a chain on its own, so mid-slide the pieces wobbled against the
+  -- green. Now every edge is a "mark" hung straight off the health's end, one link deep, all moved in the same pass:
+  -- the way Blizzard's own smooth bars work (one value glides, everything is drawn from it).
+  local W = hb:GetWidth()
+  local function newMark()
+    local m = {}
+    m.L = CreateFrame('StatusBar', nil, clip); m.L:SetPoint('TOPRIGHT', baseEdge, 'TOPRIGHT'); m.L:SetPoint('BOTTOMRIGHT', baseEdge, 'BOTTOMRIGHT'); m.L:SetWidth(W); m.L:SetReverseFill(true)
+    m.R = CreateFrame('StatusBar', nil, clip); m.R:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); m.R:SetPoint('BOTTOMLEFT', baseEdge, 'BOTTOMRIGHT'); m.R:SetWidth(W)
+    for _, b in ipairs({ m.L, m.R }) do b:SetStatusBarTexture(WHITE); b:SetStatusBarColor(0, 0, 0, 0); b:SetMinMaxValues(0, 1); b:SetValue(0) end
+    m.lt, m.rt = m.L:GetStatusBarTexture(), m.R:GetStatusBarTexture(); nosnap(m.lt); nosnap(m.rt)
+    m.f = CreateFrame('Frame', nil, clip); m.f:SetWidth(.001)
+    return m
+  end
+  P.newMark = newMark
+  P.E = { [0] = newMark() }   -- E[0]: the far end of the pieces (the health's end plus any bite still closing)
   local art = CreateFrame('Frame', nil, clip); art:SetAllPoints(clip); art:SetFrameLevel(clip:GetFrameLevel() + 2)
   P.lost = art:CreateTexture(nil, 'ARTWORK', nil, 0); barTex(P.lost); P.lost:SetVertexColor(.14, .09, .05); P.lost:Hide()
   P.lost:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); P.lost:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')   -- test only: the empty bar
   for i = 1, MAX do
-    local bar = CreateFrame('StatusBar', nil, holder); bar:SetAllPoints(holder); bar:SetReverseFill(true)
-    bar:SetStatusBarTexture(WHITE); bar:SetStatusBarColor(0, 0, 0, 0); bar:SetMinMaxValues(0, 1); bar:SetValue(0)
-    local s = { bar = bar, edge = bar:GetStatusBarTexture(), shown = 0, target = 0 }; nosnap(s.edge)
+    P.E[i] = newMark()
+    local s = { mark = P.E[i], edge = P.E[i].f, shown = 0, target = 0 }
     s.base = art:CreateTexture(nil, 'ARTWORK', nil, 1); barTex(s.base)
     s.lift = art:CreateTexture(nil, 'ARTWORK', nil, 2); barTex(s.lift); s.lift:SetBlendMode('ADD')
     -- the flash and the shine use the bar's own texture: a plain white one also lit the bar's see-through top edge
@@ -105,9 +114,7 @@ local function build()
     s.flashAnim = g
     -- sheet 27 (approved "Looks right"): the bite. A second bar holds where this piece's edge WAS; the chunk between it and
     -- the new edge glows bright in the DoT's colour, holds 120 ms, then drains over 380 ms.
-    s.gbar = CreateFrame('StatusBar', nil, holder); s.gbar:SetAllPoints(holder); s.gbar:SetReverseFill(true)
-    s.gbar:SetStatusBarTexture(WHITE); s.gbar:SetStatusBarColor(0, 0, 0, 0); s.gbar:SetMinMaxValues(0, 1); s.gbar:SetValue(0)
-    s.gedge = s.gbar:GetStatusBarTexture(); nosnap(s.gedge)
+    s.gmark = newMark(); s.gedge = s.gmark.f
     s.ghost = art:CreateTexture(nil, 'ARTWORK', nil, 5); barTex(s.ghost); s.ghost:Hide()   -- the bite: solid, its own colour
     -- the light it casts: 9 screen px onto each neighbour, fading out (left fade, core, right fade), the bar's own shape
     s.spillL = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillL); s.spillL:SetBlendMode('ADD'); s.spillL:Hide()
@@ -116,7 +123,7 @@ local function build()
     segs[i] = s
   end
   for i, s in ipairs(segs) do
-    local right, rp = (i == 1) and holder or segs[i - 1].edge, (i == 1) and 'BOTTOMRIGHT' or 'BOTTOMLEFT'
+    local right, rp = (i == 1) and P.E[0].f or segs[i - 1].edge, 'BOTTOMLEFT'
     for _, t in ipairs({ s.base, s.lift, s.flash }) do
       t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, rp)
     end
@@ -125,7 +132,7 @@ local function build()
     local sp = px(9, hb)
     s.spillC:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); s.spillC:SetPoint('BOTTOMRIGHT', right, rp)
     s.spillL:SetPoint('TOPRIGHT', s.gedge, 'TOPLEFT'); s.spillL:SetPoint('BOTTOMRIGHT', s.gedge, 'BOTTOMLEFT'); s.spillL:SetWidth(sp)
-    s.spillR:SetPoint('TOPLEFT', right, (i == 1) and 'TOPRIGHT' or 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, rp); s.spillR:SetWidth(sp)
+    s.spillR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, rp); s.spillR:SetWidth(sp)
     -- the join sits on this piece's right edge, fading from this colour into the previous (nearer the green) one
     if i > 1 then
       for _, t in ipairs({ s.join, s.joinLift }) do t:SetPoint('TOP', segs[i - 1].edge, 'TOPLEFT'); t:SetPoint('BOTTOM', segs[i - 1].edge, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
@@ -140,7 +147,7 @@ local function build()
   end
   -- one shine along the top of all the pieces (sheet 22: "fade and shine")
   shine = art:CreateTexture(nil, 'OVERLAY', nil, 2); barTex(shine); shine:SetBlendMode('ADD')
-  shine:SetPoint('TOPRIGHT', holder, 'TOPRIGHT'); shine:SetPoint('BOTTOMRIGHT', holder, 'BOTTOMRIGHT')
+  shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMRIGHT', P.E[0].f, 'BOTTOMLEFT')
   if CreateColor then shine:SetGradient('VERTICAL', CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, .30)) end
 
   -- the skull and bones, on the ring's top edge like a raid mark (sheet 23 v5)
@@ -165,6 +172,18 @@ local function hide()
   wipe(P.bites)
 end
 
+-- put a mark p health-points from the health's end (negative = into the green), on whichever side it falls
+local function setMark(m, p, maxv)
+  m.L:SetMinMaxValues(0, maxv); m.R:SetMinMaxValues(0, maxv)
+  local side = p < 0 and 'L' or 'R'
+  if side == 'L' then m.L:SetValue(-p) else m.R:SetValue(math.max(p, .0001)) end
+  if side ~= m.side then
+    m.f:ClearAllPoints()
+    local t, a, b = (side == 'L') and m.lt or m.rt, (side == 'L') and 'TOPLEFT' or 'TOPRIGHT', (side == 'L') and 'BOTTOMLEFT' or 'BOTTOMRIGHT'
+    m.f:SetPoint('TOPLEFT', t, a); m.f:SetPoint('BOTTOMLEFT', t, b); m.side = side
+  end
+end
+
 local function colorOf(name) return COLOR[name] or OTHER end
 
 -- sheet 30 (approved "Yes, build it", 2026-11-11). Every frame. dots: { {name, damage, expires} } nearest the bar's end
@@ -175,19 +194,18 @@ P.bites = {}                         -- DoT name -> { amt, at }
 local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
 local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
-local RINGTONE = {   -- the rings' own colours (Rings.lua), for the flare
-  ['Corruption'] = { 95 / 255, 216 / 255, 232 / 255 }, ['Curse of Agony'] = { 196 / 255, 108 / 255, 1 }, ['Bane of Agony'] = { 196 / 255, 108 / 255, 1 },
-  ['Immolate'] = { 1, 150 / 255, 64 / 255 }, ['Siphon Life'] = { 214 / 255, 48 / 255, 72 / 255 },
+local RINGTONE = {   -- the rings' own colours (Rings.lua), for the tick
+  ['Corruption'] = { 176 / 255, 120 / 255, 1 }, ['Curse of Agony'] = { 240 / 255, 84 / 255, 150 / 255 }, ['Bane of Agony'] = { 240 / 255, 84 / 255, 150 / 255 },
+  ['Immolate'] = { 1, 138 / 255, 61 / 255 }, ['Siphon Life'] = { 214 / 255, 48 / 255, 72 / 255 },
 }
 local RINGGOLD = { 1, 214 / 255, 110 / 255 }
 
 local function biteNow(name, now)    -- what is still left of a bite (0 when done), and its flare 0..1
   local b = P.bites[name]; if not b then return 0, 0 end
   local a = now - b.at
-  if a >= .5 then P.bites[name] = nil; return 0, 0 end
-  local k = math.max(0, math.min(1, (a - .06) / .44)); k = k < .5 and 2 * k * k or 1 - (-2 * k + 2) ^ 2 / 2   -- ease in-out: no snap at the start
-  local left = b.amt * (1 - k)
-  local flare = a < .06 and a / .06 or math.max(0, 1 - (a - .06) / .44)
+  if a >= .7 then P.bites[name] = nil; return 0, 0 end
+  local left = a < .06 and b.amt or b.amt * math.exp(-(a - .06) / .11)   -- glides shut like Blizzard's smooth bars
+  local flare = a < .06 and a / .06 or math.exp(-(a - .06) / .14)
   return left, flare
 end
 
@@ -214,14 +232,12 @@ local function render()
   local run, slide = 0, 0
   for i, s in ipairs(segs) do
     local d = dots[i]
-    s.bar:SetMinMaxValues(0, maxv); s.gbar:SetMinMaxValues(0, maxv)
     if d then
       local bl, flare = biteNow(d.name, now); slide = slide + bl
       local before = run                                 -- where this piece starts, from the bar's end
       run = run + d.damage + bl
       -- a new DoT grows in; shrinking happens only through bites
       if run > s.shown then s.shown = s.shown + (run - s.shown) * (1 - math.exp(-(P.dt or .033) * 9)) else s.shown = run end
-      s.bar:SetValue(s.shown)
       local left = d.expires and (d.expires - now)
       local lowNow = left and left > 0 and left <= LOW
       local c = colorOf(d.name)
@@ -233,7 +249,7 @@ local function render()
         local hot = mix(colorOf(d.name), { math.min(1, tone[1] * 1.1), math.min(1, tone[2] * 1.1), math.min(1, tone[3] * 1.1) }, .6)
         local base = colorOf(d.name); local ember = mix(base, EMPTY, .75)
         local col = (now - P.bites[d.name].at) < .06 and mix(base, hot, flare) or mix(ember, hot, flare)
-        s.gbar:SetValue(before + bl); s.ghost:SetVertexColor(col[1], col[2], col[3]); s.ghost:Show()
+        s.gtarget = before + bl; s.ghost:SetVertexColor(col[1], col[2], col[3]); s.ghost:Show()
         local a = flare * .4
         s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
         if CreateColor then
@@ -245,7 +261,7 @@ local function render()
         s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
       end
     else
-      s.shown = run; s.bar:SetValue(run); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
+      s.shown = run; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
     end
     local on = d and true or false
     local mode = ns.db.doomedJoin or 'crease'
@@ -257,10 +273,16 @@ local function render()
   -- the pieces hang one status bar deeper than the health's end, and WoW lays each level out a frame later; so the end
   -- takes its new value one frame late too, or on every tick the pieces slipped 2 px for a frame (filmed 2026-11-11)
   P.base:SetMinMaxValues(0, maxv); P.base:SetValue(hp)
-  P.slide:SetMinMaxValues(0, maxv); P.slide:SetValue(slide); P.slideV = slide
+  -- every edge in one pass, all one link from the health's end
+  setMark(P.E[0], slide, maxv)
+  for i, s in ipairs(segs) do
+    setMark(s.mark, slide - s.shown, maxv)
+    if s.ghost:IsShown() and s.gtarget then setMark(s.gmark, slide - s.gtarget, maxv) end
+  end
+  P.slideV = slide
   traceFrame(now)
   local far = segs[math.min(#dots, MAX)]
-  shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', holder, 'TOPRIGHT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
+  shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
   -- the skull: hidden when the mob already carries a real raid mark (that one wins)
   local total = 0; for _, d in ipairs(dots) do total = total + d.damage end
   if GetRaidTargetIndex('target') then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(total) end
