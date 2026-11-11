@@ -436,10 +436,11 @@ visible = function()
   local fight = UnitAffectingCombat('player')
   for u, p in pairs(active) do
     local show = where ~= 'frame' and (which == 'all' or (which == 'target' and isTarget(u)) or (which == 'combat' and fight))
+    if where == 'split' and isTarget(u) then show = false end   -- 'Target on its frame, others overhead'
     p.anchor:SetAlpha(show and (db.alpha or 100) / 100 or 0)
   end
   if framePair then
-    local show = where ~= 'enemy' and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
+    local show = (where == 'frame' or where == 'both' or where == 'split') and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
     framePair.anchor:SetShown(show and true or false)
   end
 end
@@ -754,6 +755,8 @@ function ns.ringsSlash(msg)
       f = EnumerateFrames(f)
     end
     OmaDoomedDB.tffind = out; say('found ' .. #out .. '; /reload to save')
+  elseif cmd == 'where' and (arg == 'enemy' or arg == 'split' or arg == 'frame' or arg == 'both') then
+    db.where = arg; ns.ringsApply('where'); say('rings: ' .. arg)
   elseif cmd == 'squares' then
     local au = targetAuras()
     local ok, m = pcall(function() return au and au:GetMaxDebuffs() end)

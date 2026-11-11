@@ -100,8 +100,8 @@ function ns.buildSettings()
     "How the gold looks in a DoT's last seconds: breathing on the rings' beat, or steady.", bar)
 
   header('Rings')
-  drop(rdb, 'where', 'Where the rings show', { { 'enemy', 'Above the enemy' }, { 'frame', 'Above the target frame' }, { 'both', 'Both' } },
-    'Above the enemy in the world, above its target frame, or both.')
+  drop(rdb, 'where', 'Where the rings show', { { 'enemy', 'Above the enemy' }, { 'split', 'Target on its frame, others overhead' }, { 'frame', 'Above the target frame' }, { 'both', 'Both' } },
+    'Above the enemy in the world, above its target frame, or both. Target on its frame, others overhead: your target\'s rings sit on its frame next to the kill bar, every other enemy keeps its rings over its head.')
   drop(rdb, 'squares', "Blizzard's squares", { { 'notmine', 'All but my DoTs' }, { 'all', 'All' }, { 'hide', 'Hide' } },
     "Blizzard's own buff and debuff squares on the target frame. All but my DoTs keeps everyone else's debuffs, stuns and the enemy's buffs, and leaves out yours (the rings already show them).")
   drop(rdb, 'which', 'Which enemies', { { 'all', 'Every enemy' }, { 'target', 'Only your target' }, { 'combat', 'Only in combat' } },

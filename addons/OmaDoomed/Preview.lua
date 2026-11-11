@@ -232,7 +232,7 @@ function ns.previewDraw()
   -- rings
   local where, size, alpha, oa = rdb.where or 'enemy', (rdb.size or 40), (rdb.alpha or 100) / 100, (rdb.othersAlpha or 55) / 100
   for home = 1, 2 do
-    local on = (home == 1 and where ~= 'frame') or (home == 2 and where ~= 'enemy')
+    local on = (home == 1 and (where == 'enemy' or where == 'both')) or (home == 2 and where ~= 'enemy')   -- the preview's enemy IS your target
     local n = 0
     for i = 1, 4 do
       local w = rings[home][i]
