@@ -34,7 +34,21 @@ local function dump()
   -- pet spells
   d.pet = try(function()
     local out = {}
-    for i = 1, 10 do local n, tex, isToken = GetPetActionInfo(i); out[#out + 1] = i .. ' | ' .. tostring(n) end
+    for i = 1, 10 do local n, tex, isToken, isActive, acAllowed, acOn, sid = GetPetActionInfo(i)
+      out[#out + 1] = i .. ' | ' .. tostring(n) .. ' | token ' .. tostring(isToken) .. ' | lit ' .. tostring(isActive) .. ' | spell ' .. tostring(sid) end
+    return out
+  end)
+  -- which pet commands this client has (2026-11-11: does /petdefensive exist here?)
+  d.petCmds = try(function()
+    local out = {}
+    for _, f in ipairs({ 'PetDefensiveMode', 'PetDefensiveAssistMode', 'PetAssistMode', 'PetAggressiveMode', 'PetPassiveMode', 'PetAttack', 'PetFollow' }) do
+      out[#out + 1] = f .. ' = ' .. type(_G[f]) end
+    for _, c in ipairs({ '/petdefensive', '/petdefensiveassist', '/petassist', '/petaggressive', '/petpassive', '/petattack' }) do
+      out[#out + 1] = c .. ' -> ' .. tostring(hash_SlashCmdList and hash_SlashCmdList[c:upper()] and 'yes' or 'no') end
+    out[#out + 1] = 'ActionButtonUseKeyDown = ' .. tostring(C_CVar and C_CVar.GetCVar('ActionButtonUseKeyDown'))
+    local names = {}
+    for k, v in pairs(_G) do if type(k) == 'string' and k:find('^SLASH_PET') then names[#names + 1] = k .. ' = ' .. tostring(v) end end
+    table.sort(names); for _, n in ipairs(names) do out[#out + 1] = n end
     return out
   end)
   -- macros
@@ -97,6 +111,8 @@ local function dump()
     for i = 1, (GetNumSkillLines and GetNumSkillLines() or 0) do local n, hdr, _, r = GetSkillLineInfo(i); if not hdr then out[#out + 1] = 'skill: ' .. n .. ' ' .. tostring(r) end end
     return out
   end)
+  d.petLog = (OmashuDumpDB and OmashuDumpDB.petLog) or {}
+  table.insert(d.petLog, d.at .. '  ' .. (type(d.pet) == 'table' and table.concat(d.pet, ' ;; ') or tostring(d.pet)))
   OmashuDumpDB = d
   print('|cffe8c860Omashu:|r read ' .. (type(d.spells) == 'table' and #d.spells or 0) .. ' spells, ' .. (type(d.slots) == 'table' and #d.slots or 0) .. ' slots')
 end

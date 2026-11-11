@@ -17,10 +17,19 @@ local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
 local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
 
+-- the pet bar slot holding Defensive Assist for the demon that's out, or nil (no demon)
+local function petFightBody()
+  for i = 1, 10 do
+    local n = GetPetActionInfo(i)
+    if n == 'PET_MODE_DEFENSIVEASSIST' then return '/click PetActionButton' .. i .. ' LeftButton 1\n/petattack' end
+  end
+end
 local MACROS = {                               -- Joshua's two demon buttons (his old "Good Boi", split for the pad)
-  -- /petdefensive, not /click PetActionButton9: on Forever's engine buttons fire on key-down and /click only sends the
-  -- key-up, so the click did nothing and the demon never went defensive (Joshua 2026-11-11, "fighting for weeks").
-  { 'PetFight', '/petdefensive\n/petattack', 'Ability_Warrior_Charge' },              -- defensive + attack my target
+  -- Defensive Assist + attack (Joshua 2026-11-11, "fighting for weeks"). Measured in game: Forever's pet bar has Assist,
+  -- Defensive Assist and Passive (no plain Defensive, so /petdefensive does nothing) and no slash command for Defensive
+  -- Assist. So the macro presses that pet-bar button, with "LeftButton 1" = key down (this engine's buttons ignore the
+  -- key-up a bare /click sends). Its slot depends on the demon, so the body is rebuilt whenever the pet changes.
+  { 'PetFight', function() return petFightBody() end, 'Ability_Warrior_Charge' },     -- defensive assist + attack my target
   { 'PetHome',  '/petpassive\n/petfollow', 'Ability_Tracking' },                     -- passive + come back
   { 'Meters',   '/ommeters', 'INV_Misc_PocketWatch_01' },                            -- damage + threat meters, show/hide
 }
@@ -219,7 +228,11 @@ local function makeMacros()
   for _, n in ipairs(OLD_MACROS) do local i = GetMacroIndexByName(n); if i > 0 then DeleteMacro(i) end end
   for _, m in ipairs(MACROS) do
     local i = GetMacroIndexByName(m[1])
-    if i == 0 then CreateMacro(m[1], m[3] or 'INV_MISC_QUESTIONMARK', m[2], true) else EditMacro(i, m[1], m[3] or 'INV_MISC_QUESTIONMARK', m[2]) end
+    local body = m[2]; if type(body) == 'function' then body = body() end
+    if body then
+      if i == 0 then CreateMacro(m[1], m[3] or 'INV_MISC_QUESTIONMARK', body, true)
+      elseif select(3, GetMacroInfo(i)) ~= body then EditMacro(i, m[1], m[3] or 'INV_MISC_QUESTIONMARK', body) end
+    elseif i == 0 then CreateMacro(m[1], m[3] or 'INV_MISC_QUESTIONMARK', '/petattack', true) end   -- no demon yet: fixed on summon
   end
 end
 
@@ -511,7 +524,7 @@ local busy
 local function later() if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply() end) end
 
 local ev = CreateFrame('Frame')
-for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'SPELLS_CHANGED', 'LEARNED_SPELL_IN_SKILL_LINE', 'LEARNED_SPELL_IN_TAB', 'BAG_UPDATE_DELAYED', 'PLAYER_REGEN_ENABLED' }) do
+for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'SPELLS_CHANGED', 'LEARNED_SPELL_IN_SKILL_LINE', 'LEARNED_SPELL_IN_TAB', 'BAG_UPDATE_DELAYED', 'PLAYER_REGEN_ENABLED', 'UNIT_PET', 'PET_BAR_UPDATE' }) do
   pcall(ev.RegisterEvent, ev, e)                -- event names differ between WoW versions
 end
 ev:SetScript('OnEvent', function(_, e)
