@@ -226,7 +226,7 @@ local function numberOn(cd, b, size)
   -- the number lives in a child of the cooldown, so it always draws above the dark swipe; it never moves
   local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
   local num = top:CreateFontString(nil, 'OVERLAY')
-  num:SetFont(NUM_FONT, math.floor(size * 0.4 + 0.5), 'THICKOUTLINE')
+  num:SetFont(NUM_FONT, math.floor(size * 0.58 + 0.5), 'THICKOUTLINE')   -- sheet 39 A 'Bold': big outlined number
   num:SetPoint('CENTER', b, 'CENTER', 0, -size * 0.02)
   num:SetTextColor(1, 1, 1, 1); num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1)
   return num
@@ -234,7 +234,7 @@ end
 
 local function mainOwn(b)
   b:SetSize(S, S); pcall(b.EnableMouse, b, false)
-  local icon = roundIcon(b, S)
+  local icon = roundIcon(b, S); icon:SetAlpha(.42)   -- sheet 39 A 'Bold': the icon steps back so the number reads
   local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(b)
   local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_inner')
   local num = numberOn(cd, b, S)
@@ -284,13 +284,13 @@ local function ringOwn(color, curve, key)
       fs:SetTextColor(color[1], color[2], color[3], 1)
       b:SetDurationText(fs, textOpts(RING_FMT, curve))
     else
-      local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. 'ring'); t:SetAllPoints(b)
+      local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. 'ring_bold'); t:SetAllPoints(b)   -- sheet 39 A: twice as thick
       t:SetVertexColor(color[1], color[2], color[3])
     end
-    local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_track')
+    local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_track_bold')
     b:SetDurationCooldown(cd)
     if key then
-      local glow = b:CreateTexture(nil, 'OVERLAY', nil, 7); glow:SetTexture(ART .. 'ring'); glow:SetAllPoints(b)
+      local glow = b:CreateTexture(nil, 'OVERLAY', nil, 7); glow:SetTexture(ART .. 'ring_bold'); glow:SetAllPoints(b)
       glow:SetVertexColor(color[1], color[2], color[3]); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
       local g = glow:CreateAnimationGroup()
       local a1 = g:CreateAnimation('Alpha'); a1:SetFromAlpha(0); a1:SetToAlpha(.4); a1:SetDuration(.12); a1:SetOrder(1); a1:SetSmoothing('OUT')

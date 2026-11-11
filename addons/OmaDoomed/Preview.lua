@@ -44,9 +44,9 @@ local function ringWidget(parent)
   local back = w:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. 'rings\\backing'); back:SetAllPoints()
   local ic = w:CreateTexture(nil, 'ARTWORK', nil, 0); ic:SetPoint('CENTER'); ic:SetTexCoord(.06, .94, .06, .94)
   local m = w:CreateMaskTexture(); m:SetTexture(ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(w); ic:AddMaskTexture(m)
-  local ring = w:CreateTexture(nil, 'ARTWORK', nil, 2); ring:SetTexture(ART .. 'rings\\ring'); ring:SetAllPoints()
-  local glow = w:CreateTexture(nil, 'ARTWORK', nil, 3); glow:SetTexture(ART .. 'rings\\ring'); glow:SetAllPoints(); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
-  local cd = CreateFrame('Cooldown', nil, w); cd:SetAllPoints(); pcall(cd.SetSwipeTexture, cd, ART .. 'rings\\swipe_track'); pcall(cd.SetDrawEdge, cd, false); pcall(cd.SetReverse, cd, true); pcall(cd.SetHideCountdownNumbers, cd, true)
+  local ring = w:CreateTexture(nil, 'ARTWORK', nil, 2); ring:SetTexture(ART .. 'rings\\ring_bold'); ring:SetAllPoints()
+  local glow = w:CreateTexture(nil, 'ARTWORK', nil, 3); glow:SetTexture(ART .. 'rings\\ring_bold'); glow:SetAllPoints(); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
+  local cd = CreateFrame('Cooldown', nil, w); cd:SetAllPoints(); pcall(cd.SetSwipeTexture, cd, ART .. 'rings\\swipe_track_bold'); pcall(cd.SetDrawEdge, cd, false); pcall(cd.SetReverse, cd, true); pcall(cd.SetHideCountdownNumbers, cd, true)
   local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(w)
   local bez = top:CreateTexture(nil, 'ARTWORK'); bez:SetTexture(ART .. 'rings\\bezel'); bez:SetAllPoints()
   local num = top:CreateFontString(nil, 'OVERLAY'); num:SetFont(STANDARD_TEXT_FONT, 16, 'THICKOUTLINE'); num:SetPoint('CENTER')
@@ -240,7 +240,7 @@ function ns.previewDraw()
       local other = i == 4
       if on and ((d and not d.casting and d.timeLeft > 0) or (other and oa > 0)) then
         local z = other and size * .6 or size
-        w:SetSize(z, z); w.ic:SetSize(z * .756, z * .756); w.num:SetFont(STANDARD_TEXT_FONT, math.floor(z * .4 + .5), 'THICKOUTLINE')
+        w:SetSize(z, z); w.ic:SetSize(z * .756, z * .756); w.num:SetFont(STANDARD_TEXT_FONT, math.floor(z * .58 + .5), 'THICKOUTLINE'); w.ic:SetAlpha(other and 1 or .42)
         local k = other and 'c' or d.k
         w.ic:SetTexture(icon(NAME[k]))
         local col = other and { .54, .42, .16 } or RING[k]

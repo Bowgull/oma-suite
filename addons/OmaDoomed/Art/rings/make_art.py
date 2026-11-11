@@ -152,9 +152,25 @@ def swipe_track(x, y, d):
     return (10, 5, 3, 0.92 * ring_cov(d, RING_R, TRACK_W))
 
 
+# sheet 39 A 'Bold' (Joshua 2026-11-11): the colour ring twice as thick, growing inward so its outer edge stays put
+BOLD_W = 2 * RING_W
+BOLD_R = RING_R - RING_W / 2
+
+
+def ring_bold(x, y, d):
+    out_d = max(0.0, abs(d - BOLD_R) - BOLD_W / 2)
+    glow = (255, 255, 255, 0.4 * math.exp(-(out_d ** 2) / (2 * (8 / 70 / 2) ** 2)) * edge_fade(d))
+    return over(glow, (255, 255, 255, ring_cov(d, BOLD_R, BOLD_W)))
+
+
+def swipe_track_bold(x, y, d):
+    return (10, 5, 3, 0.92 * ring_cov(d, BOLD_R, BOLD_W + (TRACK_W - RING_W)))
+
+
 TEXTURES = {
     'backing': backing, 'mask': mask, 'bezel': bezel, 'ring': ring, 'ring_plain': ring_plain,
     'swipe_inner': swipe_inner, 'swipe_track': swipe_track,
+    'ring_bold': ring_bold, 'swipe_track_bold': swipe_track_bold,
 }
 
 
