@@ -1,0 +1,1 @@
+DoesItDie v0.9.4 (CurseForge 1709161), copied from the Omashu laptop's AddOns folder on 2026-11-11. MIT, Joe Greive.

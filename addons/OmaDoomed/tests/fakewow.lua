@@ -90,7 +90,7 @@ W.units = {}
 W.combat = false
 local function U(t) return W.units[t] end
 function UnitExists(t) return U(t) ~= nil end
-function UnitGUID(t) return U(t) and U(t).guid end
+function UnitGUID(t) local u = U(t); if not u then return nil end; if u.secretGuid then return W.secret(u.guid) end; return u.guid end
 function UnitName(t) return U(t) and U(t).name end
 function UnitIsDead(t) return U(t) and U(t).dead or false end
 function UnitIsDeadOrGhost(t) return UnitIsDead(t) end

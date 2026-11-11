@@ -1,5 +1,5 @@
 -- Offline test runner:  luajit tests/run.lua [pattern]   (from the OmaDoomed folder)
--- Each tests/test_*.lua returns a table of name -> function(W, T). Every test gets a fresh fake WoW.
+-- Each tests/test_*.lua returns (require helpers like 'load' INSIDE each test, so every test gets a fresh world) a table of name -> function(W, T). Every test gets a fresh fake WoW.
 package.path = './tests/?.lua;' .. package.path
 local pattern = arg[1]
 local files = {}
@@ -15,16 +15,17 @@ for _, file in ipairs(files) do
   for _, n in ipairs(names) do
     if not pattern or (file .. ' ' .. n):find(pattern, 1, true) then
       -- fresh world: drop the fake and everything it defined
-      package.loaded.fakewow = nil
+      local savedMods = {}; for k in pairs(package.loaded) do savedMods[k] = true end
       local saved = {}; for k, v in pairs(_G) do saved[k] = v end
       local W = require('fakewow')
       local ok, err = xpcall(function() suite[n](W, T) end, debug.traceback)
       setmetatable(_G, nil)
       for k in pairs(_G) do if saved[k] == nil then _G[k] = nil end end
       for k, v in pairs(saved) do _G[k] = v end
-      if ok then pass = pass + 1 else fail = fail + 1; print('FAIL ' .. file .. ' :: ' .. n .. '\n  ' .. tostring(err):gsub('\n', '\n  ')) end
+      for k in pairs(package.loaded) do if not savedMods[k] then package.loaded[k] = nil end end
+      if ok then pass = pass + 1 else fail = fail + 1; io.write('FAIL ' .. file .. ' :: ' .. n .. '\n  ' .. tostring(err):gsub('\n', '\n  ') .. '\n') end
     end
   end
 end
-print(('%d passed, %d failed'):format(pass, fail))
+io.write(('%d passed, %d failed\n'):format(pass, fail))
 os.exit(fail == 0 and 0 or 1)
