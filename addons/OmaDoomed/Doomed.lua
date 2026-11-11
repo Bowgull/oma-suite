@@ -300,7 +300,10 @@ biteNow = function(name, now)    -- what is still left of a bite (0 when done), 
   -- starts from rest, is quickest midway and settles (smootherstep over 0.5 s); the light swells instead of flashing.
   local k = math.max(0, math.min(1, a / .5)); k = k * k * k * (k * (k * 6 - 15) + 10)
   local left = b.amt * (1 - k)
-  local flare = a < .12 and 1 - (1 - a / .12) ^ 2 or math.exp(-(a - .12) / .2)   -- swells in 120 ms, fades
+  -- 2026-11-11 'the ticks are a bit jumpy, plain is smooth': the light swells and settles on smooth curves and cools back
+  -- into the piece's own colour (it used to start from, and cool to, a dark ember: a dip that read as a jump)
+  local function ss(v) v = math.max(0, math.min(1, v)); return v * v * (3 - 2 * v) end
+  local flare = a < .16 and ss(a / .16) or 1 - ss((a - .16) / .5)
   return left, flare
 end
 
@@ -389,9 +392,9 @@ local function render()
         -- 2026-11-11 'when a DoT ends there's still a flash': its last tick always lands in the gold last 3 s, and lit up
         -- in bright ring gold x1.85, near white. The light now comes from the piece's own colour, like every other tick.
         local tone = lowNow and { math.min(1, c[1] * 1.3), math.min(1, c[2] * 1.3), math.min(1, c[3] * 1.3) } or (RINGTONE[d.name] or c)
-        local hot = mix(c, tone, .45)
+        local hot = mix(c, tone, .4)
         local base = c; local ember = mix(base, EMPTY, .75)
-        local col = (anow - P.bites[d.name].at) < .12 and mix(base, hot, flare) or mix(ember, hot, flare)
+        local col = mix(base, hot, flare)
         s.gtarget = before + bl; s.ghost:SetVertexColor(math.min(1, col[1] * 1.85), math.min(1, col[2] * 1.85), math.min(1, col[3] * 1.85)); s.ghost:Show()   -- 1.85: base 1.15 + lift .7, as the pieces
         local a = flare * .4
         s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
