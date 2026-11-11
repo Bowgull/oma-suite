@@ -408,6 +408,7 @@ local function release(unit)
   free[#free + 1] = p
 end
 
+local look, visible                 -- settings helpers, defined below (attach needs them)
 local function attach(unit)
   if not db or not db.enabled or active[unit] then return end
   if not unit or not unit:match('^nameplate%d+$') or not isEnemy(unit) then return end
@@ -425,11 +426,11 @@ end
 
 -- ---------- settings: size, opacity, where, which ----------
 local framePair                      -- the row above the target frame ('Where the rings show': frame / both)
-local function look(p)
+look = function(p)
   p.anchor:SetScale((db.size or 40) / 40); p.anchor:SetAlpha((db.alpha or 100) / 100)
 end
 local function isTarget(u) local ok, v = pcall(UnitIsUnit, u, 'target'); return ok and not secret(v) and v == true end
-local function visible()
+visible = function()
   if not db then return end
   local where, which = db.where or 'enemy', db.which or 'all'
   local fight = UnitAffectingCombat('player')
@@ -639,7 +640,9 @@ local function learn(spellID)
   end
 end
 
-ev:SetScript('OnEvent', function(_, e, a1, _, a3)
+local onEvent
+ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEvent, ...); if not ok then ns.err('rings event: ' .. tostring(err)) end end)
+onEvent = (function(_, e, a1, _, a3)
   if e ~= 'PLAYER_LOGIN' and not db then return end
   if e == 'PLAYER_LOGIN' then
     -- settings live in OmaDoomedDB.rings; the old separate OmaPlatesDB is moved in once
@@ -687,7 +690,7 @@ local function blizzSquares(show)
     if tf.auraPools and tf.auraPools.EnumerateActive then for f in tf.auraPools:EnumerateActive() do fn(f) end end
     for i = 1, 40 do for _, n in ipairs({ 'TargetFrameBuff', 'TargetFrameDebuff' }) do local f = _G[n .. i]; if f then fn(f) end end end
   end
-  local function apply() if db and db.squares and db.squares ~= 'all' then each(function(f) f:SetAlpha(0) end) end end
+  local function apply() local ok, err = pcall(function() if db and db.squares and db.squares ~= 'all' then each(function(f) f:SetAlpha(0) end) end end); if not ok then ns.err('squares hook: ' .. tostring(err)) end end
   if not sqHooked then
     sqHooked = true
     if tf.UpdateAuras then hooksecurefunc(tf, 'UpdateAuras', apply) end
