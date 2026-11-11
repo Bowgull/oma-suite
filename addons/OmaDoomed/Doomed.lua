@@ -95,7 +95,7 @@ local function build()
     m.L = CreateFrame('StatusBar', nil, clip); m.L:SetWidth(W); m.L:SetReverseFill(true)
     m.R = CreateFrame('StatusBar', nil, clip); m.R:SetWidth(W)
     hang(m, P.hungOn or fill); P.marks[#P.marks + 1] = m
-    for _, b in ipairs({ m.L, m.R }) do b:SetStatusBarTexture(WHITE); b:SetStatusBarColor(0, 0, 0, 0); b:SetMinMaxValues(0, 1); b:SetValue(0) end
+    for _, b in ipairs({ m.L, m.R }) do b:SetStatusBarTexture(WHITE); b:SetStatusBarColor(0, 0, 0, 0); b:SetMinMaxValues(0, 1); b:SetValue(.0001) end
     m.lt, m.rt = m.L:GetStatusBarTexture(), m.R:GetStatusBarTexture(); nosnap(m.lt); nosnap(m.rt)
     m.f = CreateFrame('Frame', nil, clip); m.f:SetWidth(.001)
     return m
@@ -167,6 +167,19 @@ local function build()
       end   -- 6 screen px: what the 2-game-pixel fade looked like on sheet 22 (seen ~3x); 2 px read as a hard cut on the TV
     end
   end
+  function P.reanchor(s, right)
+    for _, t in ipairs({ s.base, s.lift, s.flash, s.pre }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT') end
+    for _, t in ipairs({ s.ghost, s.spillC }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT') end
+    s.spillR:ClearAllPoints(); s.spillR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, 'BOTTOMLEFT'); s.spillR:SetWidth(px(9, hb))
+    for _, t in ipairs({ s.join, s.joinLift }) do t:ClearAllPoints(); t:SetPoint('TOP', right, 'TOPLEFT'); t:SetPoint('BOTTOM', right, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
+    s.creaseL:ClearAllPoints(); s.creaseL:SetPoint('TOPRIGHT', right, 'TOPLEFT'); s.creaseL:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT'); s.creaseL:SetWidth(px(2, hb))
+    s.creaseR:ClearAllPoints(); s.creaseR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.creaseR:SetPoint('BOTTOMLEFT', right, 'BOTTOMLEFT'); s.creaseR:SetWidth(px(2, hb))
+    if CreateColor then
+      s.creaseL:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, .45))
+      s.creaseR:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, .45), CreateColor(0, 0, 0, 0))
+    end
+    s.right = right
+  end
   -- one shine along the top of all the pieces (sheet 22: "fade and shine")
   shine = art:CreateTexture(nil, 'OVERLAY', nil, 2); barTex(shine); shine:SetBlendMode('ADD')
   shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMRIGHT', P.E[0].f, 'BOTTOMLEFT')
@@ -190,7 +203,8 @@ local function hide()
   if not built then return end
   P.hpLate = nil
   clip:Hide(); win:Hide()
-  for _, s in ipairs(segs) do s.shown = 0; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide() end
+  wipe(P.slotOf)
+  for _, s in ipairs(segs) do s.owner = nil; s.shown = 0; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide() end
   wipe(P.bites)
 end
 
@@ -198,7 +212,9 @@ end
 local function setMark(m, p, maxv)
   m.L:SetMinMaxValues(0, maxv); m.R:SetMinMaxValues(0, maxv)
   local side = p < 0 and 'L' or 'R'
-  if side == 'L' then m.L:SetValue(-p) else m.R:SetValue(math.max(p, .0001)) end
+  -- both sides stay alive (never 0): a side WoW had hidden took a frame or two to place when an edge first crossed the
+  -- health's end (filmed 2026-11-11: the last DoT's piece vanished for 2 frames as it ended)
+  m.L:SetValue(math.max(-p, .0001)); m.R:SetValue(math.max(p, .0001))
   if side ~= m.side then
     m.f:ClearAllPoints()
     local t, a, b = (side == 'L') and m.lt or m.rt, (side == 'L') and 'TOPLEFT' or 'TOPRIGHT', (side == 'L') and 'BOTTOMLEFT' or 'BOTTOMRIGHT'
@@ -243,6 +259,7 @@ P.predK = {}
 P.landAt = {}
 P.shownBy = {}               -- DoT name -> its piece's size on screen
 P.wasPre = {}
+P.slotOf = {}                -- DoT name -> the slot (textures and edges) it owns
 local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
 local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
@@ -289,8 +306,24 @@ local function render()
   local anow = aclock()
   local run, slide = 0, 0
   local seen = {}
-  for i, s in ipairs(segs) do
-    local d = dots[i]
+  -- 2026-11-11 'the entire bar repaints for a second when a DoT ends': pieces were slots, so when one DoT left, every
+  -- DoT behind it moved into the next slot and borrowed that slot's textures, glows and edges, still showing the old
+  -- DoT for a frame or two. Now each DoT owns its slot (textures and edges) for its whole life; when the order
+  -- changes only the neighbour anchors move, in the same frame as the edges.
+  local order, used = {}, {}
+  for j, d in ipairs(dots) do
+    if j > MAX then break end
+    local s = P.slotOf[d.name]
+    if not s then for _, c in ipairs(segs) do if not c.owner then s = c; break end end end
+    if s then s.owner = d.name; P.slotOf[d.name] = s; order[#order + 1] = s; used[s] = d end
+  end
+  for name, s in pairs(P.slotOf) do if used[s] == nil then s.owner = nil; P.slotOf[name] = nil end end
+  for j, s in ipairs(order) do local right = (j == 1) and P.E[0].f or order[j - 1].edge; if s.right ~= right then P.reanchor(s, right) end end
+  local seq = {}
+  for j, s in ipairs(order) do seq[#seq + 1] = { s, used[s], j } end
+  for _, c in ipairs(segs) do if used[c] == nil then seq[#seq + 1] = { c, nil, 99 } end end
+  for _, e in ipairs(seq) do
+    local s, d, i = e[1], e[2], e[3]
     if d then
       local bl, flare = biteNow(d.name, anow); slide = slide + bl
       local before = run                                 -- where this piece starts, from the bar's end
@@ -303,7 +336,7 @@ local function render()
       P.shownBy[d.name] = sh; seen[d.name] = true
       run = run + sh; s.shown = run; s.sz = sh
       local left = d.expires and (d.expires - now)
-      local lowNow = left and left > 0 and left <= LOW
+      local lowNow = left and left <= LOW   -- gold through its last 3 s and on past zero while it glides out (it flipped back)
       local c = colorOf(d.name)
       if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
       local tn = RINGTONE[d.name] or c
@@ -345,7 +378,7 @@ local function render()
     local mode = ns.db.doomedJoin or 'crease'
     local jw = mode == 'crease' and 0 or (JOIN[mode] or 0)
     -- no crease next to an empty piece (a DoT that just ended): two creases stacked on one spot, then popped away
-    local cr = on and i > 1 and mode == 'crease' and (s.sz or 0) > .3 and (segs[i - 1].sz or 0) > .3
+    local cr = on and i > 1 and mode == 'crease' and (s.sz or 0) > .3 and order[i - 1] and (order[i - 1].sz or 0) > .3
     s.creaseL:SetShown(cr); s.creaseR:SetShown(cr)
     if jw > 0 then s.join:SetWidth(px(jw, hb)); s.joinLift:SetWidth(px(jw, hb)) end
     s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(false); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
@@ -356,13 +389,13 @@ local function render()
   for name in pairs(P.shownBy) do if not seen[name] then P.shownBy[name] = nil end end
   -- every edge in one pass, all one link from the health's end
   setMark(P.E[0], slide, maxv)
-  for i, s in ipairs(segs) do
+  for _, s in ipairs(order) do
     setMark(s.mark, slide - s.shown, maxv)
     if s.ghost:IsShown() and s.gtarget then setMark(s.gmark, slide - s.gtarget, maxv) end
   end
   P.slideV = slide
   traceFrame(now)
-  local far = segs[math.min(#dots, MAX)]
+  local far = order[#order] or segs[1]
   shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
   -- the skull: hidden when the mob already carries a real raid mark (that one wins)
   local total = 0; for _, d in ipairs(dots) do total = total + d.damage end
@@ -470,7 +503,7 @@ function P.start()
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
-  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); wipe(P.shownBy); wipe(P.wasPre); P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
+  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); wipe(P.shownBy); wipe(P.wasPre); wipe(P.slotOf); for _, s in ipairs(segs) do s.owner = nil end; P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
   ev:SetScript('OnUpdate', function(_, dt) P.dt = math.min(dt, .05); P.clock = aclock() + math.min(dt, .05); local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
