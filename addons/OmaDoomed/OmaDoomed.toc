@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: OmaDoomed
+## Notes: on your target's health bar, the health your DoTs will still take shows in their colours, and a skull and bones marks a mob they will finish.
+## Author: Omashu
+## Version: 0.1.0
+## SavedVariables: OmaDoomedDB
+## OptionalDeps: DoesItDie
+Core.lua
+Doomed.lua
