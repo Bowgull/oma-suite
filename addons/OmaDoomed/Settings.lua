@@ -22,6 +22,10 @@ local function omaParent()
 end
 
 local cat, layout
+-- notches belong to OmaDoomed's sliders only: hide one left on a recycled slider frame
+if SettingsSliderControlMixin and SettingsSliderControlMixin.Init then
+  hooksecurefunc(SettingsSliderControlMixin, 'Init', function(frame) if frame.omaNotch then frame.omaNotch:Hide() end end)
+end
 local function header(text)
   if CreateSettingsListSectionHeaderInitializer then layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text)) end
 end
@@ -44,6 +48,22 @@ local function slider(tbl, key, label, lo, hi, step, tip, fmt, parent)
   local opts = Settings.CreateSliderOptions(lo, hi, step)
   opts:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, fmt)
   local init = Settings.CreateSlider(cat, setting, opts, tip); child(init, parent)
+  -- a small gold notch on the track marks the default (Joshua 2026-11-11: "a default spot for sliders")
+  local def = (tbl == ns.db and ns.DEFAULTS or ns.RING_DEFAULTS)[key]
+  local orig = init.InitFrame
+  init.InitFrame = function(self, frame)
+    orig(self, frame)
+    local sl = frame.SliderWithSteppers and frame.SliderWithSteppers.Slider
+    if not sl then return end
+    local n = frame.omaNotch
+    if not n then n = sl:CreateTexture(nil, 'OVERLAY'); n:SetColorTexture(1, .82, .25, .9); frame.omaNotch = n end
+    n:SetParent(sl); n:SetSize(2, 10); n:Show()
+    local function placeIt()
+      local w = sl:GetWidth(); if not w or w <= 0 then return end
+      n:ClearAllPoints(); n:SetPoint('CENTER', sl, 'LEFT', w * (def - lo) / (hi - lo), 0)
+    end
+    placeIt(); C_Timer.After(0, placeIt)
+  end
   return { init = init, setting = setting }
 end
 local function drop(tbl, key, label, choices, tip, parent)

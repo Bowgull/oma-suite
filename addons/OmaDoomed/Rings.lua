@@ -26,7 +26,7 @@ local NUM_FONT = STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 local S = 25 * 1.6                -- 2026-11-10 Joshua: 56 was too big; Blizzard Huge at 100% = 40
 local PER_ROW = 6
 local OS = S * 0.6                  -- other players' DoTs: 60% size
-local OTHERS_ALPHA = 0.55           -- and 55% alpha
+local OTHERS_ALPHA = 0.55           -- and 55% alpha (settings 'Other players' DoTs' replaces it when the rings load)
 local OTHERS_GAP = S * 6 / 70       -- mockup: 6 units gap on a 70-unit cell
 local ICON_SIZE = S * 0.756         -- mockup draws the icon at 1.8r = 0.756 cell, clipped round by the mask
 local GAP = 4                       -- row bottom sits this far above the name (mockup: ~5 of 70)
@@ -420,7 +420,38 @@ local function attach(unit)
   p.anchor:SetFrameLevel(plate:GetFrameLevel() + 20)
   place(p.anchor, plate)
   p.ring:SetUnit(unit); p.main:SetUnit(unit)   -- while hidden: no event churn; Show re-reads every aura
-  p.anchor:Show()
+  p.anchor:Show(); look(p); visible()
+end
+
+-- ---------- settings: size, opacity, where, which ----------
+local framePair                      -- the row above the target frame ('Where the rings show': frame / both)
+local function look(p)
+  p.anchor:SetScale((db.size or 40) / 40); p.anchor:SetAlpha((db.alpha or 100) / 100)
+end
+local function isTarget(u) local ok, v = pcall(UnitIsUnit, u, 'target'); return ok and not secret(v) and v == true end
+local function visible()
+  if not db then return end
+  local where, which = db.where or 'enemy', db.which or 'all'
+  local fight = UnitAffectingCombat('player')
+  for u, p in pairs(active) do
+    local show = where ~= 'frame' and (which == 'all' or (which == 'target' and isTarget(u)) or (which == 'combat' and fight))
+    p.anchor:SetAlpha(show and (db.alpha or 100) / 100 or 0)
+  end
+  if framePair then
+    local show = where ~= 'enemy' and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
+    framePair.anchor:SetShown(show and true or false)
+  end
+end
+ns.ringsVisible = visible
+local function makeFramePair()
+  if framePair or InCombatLockdown() or not TargetFrame then return end
+  local p = newPair(); if not p then return end
+  for i, q in ipairs(free) do if q == p then table.remove(free, i) break end end
+  framePair = p
+  p.anchor:SetParent(TargetFrame); p.anchor:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
+  p.anchor:ClearAllPoints(); p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14); p.anchor:SetSize(S * PER_ROW, 1)
+  p.ring:SetUnit('target'); p.main:SetUnit('target')
+  look(p); visible()
 end
 
 local function attachAll() for i = 1, 40 do local u = 'nameplate' .. i; if UnitExists(u) then attach(u) end end end
@@ -617,6 +648,7 @@ ev:SetScript('OnEvent', function(_, e, a1, _, a3)
     OmaPlatesDB = nil
     OmaDoomedDB.rings = OmaDoomedDB.rings or {}
     db = OmaDoomedDB.rings
+    if db.othersAlpha then OTHERS_ALPHA = db.othersAlpha / 100; if db.othersAlpha == 0 then db.others = false end end
     if db.enabled == nil then db.enabled = true end
     if db.others == nil then db.others = true end
     db.saved = db.saved or {}; db.learned = db.learned or {}
@@ -624,20 +656,87 @@ ev:SetScript('OnEvent', function(_, e, a1, _, a3)
     probe(); buildGroups()
     if db.enabled then blizzardRow(false) end
     fill(); attachAll()
+    if db.where ~= 'enemy' then C_Timer.After(1, makeFramePair) end
+    C_Timer.After(1, function() ns.squaresApply() end)
   elseif e == 'NAME_PLATE_UNIT_ADDED' then attach(a1)
   elseif e == 'NAME_PLATE_UNIT_REMOVED' then release(a1)
   elseif e == 'PLAYER_TARGET_CHANGED' then
+    visible()
     -- the name can appear or move when the target changes; keep each row on top of its name
     for u, p in pairs(active) do local plate = C_NamePlate.GetNamePlateForUnit(u, false); if plate then place(p.anchor, plate) end end
-  elseif e == 'PLAYER_REGEN_DISABLED' then stopTest()
+  elseif e == 'PLAYER_REGEN_DISABLED' then stopTest(); visible()
   elseif e == 'PLAYER_REGEN_ENABLED' then
     if pendingBlizzard ~= nil then blizzardRow(pendingBlizzard) end
     if filtersDirty then refreshFilters() end
     fill(); attachAll()                                  -- plates that showed up in combat with no spare container
+    if db.where ~= 'enemy' then makeFramePair() end
+    visible()
   elseif e == 'SPELLS_CHANGED' then if not InCombatLockdown() then refreshFilters() else filtersDirty = true end
   elseif e == 'UNIT_SPELLCAST_SUCCEEDED' then learn(a3)
   end
 end)
+
+-- ---------- Blizzard's squares on the target frame ('All but my DoTs' / 'All' / 'Hide') ----------
+-- Blizzard draws them; we only hide theirs. 'All but my DoTs' then draws everyone else's auras ourselves, as squares,
+-- through the same aura container (allowed in combat): every debuff except your four DoTs, and the enemy's buffs.
+local SQ = 22
+local sq, sqHooked
+local function blizzSquares(show)
+  local tf = TargetFrame; if not tf then return end
+  local function each(fn)
+    if tf.auraPools and tf.auraPools.EnumerateActive then for f in tf.auraPools:EnumerateActive() do fn(f) end end
+    for i = 1, 40 do for _, n in ipairs({ 'TargetFrameBuff', 'TargetFrameDebuff' }) do local f = _G[n .. i]; if f then fn(f) end end end
+  end
+  local function apply() if db and db.squares and db.squares ~= 'all' then each(function(f) f:SetAlpha(0) end) end end
+  if not sqHooked then
+    sqHooked = true
+    if tf.UpdateAuras then hooksecurefunc(tf, 'UpdateAuras', apply) end
+    if _G.TargetFrame_UpdateAuras then hooksecurefunc('TargetFrame_UpdateAuras', apply) end
+  end
+  if show then each(function(f) f:SetAlpha(1) end) else apply() end
+end
+local function squareButton(b)
+  b:SetSize(SQ, SQ); pcall(b.EnableMouse, b, false)
+  local bg = b:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(b); bg:SetColorTexture(0, 0, 0, 1)
+  local icon = b:CreateTexture(nil, 'ARTWORK'); icon:SetPoint('TOPLEFT', 1, -1); icon:SetPoint('BOTTOMRIGHT', -1, 1); icon:SetTexCoord(.07, .93, .07, .93)
+  local cd = CreateFrame('Cooldown', nil, b, 'CooldownFrameTemplate'); cd:SetAllPoints(icon); pcall(cd.SetReverse, cd, true); pcall(cd.SetHideCountdownNumbers, cd, true)
+  b:SetIcon(icon); b:SetDurationCooldown(cd)
+end
+local function makeSquares()
+  if sq or InCombatLockdown() or not TargetFrame then return end
+  local ok, err = pcall(function()
+    local c = CreateFrame('AuraContainer', nil, TargetFrame, 'CustomAuraContainerTemplate')
+    pcall(c.SetEditModePreviewEnabled, c, false)
+    c:SetFlowLayoutAnchorPoint('TOPLEFT'); c:SetFlowLayoutGrowthDirection(1, -1); c:SetFlowLayoutMaximumLineSize(SQ * 6 + 6)
+    local ex = {}; for _, sp in ipairs(SPELLS) do if sp.key ~= 'channel' then for id in pairs(idSet(sp)) do ex[id] = true end end end
+    c:AddAuraGroup('sqdebuff', 'HARMFUL', { initializeFrame = squareButton, candidateFilters = { excludeSpellIDs = ex }, sortMethod = SORT, maxFrameCount = 16 })
+    c:AddAuraGroup('sqbuff', 'HELPFUL', { initializeFrame = squareButton, sortMethod = SORT, maxFrameCount = 16 })
+    c:SetPoint('TOPLEFT', TargetFrame, 'BOTTOMLEFT', 24, 30)
+    c:SetUnit('target')
+    sq = c
+  end)
+  if not ok then log('squares failed: ' .. tostring(err)) end
+end
+function ns.squaresApply()
+  if not db then return end
+  local mode = db.squares or 'notmine'
+  if mode == 'all' then blizzSquares(true); if sq then sq:Hide() end; return end
+  blizzSquares(false)
+  if mode == 'notmine' then makeSquares(); if sq then sq:Show() end elseif sq then sq:Hide() end
+end
+
+function ns.ringsApply(key)
+  if not db then return end
+  if key == 'size' or key == 'alpha' then for _, p in ipairs(pairsAll) do look(p) end; visible()
+  elseif key == 'othersAlpha' then
+    OTHERS_ALPHA = (db.othersAlpha or 55) / 100
+    setOthers((db.othersAlpha or 55) > 0)
+    say("other players' rings: new strength shows after a /reload" .. ((db.othersAlpha or 55) == 0 and ' (hidden now)' or ''))
+  elseif key == 'where' then if db.where ~= 'enemy' then makeFramePair() end; visible()
+  elseif key == 'which' then visible()
+  elseif key == 'squares' then if ns.squaresApply then ns.squaresApply() end
+  end
+end
 
 -- ---------- /omadoomed rings ... ----------
 function ns.ringsSlash(msg)
