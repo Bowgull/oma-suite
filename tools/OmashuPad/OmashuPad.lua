@@ -18,7 +18,9 @@ local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
 local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
 
 local MACROS = {                               -- Joshua's two demon buttons (his old "Good Boi", split for the pad)
-  { 'PetFight', '/click PetActionButton9\n/petattack', 'Ability_Warrior_Charge' },   -- defensive + attack my target
+  -- /petdefensive, not /click PetActionButton9: on Forever's engine buttons fire on key-down and /click only sends the
+  -- key-up, so the click did nothing and the demon never went defensive (Joshua 2026-11-11, "fighting for weeks").
+  { 'PetFight', '/petdefensive\n/petattack', 'Ability_Warrior_Charge' },              -- defensive + attack my target
   { 'PetHome',  '/petpassive\n/petfollow', 'Ability_Tracking' },                     -- passive + come back
   { 'Meters',   '/ommeters', 'INV_Misc_PocketWatch_01' },                            -- damage + threat meters, show/hide
 }
