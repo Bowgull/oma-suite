@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: OmaDemon
+## Notes: Your demon, readable from across the room: its portrait and the screen edge glow soul purple below 30% health, and your soul shards sit under it as five cut gems.
+## SavedVariables: OmaDemonDB
+
+Settings.lua
+Glow.lua
+Shards.lua

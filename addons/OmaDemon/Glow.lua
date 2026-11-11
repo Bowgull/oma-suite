@@ -1,15 +1,16 @@
--- Omashu Demon: your demon's portrait ring glows soul-purple when it is in trouble (below 30% health).
+-- OmaDemon glow: your demon's portrait ring glows soul-purple when it is in trouble (below 30% health).
 -- Approved design: mockups omashu/wow/15-glows-and-nameplates.html, section B ("Yes, build it", 2026-11-09).
 -- Three layers on the pet portrait, sized from the portrait itself so it fits any demon and any frame size:
---   bloom (breathes every 1.6 s), rim lit from above (steady), sheen (sweeps once around every 3.5 s).
+--   bloom (breathes with the screen edge, Blizzard's clock), rim lit from above (steady), sheen (sweeps once around every 3.5 s).
 -- Health is a hidden ("secret") value in combat on Forever, so we never read it. Blizzard's own
 -- UnitHealthPercent(unit, usePredicted, curve) evaluates a curve on it and hands back an alpha, and SetAlpha
 -- accepts hidden values. So: alpha = curve(health%) = 1 below 28%, 0 above 32%, a short ramp between.
 -- We only anchor our own frame to PetPortrait; nothing on Blizzard's frames is ever changed.
-local ART = 'Interface\\AddOns\\OmashuDemon\\art\\'
+local _, ns = ...
+local ART = 'Interface\\AddOns\\OmaDemon\\art\\'
 local LOW, HIGH = .28, .32                  -- fully lit under 28%, gone over 32% (the line is 30%)
 
-local root = CreateFrame('Frame', 'OmashuDemonFrame', UIParent)
+local root = CreateFrame('Frame', 'OmaDemonGlow', UIParent)
 root:SetFrameStrata('MEDIUM'); root:Hide()
 local gate = CreateFrame('Frame', nil, root); gate:SetAllPoints(); gate:SetAlpha(0)   -- the health switch
 local glow = CreateFrame('Frame', nil, gate); glow:SetAllPoints()                    -- the motion lives here
@@ -22,9 +23,13 @@ local bloom = layer('bloom', 'BACKGROUND', 0)
 local rim = layer('rim', 'ARTWORK', 1)
 local sheen = layer('sheen', 'OVERLAY', 2); sheen:SetBlendMode('ADD')
 
--- Bloom breathes .62 -> 1 -> .62 over 1.6 s (mockup: .62 + .38 * sine)
+-- Bloom breathes on Blizzard's low-health clock, in step with the screen edge below (2026-11-11, Joshua: "Match
+-- Blizzard too"): same 0.5236 s linear bounce, started on the same frame, settling at the same moment.
+-- Its own range keeps the ring readable: .62 <-> 1 while alarmed, easing to .62 <-> .81 (the edge's 15-100% -> 15-50%).
 local breathe = bloom:CreateAnimationGroup(); breathe:SetLooping('BOUNCE')
-local b = breathe:CreateAnimation('Alpha'); b:SetFromAlpha(.62); b:SetToAlpha(1); b:SetDuration(.8); b:SetSmoothing('IN_OUT')
+local b = breathe:CreateAnimation('Alpha'); b:SetDuration(.5236); b:SetSmoothing('NONE')
+local RING_MIN, RING_ALARM, RING_CALM = .62, 1.0, .81
+b:SetFromAlpha(RING_MIN); b:SetToAlpha(RING_ALARM)
 -- Sheen sweeps clockwise once every 3.5 s
 local sweep = sheen:CreateAnimationGroup(); sweep:SetLooping('REPEAT')
 local s = sweep:CreateAnimation('Rotation'); s:SetDegrees(-360); s:SetDuration(3.5)
@@ -34,8 +39,7 @@ local s = sweep:CreateAnimation('Rotation'); s:SetDegrees(-360); s:SetDuration(3
 -- the ring, so it shows and hides exactly with it (in combat too). Drawn under everything else, like Blizzard's.
 -- Breathing copies Blizzard's own LowHealthFrame (FrameXML LowHealthFrame.xml/.lua, 2026-11-10, Joshua: "it needs to
 -- breathe the way the WoW I'm dying breathes"): bounce 15% <-> 100%, 0.5236 s each way, linear; 2 s after it lights
--- it eases over 1 s to 15% <-> 50%. Reduced motion (/omdemon motion off) holds a steady 50%.
-OmashuDemonDB = OmashuDemonDB or {}
+-- it eases over 1 s to 15% <-> 50%. Reduced motion (/omademon motion off) holds a steady 50%.
 local edge = CreateFrame('Frame', nil, gate); edge:SetFrameStrata('BACKGROUND'); edge:SetFrameLevel(0)
 edge:SetPoint('TOPLEFT', UIParent, 'TOPLEFT'); edge:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMRIGHT')
 local edgeTex = edge:CreateTexture(nil, 'BACKGROUND'); edgeTex:SetTexture(ART .. 'edge'); edgeTex:SetAllPoints(); edgeTex:SetBlendMode('BLEND')
@@ -44,15 +48,21 @@ local eb = edgeBreathe:CreateAnimation('Alpha'); eb:SetDuration(.5236); eb:SetSm
 local ALARM_MIN, ALARM_MAX, CALM_MIN, CALM_MAX = .15, 1.0, .15, .5
 eb:SetFromAlpha(ALARM_MIN); eb:SetToAlpha(ALARM_MAX)
 local litAt          -- when the edge last lit (only known while the gate's alpha is readable)
+-- Ring and edge always start together so they breathe as one. Reduced motion: both hold steady at their calm top.
 local function edgeMotion()
-  if OmashuDemonDB.reduced then edgeBreathe:Stop(); edgeTex:SetAlpha(CALM_MAX) else edgeTex:SetAlpha(1); if not edgeBreathe:IsPlaying() then edgeBreathe:Play() end end
+  if ns.glowDB().reduced then
+    edgeBreathe:Stop(); breathe:Stop(); edgeTex:SetAlpha(CALM_MAX); bloom:SetAlpha(RING_CALM)
+  elseif not (edgeBreathe:IsPlaying() and breathe:IsPlaying()) then
+    edgeBreathe:Stop(); breathe:Stop(); edgeTex:SetAlpha(1); bloom:SetAlpha(1); edgeBreathe:Play(); breathe:Play()
+  end
 end
+ns.glowMotion = edgeMotion
 -- Blizzard's settle: full alarm for 2 s after lighting, then ease to the calm range over 1 s.
 local function edgeSettle()
-  if not litAt then eb:SetFromAlpha(ALARM_MIN); eb:SetToAlpha(ALARM_MAX); return end
-  local t = GetTime() - litAt
-  local k = t <= 2 and 0 or (t >= 3 and 1 or (t - 2))
+  local k = 0
+  if litAt then local t = GetTime() - litAt; k = t <= 2 and 0 or (t >= 3 and 1 or (t - 2)) end
   eb:SetFromAlpha(ALARM_MIN + (CALM_MIN - ALARM_MIN) * k); eb:SetToAlpha(ALARM_MAX + (CALM_MAX - ALARM_MAX) * k)
+  b:SetToAlpha(RING_ALARM + (RING_CALM - RING_ALARM) * k)
 end
 
 -- Health % may come back as 0..1 or 0..100 (the docs only say "percentage"), and in combat we can't look.
@@ -68,7 +78,7 @@ local function buildCurve()
   end
 end
 
-local testAt, testUntil = 0, 0   -- /omdemon test: lights at testAt for 8 s (a 6 s countdown first)
+local testAt, testUntil = 0, 0   -- /omademon test: lights at testAt for 8 s (a 6 s countdown first)
 local function update()
   local portrait = PetPortrait
   local okd, dead = pcall(UnitIsDeadOrGhost, 'pet')
@@ -82,7 +92,7 @@ local function update()
     local r = (portrait:GetWidth() or 0) / 2 * 1.52
     if r <= 0 then return end
     root:ClearAllPoints(); root:SetPoint('CENTER', portrait, 'CENTER'); root:SetSize(4.4 * r, 4.4 * r)
-    root:Show(); breathe:Play(); sweep:Play(); edgeMotion()
+    root:Show(); sweep:Play(); edgeMotion()
   end
   local now = GetTime()
   if now >= testAt and now < testUntil then gate:SetAlpha(1); litAt = litAt or now; edgeSettle(); return end
@@ -130,18 +140,17 @@ local function raw()   -- the pet's health % as the game reports it, when readab
   return ('%s -> alpha %s'):format(tostring(v), (a ~= nil and not (issecretvalue and issecretvalue(a))) and tostring(a) or '?')
 end
 
-SLASH_OMASHUDEMON1 = '/omdemon'
-SlashCmdList.OMASHUDEMON = function(msg)
+ns.glowSlash = function(msg)
   msg = (msg or ''):lower()
   if msg == 'test' then
-    if InCombatLockdown() then print('|cffc08cffOmashu Demon|r: not in combat'); return end
-    testAt = GetTime() + 6; testUntil = testAt + 8; litAt = nil; root:Hide(); update(); print('|cffc08cffOmashu Demon|r: the glow lights in 6 s, for 8 s')
-  elseif msg == 'motion on' or msg == 'motion off' then
-    OmashuDemonDB.reduced = (msg == 'motion off'); edgeMotion(); print('|cffc08cffOmashu Demon|r: motion ' .. (OmashuDemonDB.reduced and 'reduced (steady edge)' or 'full'))
-  else
+    if InCombatLockdown() then ns.say('not in combat'); return end
+    testAt = GetTime() + 6; testUntil = testAt + 8; litAt = nil; root:Hide(); update(); ns.say('the glow lights in 6 s, for 8 s')
+  elseif msg == '' or msg == 'status' then
     local p = PetPortrait
-    print(('|cffc08cffOmashu Demon|r: pet %s, frame %s, portrait %s, curve %s, health %s'):format(
+    ns.say(('pet %s, frame %s, portrait %s, curve %s, health %s'):format(
       tostring(UnitExists('pet')), tostring(PetFrame and PetFrame:IsVisible()),
       p and ('%.1f x %.1f'):format(p:GetWidth(), p:GetHeight()) or 'none', tostring(curve ~= nil), raw()))
+  else
+    ns.say('/omademon test | motion on|off | status | shards ...')
   end
 end

@@ -1,8 +1,9 @@
--- Omashu Shards: Bujuju's soul shards as five cut gems under the pet frame (mockup 12, "looks good!").
+-- OmaDemon shards: Bujuju's soul shards as five cut gems under the pet frame (mockup 12, "looks good!").
 -- Spec and QA list: reports/Soul shard displays in WoW.md. On Forever shards are bag items (6265), no bar, no cap.
+local _, ns = ...
 local ITEM, N = 6265, 5
-local SHEET = 'Interface\\AddOns\\OmashuShards\\art\\OmashuShards.tga'    -- 512x256, drawn at 2x
-local CHIME = 'Interface\\AddOns\\OmashuShards\\snd\\five.ogg'
+local SHEET = 'Interface\\AddOns\\OmaDemon\\shards\\art\\OmashuShards.tga'    -- 512x256, drawn at 2x
+local CHIME = 'Interface\\AddOns\\OmaDemon\\shards\\snd\\five.ogg'
 local PX = 1                                                              -- the row frame is scaled so that 1 unit = 1 TV pixel (see place)
 local W, H, STEP = 40 * PX, 48 * PX, 48 * PX                              -- one cell drawn at 1x (gem 36x44 inside a 40x48 cell)
 local CELL = {                                                            -- left, right, top, bottom in the sheet
@@ -10,9 +11,8 @@ local CELL = {                                                            -- lef
   glow = { 320, 416, 0, 112 }, flash = { 0, 96, 96, 192 }, spark = { 104, 120, 96, 112 } }
 local function coords(t, c) t:SetTexCoord(c[1] / 512, c[2] / 512, c[3] / 256, c[4] / 256) end
 
-OmashuShardsDB = OmashuShardsDB or {}
 local db
-local function say(m) print('|cffe8c860Omashu:|r ' .. m) end
+local function say(m) ns.say(m) end
 local function log(m) if not db then return end; db.log = db.log or {}; table.insert(db.log, 1, date('%H:%M:%S ') .. m); while #db.log > 40 do table.remove(db.log) end end
 local function reduced() return db.reduced end
 
@@ -36,7 +36,7 @@ local function checkDrainSoul()
 end
 
 -- ---------- frames ----------
-local root = CreateFrame('Frame', 'OmashuShardsFrame', UIParent)
+local root = CreateFrame('Frame', 'OmaDemonShards', UIParent)
 root:SetSize(STEP * (N - 1) + W, H); root:SetFrameStrata('MEDIUM'); root:SetFrameLevel(5)
 local gems, countText = {}, nil
 local function tex(parent, cell, layer, blend, w, h)
@@ -106,7 +106,7 @@ countText = root:CreateFontString(nil, 'OVERLAY'); countText:SetFont(STANDARD_TE
 countText:SetPoint('LEFT', root, 'RIGHT', 10 * PX, -2 * PX); countText:SetTextColor(.94, .94, .94); countText:Hide()
 
 -- ---------- placing the row: 10 px under the pet frame, left edge on the pet portrait; never anchored to it ----------
-local testNoPet = false   -- /omshards nopet: show the no-pet spot for 15 s
+local testNoPet = false   -- /omademon shards nopet: show the no-pet spot for 15 s
 local function place()
   -- our own plain frame: fine to move in combat too (a pet summoned mid-fight)
   local s = UIParent:GetEffectiveScale()
@@ -114,7 +114,7 @@ local function place()
   -- 25 px high on 2026-11-09). Physical px = units * effective scale * (screen height / 768).
   local _, ph = GetPhysicalScreenSize(); ph = (ph and ph > 0) and ph or 1080
   root:SetScale((768 / ph) / UIParent:GetEffectiveScale())
-  -- 2026-11-10 (Joshua: follow the pet frame; no pet = slide up under you). Measured with /omshards probe: the row's
+  -- 2026-11-10 (Joshua: follow the pet frame; no pet = slide up under you). Measured with /omademon shards probe: the row's
   -- old spot (232,237 TV px) is the pet portrait's bottom-left (235,237) less 3 px. So: pinned to PetPortrait while
   -- the pet is out (it moves when the pet frame moves); with no pet, up where the pet frame's top is (157 px), just
   -- under your own bars, pinned to the frame that holds the pet frame. Only OUR frame is anchored; theirs untouched.
@@ -159,7 +159,7 @@ local function refreshFull(count)
 end
 local function refreshZero(count)
   local g = gems[1]
-  -- 2026-11-10 Joshua: "It's annoying turn off the glow". Off unless /omshards hint on.
+  -- 2026-11-10 Joshua: "It's annoying turn off the glow". Off unless /omademon shards hint on.
   if count == 0 and drainSoul and db and db.zeroHint then
     g.amber:Show(); if reduced() then g.zero:Stop(); g.amber:SetAlpha(.6) elseif not g.zero:IsPlaying() then g.zero:Play() end
   else g.zero:Stop(); g.amber:Hide() end
@@ -200,7 +200,7 @@ for _, e in ipairs({ 'PLAYER_LOGIN', 'PLAYER_ENTERING_WORLD', 'BAG_UPDATE_DELAYE
 ev:SetScript('OnEvent', function(_, e)
   if e ~= 'PLAYER_LOGIN' and not db then return end
   if e == 'PLAYER_LOGIN' then
-    db = OmashuShardsDB
+    db = ns.shardsDB()
     if select(2, UnitClass('player')) ~= 'WARLOCK' then root:Hide(); ev:UnregisterAllEvents(); return end
     checkDrainSoul(); place(); root:Show()
   elseif e == 'PLAYER_ENTERING_WORLD' then checkDrainSoul(); place(); C_Timer.After(1, function() update('enter') end)
@@ -211,16 +211,15 @@ ev:SetScript('OnEvent', function(_, e)
   else place(); C_Timer.After(0.3, place) end   -- pet in or out: the pet frame settles a moment later
 end)
 
--- ---------- /omshards: test and options ----------
-SLASH_OMASHUSHARDS1 = '/omshards'
-SlashCmdList.OMASHUSHARDS = function(msg)
+-- ---------- /omademon shards: test and options ----------
+ns.shardsSlash = function(msg)
   local cmd, arg = msg:match('^(%S*)%s*(.-)$'); cmd = cmd:lower()
   if cmd == 'test' then
     arg = arg:lower()
     if arg == 'gain' then db.fake = (last or 0) + 1 elseif arg == 'spend' then db.fake = math.max(0, (last or 0) - 1)
     elseif arg == 'zero' then db.fake = 0 elseif arg == 'full' then db.fake = 5 elseif arg == 'seven' then db.fake = 7
     elseif arg == 'two' then db.fake = (last or 0) + 2 elseif arg == 'off' then db.fake = nil
-    elseif tonumber(arg) then db.fake = tonumber(arg) else say('/omshards test gain|spend|two|zero|full|seven|<n>|off'); return end
+    elseif tonumber(arg) then db.fake = tonumber(arg) else say('/omademon shards test gain|spend|two|zero|full|seven|<n>|off'); return end
     update('test ' .. arg); say('test: count ' .. tostring(db.fake == nil and 'real' or db.fake))
   elseif cmd == 'hint' then db.zeroHint = (arg == 'on'); if last then refreshZero(last) end; say('empty-shard hint ' .. (db.zeroHint and 'on' or 'off'))
   elseif cmd == 'motion' then db.reduced = (arg == 'off'); say('motion ' .. (db.reduced and 'reduced' or 'full'))
@@ -245,5 +244,5 @@ SlashCmdList.OMASHUSHARDS = function(msg)
     while q and depth < 4 do rect('player' .. depth .. ':' .. tostring(q.GetName and q:GetName()), q); q = q.GetParent and q:GetParent(); depth = depth + 1 end
     db.probe = out; say('probe saved: ' .. #out .. ' frames (/reload to write)')
   elseif cmd == 'log' then for i = math.min(10, #(db.log or {})), 1, -1 do print(db.log[i]) end
-  else say('/omshards test ... | motion on|off | sound on|off | hint on|off | place | log') end
+  else say('/omademon shards test ... | motion on|off | sound on|off | hint on|off | place | log') end
 end

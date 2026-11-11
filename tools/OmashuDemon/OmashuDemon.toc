@@ -1,6 +1,0 @@
-## Interface: 16001
-## Title: Omashu Demon
-## Notes: Your demon's portrait glows soul-purple when it drops below 30% health (sheet 15 B).
-## SavedVariables: OmashuDemonDB
-
-OmashuDemon.lua
