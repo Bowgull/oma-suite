@@ -710,11 +710,12 @@ local function makeSquares()
   local ok, err = pcall(function()
     local c = CreateFrame('AuraContainer', nil, TargetFrame, 'CustomAuraContainerTemplate')
     pcall(c.SetEditModePreviewEnabled, c, false)
-    c:SetFlowLayoutAnchorPoint('TOPLEFT'); c:SetFlowLayoutGrowthDirection(1, -1); c:SetFlowLayoutMaximumLineSize(SQ * 6 + 6)
-    local ex = {}; for _, sp in ipairs(SPELLS) do if sp.key ~= 'channel' then for id in pairs(idSet(sp)) do ex[id] = true end end end
-    c:AddAuraGroup('sqdebuff', 'HARMFUL', { initializeFrame = squareButton, candidateFilters = { excludeSpellIDs = ex }, sortMethod = SORT, maxFrameCount = 16 })
+    -- where Blizzard's row sat: just above the frame's top-left, growing right then up
+    c:SetFlowLayoutAnchorPoint('BOTTOMLEFT'); c:SetFlowLayoutGrowthDirection(1, 1); c:SetFlowLayoutMaximumLineSize(SQ * 8 + 8)
+    -- everything NOT from you: other players' DoTs, poisons, stuns, the mob's own debuffs, and its buffs (Joshua 2026-11-11)
+    c:AddAuraGroup('sqdebuff', 'HARMFUL|!PLAYER', { initializeFrame = squareButton, sortMethod = SORT, maxFrameCount = 16 })
     c:AddAuraGroup('sqbuff', 'HELPFUL', { initializeFrame = squareButton, sortMethod = SORT, maxFrameCount = 16 })
-    c:SetPoint('TOPLEFT', TargetFrame, 'BOTTOMLEFT', 24, 30)
+    c:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -16)
     c:SetUnit('target')
     sq = c
   end)
