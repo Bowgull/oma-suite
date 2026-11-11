@@ -25,6 +25,7 @@ local NUM_FONT = STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 -- Debuff Scale 140% (1.4) = 56 units, square, no gaps; at that scale Blizzard puts 6 per row and grows rows upward.
 local S = 25 * 1.6                -- 2026-11-10 Joshua: 56 was too big; Blizzard Huge at 100% = 40
 local PER_ROW = 6
+local FRAME_ROW = 3                 -- target frame row (Haunt / Target frame): 3 rings fit before the portrait
 local OS = S * 0.6                  -- other players' DoTs: 60% size
 local OTHERS_ALPHA = 0.55           -- and 55% alpha (settings 'Other players' DoTs' replaces it when the rings load)
 local OTHERS_GAP = S * 6 / 70       -- mockup: 6 units gap on a 70-unit cell
@@ -53,7 +54,14 @@ local SPELLS = {
     ids = { 18265, 18879, 18880, 18881, 27264, 30911 } },
   -- channels keep the same ring and timer as before (Joshua: "the original version of the channel was excellent"),
   -- only their own colour: bone white (sheet 28, "Bone white")
-  { key = 'channel', names = { 'Drain Soul', 'Drain Life', 'Drain Mana', 'Wrack' }, color = hex('ece2c6'),   -- Wrack: Forever's channel
+  -- curses that do no damage (sheet 41, Joshua 2026-11-11: "a green curse ring"): their own ring so you can see which
+  -- mobs are cursed; IDs Classic + TBC ranks (assumed; the exact ID is learned on every cast, as for the DoTs)
+  { key = 'curse', names = { 'Curse of Weakness', 'Curse of Tongues', 'Curse of the Elements', 'Curse of Exhaustion',
+      'Curse of Recklessness', 'Curse of Shadow', 'Curse of Doom' }, color = hex('96ce54'),
+    ids = { 702, 1108, 6205, 7646, 11707, 11708, 27224, 30909, 1714, 11719, 1490, 11721, 11722, 27228, 18223,
+      704, 7658, 7659, 11717, 27226, 17862, 17937, 603, 30910 } },
+  -- 'Soul Siphon' (Joshua: "what about other drains?"): by name only; if Forever has it as a channel it rides here
+  { key = 'channel', names = { 'Drain Soul', 'Drain Life', 'Drain Mana', 'Wrack', 'Soul Siphon' }, color = hex('ece2c6'),   -- Wrack: Forever's channel
     ids = { 1120, 8288, 8289, 11675, 27217, 689, 699, 709, 7651, 11699, 11700, 27219, 27220, 5138, 6226, 11703, 11704, 27221 } },
 }
 
@@ -185,7 +193,7 @@ end
 -- which eye (ring key) a spell ID belongs to, for the tracking (Track/Forever.lua)
 function ns.eyeKeyFor(id)
   if not db or type(id) ~= 'number' then return nil end
-  for _, sp in ipairs(SPELLS) do if sp.key ~= 'channel' and idSet(sp)[id] then return sp.key end end
+  for _, sp in ipairs(SPELLS) do if sp.key ~= 'channel' and sp.key ~= 'curse' and idSet(sp)[id] then return sp.key end end
 end
 
 local function filtersFor(key)
@@ -270,7 +278,7 @@ local pulseRings = setmetatable({}, { __mode = 'k' })     -- ring button -> spel
 local function keyOfName(name)
   for _, sp in ipairs(SPELLS) do for _, n in ipairs(sp.names) do if n == name then return sp.key end end end
 end
-local framePair, attachAll           -- defined further down (forward-declared so earlier code sees them, not a nil global)
+local framePair, attachAll, chanPair -- defined further down (forward-declared so earlier code sees them, not a nil global)
 function ns.ringsPulse(unit, name)
   local key = keyOfName(name); if not key then return end
   local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
@@ -529,7 +537,7 @@ local function fadeStep(p, now)
   end
   p.curA = alpha
   p.anchor:SetAlpha(alpha * base)
-  p.ring:ClearAllPoints(); p.ring:SetPoint('BOTTOM', p.anchor, 'BOTTOM', 0, dy)
+  local pt = p.pt or 'BOTTOM'; p.ring:ClearAllPoints(); p.ring:SetPoint(pt, p.anchor, pt, 0, dy)
   return done
 end
 fader:SetScript('OnUpdate', function()
@@ -550,7 +558,7 @@ local function setVis(p, show)
   fading[p] = true; fader:Show()
 end
 ns.ringsSetVis = setVis
-function ns.ringsUnfade(p) fading[p] = nil; p.want = nil; p.curA = nil; p.ring:ClearAllPoints(); p.ring:SetPoint('BOTTOM', p.anchor, 'BOTTOM') end
+function ns.ringsUnfade(p) fading[p] = nil; p.want = nil; p.curA = nil; local pt = p.pt or 'BOTTOM'; p.ring:ClearAllPoints(); p.ring:SetPoint(pt, p.anchor, pt) end
 
 visible = function()
   if not db then return end
@@ -565,18 +573,57 @@ visible = function()
     local show = (where == 'frame' or where == 'both' or where == 'split') and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
     setVis(framePair, show)
   end
+  if chanPair then
+    local show = where == 'split' and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
+    if show and not ns.placeChanPair() then show = false end
+    setVis(chanPair, show)
+  end
 end
 ns.ringsVisible = visible
+local function channelGroup(p, on)
+  if not p or InCombatLockdown() then return end
+  pcall(p.ring.SetAuraGroupEnabled, p.ring, 'channel', on); pcall(p.main.SetAuraGroupEnabled, p.main, 'channel', on)
+end
 local function makeFramePair()
   if framePair or InCombatLockdown() or not TargetFrame then return end
   local p = newPair(); if not p then return end
   for i, q in ipairs(free) do if q == p then table.remove(free, i) break end end
   framePair = p
   p.anchor:SetParent(TargetFrame); p.anchor:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
-  p.anchor:ClearAllPoints(); p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14); p.anchor:SetSize(S * PER_ROW, 1)
+  p.anchor:ClearAllPoints(); p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14); p.anchor:SetSize(S * FRAME_ROW, 1)
+  -- sheet 41 (Joshua's film 2026-11-11: the skull covered the third ring): the row used to sit centred on a 6-wide
+  -- anchor, so it started mid-frame and ran under the skull. Now it starts at the name box's left edge and wraps
+  -- upward after FRAME_ROW rings, which end before the portrait.
+  p.pt = 'BOTTOMLEFT'
+  for _, c in ipairs({ p.ring, p.main }) do
+    c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, S * FRAME_ROW + 0.01)
+  end
+  channelGroup(p, db.where ~= 'split')   -- in Haunt your channel stays over the mob (chanPair), not on the frame
   p.ring:SetUnit('target'); p.main:SetUnit('target')
   look(p); visible()
 end
+
+-- sheet 41 (Joshua: "channels I'd also want to see above the enemy in Haunt mode"): in Haunt your target's rings sit
+-- on its frame, which took your Drain Life off the mob too. chanPair is one more row, channel group only, unit
+-- 'target', that rides your target's plate. Moving our own frames between plates is allowed in combat.
+local function makeChanPair()
+  if chanPair or InCombatLockdown() then return end
+  local p = newPair(); if not p then return end
+  for i, q in ipairs(free) do if q == p then table.remove(free, i) break end end
+  chanPair = p
+  for _, g in ipairs(GROUPS) do if g.key ~= 'channel' then pcall(p.ring.SetAuraGroupEnabled, p.ring, g.key, false); pcall(p.main.SetAuraGroupEnabled, p.main, g.key, false) end end
+  if p.eyes then p.eyes:SetParent(holder); p.eyes:Hide() end
+  p.ring:SetUnit('target'); p.main:SetUnit('target')
+  look(p)
+end
+local function placeChanPair()
+  if not chanPair then return false end
+  local plate = UnitExists('target') and C_NamePlate.GetNamePlateForUnit('target', false)
+  if not plate then return false end
+  chanPair.anchor:SetParent(plate); chanPair.anchor:SetFrameLevel(plate:GetFrameLevel() + 20); place(chanPair.anchor, plate)
+  return true
+end
+ns.makeChanPair, ns.placeChanPair = makeChanPair, placeChanPair
 
 attachAll = function() for i = 1, 40 do local u = 'nameplate' .. i; if UnitExists(u) then attach(u) end end end
 local function releaseAll() local us = {}; for u in pairs(active) do us[#us + 1] = u end; for _, u in ipairs(us) do release(u) end end
@@ -782,7 +829,7 @@ onEvent = (function(_, e, a1, _, a3)
     probe(); buildGroups()
     if db.enabled then blizzardRow(false) end
     fill(); attachAll()
-    if db.where ~= 'enemy' then C_Timer.After(1, makeFramePair) end
+    if db.where ~= 'enemy' then C_Timer.After(1, function() makeFramePair(); if db.where == 'split' then ns.makeChanPair() end; visible() end) end
     ns.squaresApply()
   elseif e == 'NAME_PLATE_UNIT_ADDED' then attach(a1)
   elseif e == 'NAME_PLATE_UNIT_REMOVED' then release(a1)
@@ -796,6 +843,8 @@ onEvent = (function(_, e, a1, _, a3)
     if filtersDirty then refreshFilters() end
     fill(); attachAll()                                  -- plates that showed up in combat with no spare container
     if db.where ~= 'enemy' then makeFramePair() end
+    if db.where == 'split' then ns.makeChanPair() end
+    channelGroup(framePair, db.where ~= 'split')
     visible()
   elseif e == 'SPELLS_CHANGED' then if not InCombatLockdown() then refreshFilters() else filtersDirty = true end
   elseif e == 'UNIT_SPELLCAST_SUCCEEDED' then learn(a3)
@@ -841,7 +890,11 @@ function ns.ringsApply(key)
     OTHERS_ALPHA = (db.othersAlpha or 55) / 100
     setOthers((db.othersAlpha or 55) > 0)
     say("other players' rings: new strength shows after a /reload" .. ((db.othersAlpha or 55) == 0 and ' (hidden now)' or ''))
-  elseif key == 'where' then if db.where ~= 'enemy' then makeFramePair() end; visible()
+  elseif key == 'where' then
+    if db.where ~= 'enemy' then makeFramePair() end
+    if db.where == 'split' then ns.makeChanPair() end
+    channelGroup(framePair, db.where ~= 'split')   -- out of combat only; otherwise after the fight (REGEN_ENABLED)
+    visible()
   elseif key == 'which' then visible()
   elseif key == 'squares' then if ns.squaresApply then ns.squaresApply() end
   end

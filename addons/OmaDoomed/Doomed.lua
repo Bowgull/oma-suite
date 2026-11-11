@@ -14,6 +14,7 @@ local COLOR = {   -- sheet 34 B 'shadow and fire' (Joshua 2026-11-11: "shadow an
   ['Bane of Agony'] = { 128 / 255, 30 / 255, 74 / 255 }, ['Immolate'] = { 160 / 255, 66 / 255, 22 / 255 },
   ['Siphon Life'] = { 110 / 255, 20 / 255, 30 / 255 },
 }
+ns.doomedColor = COLOR                    -- the kill bar over every dotted mob uses the same colours (KillPlates.lua)
 local GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- gold means only 'ending soon' (last 3 s); at the green's strength like the other pieces
 local function LOWS() return (ns.db and ns.db.low) or 3 end   -- 'Ending soon' (settings): seconds of gold
 local function breath(x)              -- the rings' own breath (Rings.lua): 1 at the start, 0.3 halfway, 1 every 1.5 s
