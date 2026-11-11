@@ -680,24 +680,32 @@ onEvent = (function(_, e, a1, _, a3)
 end)
 
 -- Blizzard's squares on the target frame live in TargetFrame...TargetFrameContentContextual.Auras, a
--- TargetFrameAuraContainer (Forever source, Blizzard_UnitFrame/Mainline/TargetFrame.lua GetAuraContainer). It has a
--- public SetDebuffFilterString. 'All but my DoTs' hands it Blizzard's own default plus !PLAYER, so the game itself
--- leaves out what you (or your pet) cast and keeps everyone else's debuffs, stuns and the mob's buffs.
-local DEFAULT_DEBUFFS = 'HARMFUL|INCLUDE_NAME_PLATE_ONLY'
-local NOT_MINE = 'HARMFUL|!PLAYER|INCLUDE_NAME_PLATE_ONLY'
+-- TargetFrameAuraContainer (Forever source: Blizzard_UnitFrame/Shared/TargetFrameAuraContainer.lua). Its filter string is
+-- ignored: ShouldShowAuraAsDebuff decides, and on an enemy NPC it shows ONLY your (and your pet's) debuffs plus ones
+-- the NPCs cast; other players' DoTs are never shown there (they show on our rings, small and dim). So on mobs
+-- 'All but my DoTs' turns the debuff row off (SetMaxDebuffs 0, a public call) and keeps the mob's buffs. On a player
+-- target Blizzard shows everyone's debuffs, so there the row stays whole.
 local function targetAuras()
   local c = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual
   return c and c.Auras
 end
-function ns.squaresApply()
-  if not db then return end
-  local au = targetAuras(); if not au then ns.err('squares: no target aura container'); return end
+local function squaresNow()
+  local au = targetAuras(); if not au or not db then return end
   local mode = db.squares or 'notmine'
+  local onPlayer = UnitExists('target') and UnitIsPlayer('target')
   local ok, err = pcall(function()
-    au:SetDebuffFilterString(mode == 'notmine' and NOT_MINE or DEFAULT_DEBUFFS)
-    au:SetAlpha(mode == 'hide' and 0 or 1)
+    au:SetMaxDebuffs((mode == 'hide' or (mode == 'notmine' and not onPlayer)) and 0 or (MAX_TARGET_DEBUFFS or 16))
+    au:SetMaxBuffs(mode == 'hide' and 0 or (MAX_TARGET_BUFFS or 32))
   end)
   if not ok then ns.err('squares: ' .. tostring(err)) end
+end
+local sqHooked
+function ns.squaresApply()
+  if not db then return end
+  if not sqHooked and TargetFrame and TargetFrame.ConfigureAuraContainer then
+    sqHooked = true; hooksecurefunc(TargetFrame, 'ConfigureAuraContainer', function() squaresNow() end)   -- Blizzard re-sets the limits on every new target
+  end
+  squaresNow()
 end
 
 function ns.ringsApply(key)
@@ -747,9 +755,9 @@ function ns.ringsSlash(msg)
     end
     OmaDoomedDB.tffind = out; say('found ' .. #out .. '; /reload to save')
   elseif cmd == 'squares' then
-    local au = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
-    local ok, f = pcall(function() return au and au:GetDebuffFilterString() end)
-    say(('squares=%s container=%s filter=%s'):format(tostring(db.squares), tostring(au ~= nil), tostring(ok and f or f)))
+    local au = targetAuras()
+    local ok, m = pcall(function() return au and au:GetMaxDebuffs() end)
+    say(('squares=%s container=%s maxDebuffs=%s hooked=%s'):format(tostring(db.squares), tostring(au ~= nil), tostring(m), tostring(sqHooked)))
   elseif cmd == 'log' then
     for i = math.min(10, #(db.log or {})), 1, -1 do print(db.log[i]) end
   else
