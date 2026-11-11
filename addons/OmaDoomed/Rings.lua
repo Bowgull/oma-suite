@@ -182,6 +182,12 @@ local function idSet(sp)
   return set
 end
 
+-- which eye (ring key) a spell ID belongs to, for the tracking (Track/Forever.lua)
+function ns.eyeKeyFor(id)
+  if not db or type(id) ~= 'number' then return nil end
+  for _, sp in ipairs(SPELLS) do if sp.key ~= 'channel' and idSet(sp)[id] then return sp.key end end
+end
+
 local function filtersFor(key)
   if key == 'others' then return { isFromPlayerOrPlayerPet = true } end   -- other players and their pets, not NPCs
   if key == 'mine' then
@@ -323,9 +329,54 @@ local function buildGroups()
     main = mainOthers, ring = ringOthers, layout = { groupSpacing = OTHERS_GAP } }
 end
 
+-- ---------- the eyes: an invisible third container per plate (2026-11-11) ----------
+-- Add-on code can't read enemy auras in combat, but Blizzard's container shows a button per aura it lets through.
+-- One group per DoT (plus Improved Shadow Bolt's Shadow Vulnerability), buttons invisible and 1 px: whether a group's
+-- button is shown says whether that debuff of yours is on the mob. The tracking uses it (Track/Forever.lua) to drop a
+-- DoT that's gone (dispelled, eaten, mob reset) even while other hits look like its ticks. Always shown, so it keeps
+-- reading when the visible rings are faded out. If the game hides this from us, ns.eyes answers nil and nothing changes.
+local EYES = {
+  { key = 'corruption' }, { key = 'agony' }, { key = 'immolate' }, { key = 'siphon' },
+  { key = 'isb', names = { 'Shadow Vulnerability' }, ids = { 17794, 17797, 17798, 17799, 17800 } },
+}
+local function eyeIds(e)
+  if not e.ids then for _, sp in ipairs(SPELLS) do if sp.key == e.key then return idSet(sp) end end end
+  local set = {}; for _, id in ipairs(e.ids) do set[id] = true end
+  for _, n in ipairs(e.names or {}) do local id = spellIdByName(n); if id then set[id] = true end end
+  return set
+end
+local function setupEyes(c)
+  pcall(c.SetEditModePreviewEnabled, c, false)
+  for _, e in ipairs(EYES) do
+    local key = e.key
+    pcall(c.AddAuraGroup, c, key, OWN, {
+      initializeFrame = function(b) b:SetSize(1, 1); b:SetAlpha(0); pcall(b.EnableMouse, b, false); b.omaEye = key end,
+      candidateFilters = { includeSpellIDs = eyeIds(e) }, sortMethod = SORT, maxFrameCount = 1 })
+  end
+end
+
 -- ---------- the pool: containers can't be created in combat, so we keep spares and fill up after each fight ----------
 local holder = CreateFrame('Frame', nil, UIParent); holder:Hide()
 local pairsAll, free, active = {}, {}, {}
+
+-- What the eyes see on a plate: { corruption = true/false, ... }, or nil when unknown (no eyes, or secret).
+function ns.eyes(unit)
+  local p = active[unit]
+  if not p or not p.eyes then return nil end
+  local seen = {}
+  for _, e in ipairs(EYES) do seen[e.key] = false end
+  local kids = { p.eyes:GetChildren() }
+  for _, b in ipairs(kids) do
+    if b.omaEye then
+      local ok, shown = pcall(b.IsShown, b)
+      if not ok or secret(shown) then return nil end
+      if shown then seen[b.omaEye] = true end
+    end
+  end
+  return seen
+end
+function ns.eyesUnits() local out = {}; for unit, p in pairs(active) do if p.eyes then out[#out + 1] = unit end end; return out end
+
 
 local function setupContainer(c, kind)
   pcall(c.SetEditModePreviewEnabled, c, false)    -- no fake auras on every plate when Edit Mode opens
@@ -357,7 +408,13 @@ local function newPair()
     if not othersOK then pcall(ring.SetAuraGroupEnabled, ring, 'others', false)       -- keep both layouts identical
     elseif not db.others then pcall(ring.SetAuraGroupEnabled, ring, 'others', false); pcall(main.SetAuraGroupEnabled, main, 'others', false) end
     ring:SetPoint('BOTTOM', anchor, 'BOTTOM'); main:SetPoint('BOTTOM', anchor, 'BOTTOM')
-    return { anchor = anchor, ring = ring, main = main }
+    local eyes
+    local okE = pcall(function()
+      eyes = CreateFrame('AuraContainer', nil, holder, 'CustomAuraContainerTemplate'); eyes:SetSize(1, 1); eyes:SetAlpha(0)
+      setupEyes(eyes)
+    end)
+    if not okE then eyes = nil; log('eyes container failed') end
+    return { anchor = anchor, ring = ring, main = main, eyes = eyes }
   end)
   if not ok then log('new pair failed: ' .. tostring(p)); return nil end
   pairsAll[#pairsAll + 1] = p; free[#free + 1] = p
@@ -411,6 +468,7 @@ local function release(unit)
   active[unit] = nil
   if ns.ringsUnfade then ns.ringsUnfade(p) end
   p.anchor:Hide(); p.anchor:ClearAllPoints(); p.anchor:SetParent(holder)
+  if p.eyes then p.eyes:ClearAllPoints(); p.eyes:SetParent(holder) end
   free[#free + 1] = p
   if InCombatLockdown() and attachAll then C_Timer.After(0, function() attachAll() end) end   -- review #7: hand it to a plate that has no row
 end
@@ -428,6 +486,7 @@ local function attach(unit)
   p.anchor:SetFrameLevel(plate:GetFrameLevel() + 20)
   place(p.anchor, plate)
   p.ring:SetUnit(unit); p.main:SetUnit(unit)   -- while hidden: no event churn; Show re-reads every aura
+  if p.eyes then p.eyes:SetParent(plate); p.eyes:SetPoint('CENTER', plate, 'CENTER'); p.eyes:SetUnit(unit); p.eyes:Show() end
   p.want = nil; p.anchor:SetAlpha(0); p.anchor:Hide(); look(p); p.want = false; p.curA = 0; visible()
 end
 

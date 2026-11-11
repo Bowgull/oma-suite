@@ -1299,6 +1299,7 @@ local function onUnitCombat(unit, action, flag, amount, school)
     if not key then return end
     if AVOIDED_ACTIONS[action] then return onAvoided(key, action, school) end
     if action == "WOUND" or absorbed then onHit(key, school) end
+    if ns.omaClaim and not isSecret(school) and ns.omaClaim(unit, key, school, GetTime()) then return end -- OMA
     if isSecret(amount) and not isSecret(school) and type(school) == "number" then
         return onHiddenAmountHit(key, unit, school)
     end

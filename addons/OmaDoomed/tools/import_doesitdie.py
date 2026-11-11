@@ -136,6 +136,12 @@ end""", """local function remainingDamage(dot, key) -- OMA: key, and timed boost
 end""", 'remaining damage per tick')
     s = edit(s, "expiresAt = dot.expiresAt, damage = remainingDamage(dot) })", "expiresAt = dot.expiresAt, damage = remainingDamage(dot, key) }) -- OMA: key", 'breakdown key')
     s = edit(s, "damage = remainingDamage(cast.dot),", "damage = remainingDamage(cast.dot, key), -- OMA: key", 'breakdown key (cast)')
+    # Hits OmaDoomed knows aren't DoT ticks (your own channel's ticks, your Imp's Firebolt) are claimed before
+    # tick matching, so they can't keep a finished DoT alive (Track/Forever.lua, ns.omaClaim).
+    s = edit(s, '    if action == "WOUND" or absorbed then onHit(key, school) end\n',
+        '    if action == "WOUND" or absorbed then onHit(key, school) end\n'
+        '    if ns.omaClaim and not isSecret(school) and ns.omaClaim(unit, key, school, GetTime()) then return end -- OMA\n',
+        'claim known hits')
     # No slash commands: /did belongs to DoesItDie (both can be installed).
     cut = s.find('---------------------------------------------------------------------------\n-- Slash commands')
     if cut < 0: sys.exit('import_doesitdie: slash command block not found')

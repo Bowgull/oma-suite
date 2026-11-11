@@ -23,6 +23,7 @@ F.SPELLS = {
   [1490] = { name = 'Curse of the Elements', desc = 'Curses the target for 5 min, reducing Magic resistances by 75 and increasing Magic damage taken by 10%. Only one Curse per Warlock can be active on any one target.' },
   [702] = { name = 'Curse of Weakness', desc = 'Target\'s Physical damage is reduced by 4 for 2 min. Only one Curse per Warlock can be active on any one target.' },
   [17877] = { name = 'Shadowburn', desc = 'Instantly blasts the target for 62 to 70 Shadow damage.' },
+  [3110] = { name = 'Firebolt', desc = 'Deals 8 to 10 Fire damage to a target.' },
   [1978] = { name = 'Serpent Sting', desc = 'Stings the target, causing 20 Nature damage over 15 sec.' },
 }
 
