@@ -293,8 +293,8 @@ local function ringOwn(color, curve, key)
       local glow = b:CreateTexture(nil, 'OVERLAY', nil, 7); glow:SetTexture(ART .. 'ring'); glow:SetAllPoints(b)
       glow:SetVertexColor(color[1], color[2], color[3]); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
       local g = glow:CreateAnimationGroup()
-      local a1 = g:CreateAnimation('Alpha'); a1:SetFromAlpha(0); a1:SetToAlpha(.9); a1:SetDuration(.12); a1:SetOrder(1); a1:SetSmoothing('OUT')
-      local a2 = g:CreateAnimation('Alpha'); a2:SetFromAlpha(.9); a2:SetToAlpha(0); a2:SetDuration(.28); a2:SetOrder(2); a2:SetSmoothing('IN')
+      local a1 = g:CreateAnimation('Alpha'); a1:SetFromAlpha(0); a1:SetToAlpha(.5); a1:SetDuration(.12); a1:SetOrder(1); a1:SetSmoothing('OUT')
+      local a2 = g:CreateAnimation('Alpha'); a2:SetFromAlpha(.5); a2:SetToAlpha(0); a2:SetDuration(.28); a2:SetOrder(2); a2:SetSmoothing('IN')
       b.omPulse = g; pulseRings[b] = key
     end
   end

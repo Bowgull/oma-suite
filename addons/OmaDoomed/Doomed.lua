@@ -66,14 +66,21 @@ local function build()
   clip:SetClipsChildren(true); clip:SetFrameLevel(hb:GetFrameLevel() + 1)
   -- sheet 30: while a bite closes, everything nearer the bar's end sits a little to the right and slides back. A 0..max
   -- bar starting at the health's end carries that offset (a plain number, the bite left), so no size is ever read.
+  -- our own copy of the health's end (2026-11-11, 'really jumpy'): pinning to Blizzard's fill mixed two clocks, so on a
+  -- tick the pieces jumped left for one frame before the bite caught them. Now the health's end and the bite move in
+  -- the same SetValue pass, every frame. Health may be a hidden number: only a status bar is handed it.
+  P.base = CreateFrame('StatusBar', nil, clip); P.base:SetPoint('TOPLEFT', fill, 'TOPLEFT'); P.base:SetPoint('BOTTOMLEFT', fill, 'BOTTOMLEFT'); P.base:SetWidth(hb:GetWidth())
+  P.base:SetStatusBarTexture(WHITE); P.base:SetStatusBarColor(0, 0, 0, 0); P.base:SetMinMaxValues(0, 1); P.base:SetValue(0)
+  local baseEdge = P.base:GetStatusBarTexture()
   P.slide = CreateFrame('StatusBar', nil, clip); P.slide:SetWidth(hb:GetWidth())
-  P.slide:SetPoint('TOPLEFT', fill, 'TOPRIGHT'); P.slide:SetPoint('BOTTOMLEFT', fill, 'BOTTOMRIGHT')
+  P.slide:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); P.slide:SetPoint('BOTTOMLEFT', baseEdge, 'BOTTOMRIGHT')
   P.slide:SetStatusBarTexture(WHITE); P.slide:SetStatusBarColor(0, 0, 0, 0); P.slide:SetMinMaxValues(0, 1); P.slide:SetValue(0)
   local slideEdge = P.slide:GetStatusBarTexture()
   holder = CreateFrame('Frame', nil, clip)
   holder:SetPoint('TOPRIGHT', slideEdge, 'TOPRIGHT'); holder:SetPoint('BOTTOMRIGHT', slideEdge, 'BOTTOMRIGHT'); holder:SetWidth(hb:GetWidth())
   local art = CreateFrame('Frame', nil, clip); art:SetAllPoints(clip); art:SetFrameLevel(clip:GetFrameLevel() + 2)
-  P.lost = art:CreateTexture(nil, 'ARTWORK', nil, 0); barTex(P.lost); P.lost:SetVertexColor(.14, .09, .05); P.lost:Hide()   -- test only: the empty bar
+  P.lost = art:CreateTexture(nil, 'ARTWORK', nil, 0); barTex(P.lost); P.lost:SetVertexColor(.14, .09, .05); P.lost:Hide()
+  P.lost:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); P.lost:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')   -- test only: the empty bar
   for i = 1, MAX do
     local bar = CreateFrame('StatusBar', nil, holder); bar:SetAllPoints(holder); bar:SetReverseFill(true)
     bar:SetStatusBarTexture(WHITE); bar:SetStatusBarColor(0, 0, 0, 0); bar:SetMinMaxValues(0, 1); bar:SetValue(0)
@@ -179,6 +186,19 @@ local function biteNow(name, now)    -- what is still left of a bite (0 when don
 end
 
 local cur                            -- the latest dots, maxv, hp (from update), drawn every frame
+local trace                          -- /omadoomed trace: per-frame positions for 4 s (saved on /reload)
+function ns.startTrace() trace = { t0 = GetTime(), untilT = GetTime() + 4, rows = {} }; ns.say('tracing 4 s') end
+local traceRow
+local function traceFrame(now) if trace then local ok, e = pcall(traceRow, now); if not ok then OmaDoomedDB.traceErr = tostring(e); trace = nil end end end
+traceRow = function(now)
+  if now > trace.untilT then OmaDoomedDB.trace = trace.rows; trace = nil; ns.say('trace saved (' .. #OmaDoomedDB.trace .. ' frames); /reload to write it'); return end
+  local row = { string.format('%.3f', now - trace.t0), string.format('dt%.3f', P.dt or 0) }
+  row[#row + 1] = 'hp' .. tostring(cur and cur.hp)
+  for i = 1, 3 do local x = segs[i] and segs[i].shown; row[#row + 1] = (x and string.format('%.2f', x) or '-') end
+  row[#row + 1] = 'S' .. string.format('%.2f', P.slideV or 0)
+  for n, b in pairs(P.bites) do row[#row + 1] = n:sub(1, 3) .. string.format('%.2f', now - b.at) end
+  trace.rows[#trace.rows + 1] = table.concat(row, ' ')
+end
 local function render()
   if not cur or not built then return end
   local dots, maxv, hp = cur.dots, cur.maxv, cur.hp
@@ -194,7 +214,7 @@ local function render()
       local before = run                                 -- where this piece starts, from the bar's end
       run = run + d.damage + bl
       -- a new DoT grows in; shrinking happens only through bites
-      if run > s.shown then s.shown = s.shown + (run - s.shown) * .25 else s.shown = run end
+      if run > s.shown then s.shown = s.shown + (run - s.shown) * (1 - math.exp(-(P.dt or .033) * 9)) else s.shown = run end
       s.bar:SetValue(s.shown)
       local left = d.expires and (d.expires - now)
       local lowNow = left and left > 0 and left <= LOW
@@ -204,11 +224,11 @@ local function render()
       s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
       if bl > 0 then
         local tone = lowNow and RINGGOLD or (RINGTONE[d.name] or c)
-        local hot = mix({ math.min(1, tone[1] * 1.25), math.min(1, tone[2] * 1.25), math.min(1, tone[3] * 1.25) }, { 1, .98, .92 }, .2)
+        local hot = mix(colorOf(d.name), { math.min(1, tone[1] * 1.1), math.min(1, tone[2] * 1.1), math.min(1, tone[3] * 1.1) }, .6)
         local base = colorOf(d.name); local ember = mix(base, EMPTY, .75)
         local col = (now - P.bites[d.name].at) < .16 and mix(base, hot, flare) or mix(ember, hot, flare)
         s.gbar:SetValue(before + bl); s.ghost:SetVertexColor(col[1], col[2], col[3]); s.ghost:Show()
-        local a = flare * .8
+        local a = flare * .4
         s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
         if CreateColor then
           s.spillL:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 0), CreateColor(tone[1] * a, tone[2] * a, tone[3] * a, 1))
@@ -228,7 +248,9 @@ local function render()
     if jw > 0 then s.join:SetWidth(px(jw, hb)); s.joinLift:SetWidth(px(jw, hb)) end
     s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(false); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
   end
-  P.slide:SetMinMaxValues(0, maxv); P.slide:SetValue(slide)
+  P.base:SetMinMaxValues(0, maxv); P.base:SetValue(hp)
+  P.slide:SetMinMaxValues(0, maxv); P.slide:SetValue(slide); P.slideV = slide
+  traceFrame(now)
   local far = segs[math.min(#dots, MAX)]
   shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', holder, 'TOPRIGHT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
   -- the skull: hidden when the mob already carries a real raid mark (that one wins)
@@ -242,7 +264,8 @@ local function draw(dots, maxv, hp)
   local now = GetTime()
   for _, d in ipairs(dots) do
     if last[d.name] and d.damage < last[d.name] - .5 then
-      P.bites[d.name] = { amt = last[d.name] - d.damage, at = now }
+      local was = biteNow(d.name, now)
+      P.bites[d.name] = { amt = was + last[d.name] - d.damage, at = now }
       if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end   -- its ring, same instant
     end
     last[d.name] = d.damage
@@ -273,11 +296,7 @@ local function update()
       if left > 0 then dots[#dots + 1] = { name = d.n, damage = left, expires = test.t0 + d.dur } end
     end
     table.sort(dots, function(a, b) return a.expires < b.expires end)
-    if build() then   -- the health's end, as Blizzard's bar would draw it
-      local W = hb:GetWidth()
-      P.slide:ClearAllPoints(); P.slide:SetPoint('TOPLEFT', hb, 'TOPLEFT', W * hp / m, 0); P.slide:SetPoint('BOTTOMLEFT', hb, 'BOTTOMLEFT', W * hp / m, 0)
-      P.lost:ClearAllPoints(); P.lost:SetPoint('TOPLEFT', hb, 'TOPLEFT', W * hp / m, 0); P.lost:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT'); P.lost:Show()
-    end
+    if build() then P.lost:Show() end   -- the empty bar past the fake health (P.base carries its end)
     return draw(dots, m, hp)
   end
   if not UnitExists('target') or UnitIsDead('target') or not (DoesItDie and DoesItDie.GetDoTs) then cur = nil; return hide() end
@@ -308,7 +327,7 @@ function P.start()
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
   ev:SetScript('OnEvent', function(_, e) if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
-  ev:SetScript('OnUpdate', function(_, dt) local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
+  ev:SetScript('OnUpdate', function(_, dt) P.dt = dt; local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
 end
 
@@ -316,7 +335,7 @@ end
 -- /omadoomed test       fake DoTs on your current target (live)   /omadoomed test die   (doomed)   ... test off
 function P.slash(m)
   local j = m:match('^join (%a+)'); if j and JOIN[j] then ns.db.doomedJoin = j; ns.say('Doomed join: ' .. j); return update() end
-  if m == 'test off' then test = nil; if built then P.lost:Hide(); P.slide:ClearAllPoints(); P.slide:SetPoint('TOPLEFT', fill, 'TOPRIGHT'); P.slide:SetPoint('BOTTOMLEFT', fill, 'BOTTOMRIGHT') end; ns.say('Doomed test off'); return update() end
+  if m == 'test off' then test = nil; if built then P.lost:Hide() end; ns.say('Doomed test off'); return update() end
   if m:match('^test') then
     test = {}; wipe(last); wipe(P.bites)
     ns.say('Doomed test on your target (Bujuju\'s real ticks, sheet 30). /omadoomed test off'); return update()

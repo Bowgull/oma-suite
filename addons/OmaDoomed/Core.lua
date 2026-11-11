@@ -15,6 +15,7 @@ SLASH_OMADOOMED1 = '/omadoomed'
 SlashCmdList.OMADOOMED = function(m)
   m = (m or ''):lower()
   local rest = m:match('^rings%s*(.*)$'); if rest then return ns.ringsSlash and ns.ringsSlash(rest) end
+  if m == 'trace' then return ns.startTrace and ns.startTrace() end
   m = 'doomed ' .. m
   local p = ns.parts[m:match('^(%S+)')]
   if p and p.slash then p.slash(m:match('^%S+%s*(.*)$')) return end
