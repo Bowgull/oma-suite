@@ -41,16 +41,19 @@ local pieces, rings, squares = {}, {}, {}
 
 local function ringWidget(parent)
   local w = CreateFrame('Frame', nil, parent); w:SetSize(40, 40)
+  local shadow = w:CreateTexture(nil, 'BACKGROUND', nil, -8); shadow:SetTexture(ART .. 'rings\\ring_shadow'); shadow:SetAllPoints()
   local back = w:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. 'rings\\backing'); back:SetAllPoints()
   local ic = w:CreateTexture(nil, 'ARTWORK', nil, 0); ic:SetPoint('CENTER'); ic:SetTexCoord(.06, .94, .06, .94)
   local m = w:CreateMaskTexture(); m:SetTexture(ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(w); ic:AddMaskTexture(m)
   local ring = w:CreateTexture(nil, 'ARTWORK', nil, 2); ring:SetTexture(ART .. 'rings\\ring_bold'); ring:SetAllPoints()
-  local glow = w:CreateTexture(nil, 'ARTWORK', nil, 3); glow:SetTexture(ART .. 'rings\\ring_bold'); glow:SetAllPoints(); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
+  local light = w:CreateTexture(nil, 'ARTWORK', nil, 3); light:SetTexture(ART .. 'rings\\ring_light'); light:SetAllPoints()
+  local spot = w:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'rings\\numspot'); spot:SetAllPoints()
+  local glow = w:CreateTexture(nil, 'ARTWORK', nil, 4); glow:SetTexture(ART .. 'rings\\ring_bold'); glow:SetAllPoints(); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
   local cd = CreateFrame('Cooldown', nil, w); cd:SetAllPoints(); pcall(cd.SetSwipeTexture, cd, ART .. 'rings\\swipe_track_bold'); pcall(cd.SetDrawEdge, cd, false); pcall(cd.SetReverse, cd, true); pcall(cd.SetHideCountdownNumbers, cd, true)
   local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(w)
   local bez = top:CreateTexture(nil, 'ARTWORK'); bez:SetTexture(ART .. 'rings\\bezel'); bez:SetAllPoints()
   local num = top:CreateFontString(nil, 'OVERLAY'); num:SetFont(STANDARD_TEXT_FONT, 16, 'THICKOUTLINE'); num:SetPoint('CENTER')
-  w.ic, w.ring, w.glow, w.cd, w.num = ic, ring, glow, cd, num
+  w.ic, w.ring, w.glow, w.cd, w.num, w.light, w.spot, w.shadow = ic, ring, glow, cd, num, light, spot, shadow
   return w
 end
 
@@ -240,7 +243,7 @@ function ns.previewDraw()
       local other = i == 4
       if on and ((d and not d.casting and d.timeLeft > 0) or (other and oa > 0)) then
         local z = other and size * .6 or size
-        w:SetSize(z, z); w.ic:SetSize(z * .756, z * .756); w.num:SetFont(STANDARD_TEXT_FONT, math.floor(z * .58 + .5), 'THICKOUTLINE'); w.ic:SetAlpha(other and 1 or .42)
+        w:SetSize(z, z); w.ic:SetSize(z * .756, z * .756); w.num:SetFont(STANDARD_TEXT_FONT, math.floor(z * .58 + .5), 'THICKOUTLINE'); w.ic:SetAlpha(other and 1 or .8); w.light:SetShown(not other); w.spot:SetShown(not other); w.shadow:SetShown(not other)
         local k = other and 'c' or d.k
         w.ic:SetTexture(icon(NAME[k]))
         local col = other and { .54, .42, .16 } or RING[k]

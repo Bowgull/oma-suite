@@ -241,7 +241,9 @@ end
 
 local function mainOwn(b)
   b:SetSize(S, S); pcall(b.EnableMouse, b, false)
-  local icon = roundIcon(b, S); icon:SetAlpha(.42)   -- sheet 39 A 'Bold': the icon steps back so the number reads
+  -- sheet 41 'Bold, richer' (2026-11-11): the icon stays clear (was .42); a dark spot behind the number keeps it readable
+  local icon = roundIcon(b, S); icon:SetAlpha(.8)
+  local spot = b:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot'); spot:SetAllPoints(b)
   local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(b)
   local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_inner')
   local num = numberOn(cd, b, S)
@@ -286,6 +288,7 @@ end
 local function ringOwn(color, curve, key)
   return function(b)
     b:SetSize(S, S); pcall(b.EnableMouse, b, false)
+    local shadow = b:CreateTexture(nil, 'BACKGROUND', nil, -8); shadow:SetTexture(ART .. 'ring_shadow'); shadow:SetAllPoints(b)   -- sheet 41: sits in the world
     local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. 'backing'); back:SetAllPoints(b)
     if GLYPH and curve then
       local fs = b:CreateFontString(nil, 'ARTWORK')
@@ -297,6 +300,8 @@ local function ringOwn(color, curve, key)
       local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. 'ring_bold'); t:SetAllPoints(b)   -- sheet 39 A: twice as thick
       t:SetVertexColor(color[1], color[2], color[3])
     end
+    -- sheet 41: the ring lit like metal (cream on top, shade underneath, a warm sheen up-left), under the dark track
+    local light = b:CreateTexture(nil, 'ARTWORK', nil, 3); light:SetTexture(ART .. 'ring_light'); light:SetAllPoints(b)
     local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_track_bold')
     b:SetDurationCooldown(cd)
     if key then

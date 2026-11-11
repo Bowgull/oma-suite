@@ -167,10 +167,38 @@ def swipe_track_bold(x, y, d):
     return (10, 5, 3, 0.92 * ring_cov(d, BOLD_R, BOLD_W + (TRACK_W - RING_W)))
 
 
+# sheet 41 'Bold, richer' (Joshua 2026-11-11: "Let's try bold richer in game"): the same Bold pieces with depth.
+# ring_light lies over the tinted Bold ring: cream lift on the top 40%, shade on the bottom, a warm sheen up-left
+# (mockup: gradient 20..236 of 256, stops cream .45 / colour / black .6; sheen at 80,60 radius 90). No glowing tip.
+def ring_light(x, y, d):
+    cov = ring_cov(d, BOLD_R, BOLD_W)
+    if cov <= 0:
+        return (0, 0, 0, 0.0)
+    t = clamp((y - 20 / 256) / (216 / 256))
+    base = (255, 244, 220, 0.45 * (1 - t / 0.4)) if t < 0.4 else (0, 0, 0, 0.6 * (t - 0.4) / 0.6)
+    sh = clamp(1 - math.hypot(x - 80 / 256, y - 60 / 256) / (90 / 256))
+    out = over((255, 236, 200, 0.45 * sh), base)
+    return (out[0], out[1], out[2], out[3] * cov)
+
+
+def ring_shadow(x, y, d):
+    # a soft shadow under the whole ring so it sits in the world (mockup: centre 12/256 low, .6 fading out by 124/256)
+    ds = math.hypot(x - 0.5, y - 0.5 - 12 / 256)
+    return (0, 0, 0, 0.6 * clamp(1 - (ds - 60 / 256) / (64 / 256)) * edge_fade(d))
+
+
+def numspot(x, y, d):
+    # the icon stays clear; only the middle darkens so the number reads (mockup: centre 4/256 low, radius 58/256)
+    ds = math.hypot(x - 0.5, y - 0.5 - 4 / 256) / (58 / 256)
+    a = 0.6 + (0.35 - 0.6) * ds / 0.6 if ds < 0.6 else 0.35 * clamp((1 - ds) / 0.4)
+    return (0, 0, 0, a)
+
+
 TEXTURES = {
     'backing': backing, 'mask': mask, 'bezel': bezel, 'ring': ring, 'ring_plain': ring_plain,
     'swipe_inner': swipe_inner, 'swipe_track': swipe_track,
     'ring_bold': ring_bold, 'swipe_track_bold': swipe_track_bold,
+    'ring_light': ring_light, 'ring_shadow': ring_shadow, 'numspot': numspot,
 }
 
 
