@@ -86,6 +86,21 @@ local function build()
     local a1 = g:CreateAnimation('Alpha'); a1:SetFromAlpha(0); a1:SetToAlpha(.42); a1:SetDuration(.08); a1:SetOrder(1)
     local a2 = g:CreateAnimation('Alpha'); a2:SetFromAlpha(.42); a2:SetToAlpha(0); a2:SetDuration(.45); a2:SetOrder(2); a2:SetSmoothing('OUT')
     s.flashAnim = g
+    -- sheet 27 (approved "Looks right"): the bite. A second bar holds where this piece's edge WAS; the chunk between it and
+    -- the new edge glows bright in the DoT's colour, holds 120 ms, then drains over 380 ms.
+    s.gbar = CreateFrame('StatusBar', nil, holder); s.gbar:SetAllPoints(holder); s.gbar:SetReverseFill(true)
+    s.gbar:SetStatusBarTexture(WHITE); s.gbar:SetStatusBarColor(0, 0, 0, 0); s.gbar:SetMinMaxValues(0, 1); s.gbar:SetValue(0)
+    s.gedge = s.gbar:GetStatusBarTexture()
+    s.ghost = art:CreateTexture(nil, 'OVERLAY', nil, 3); barTex(s.ghost); s.ghost:SetBlendMode('ADD'); s.ghost:Hide()
+    s.ghost:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); s.ghost:SetPoint('BOTTOMRIGHT', s.edge, 'BOTTOMLEFT')
+    -- the glint: one soft light crossing the piece in 450 ms (a 0..1 bar inside the piece carries it, so no size is read)
+    s.gclip = CreateFrame('Frame', nil, art); s.gclip:SetClipsChildren(true); s.gclip:SetFrameLevel(art:GetFrameLevel() + 1)
+    s.sweep = CreateFrame('StatusBar', nil, s.gclip); s.sweep:SetAllPoints(s.gclip)
+    s.sweep:SetStatusBarTexture(WHITE); s.sweep:SetStatusBarColor(0, 0, 0, 0); s.sweep:SetMinMaxValues(0, 1); s.sweep:SetValue(0)
+    s.glint = s.gclip:CreateTexture(nil, 'OVERLAY'); barTex(s.glint); s.glint:SetBlendMode('ADD'); s.glint:SetWidth(px(14, hb))
+    s.glint:SetPoint('TOP', s.sweep:GetStatusBarTexture(), 'TOPRIGHT'); s.glint:SetPoint('BOTTOM', s.sweep:GetStatusBarTexture(), 'BOTTOMRIGHT')
+    if CreateColor then s.glint:SetGradient('HORIZONTAL', CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, .55)) end
+    s.gclip:Hide()
     segs[i] = s
   end
   for i, s in ipairs(segs) do
@@ -93,6 +108,7 @@ local function build()
     for _, t in ipairs({ s.base, s.lift, s.flash }) do
       t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, rp)
     end
+    s.gclip:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); s.gclip:SetPoint('BOTTOMRIGHT', right, rp)
     -- the join sits on this piece's right edge, fading from this colour into the previous (nearer the green) one
     if i > 1 then
       for _, t in ipairs({ s.join, s.joinLift }) do t:SetPoint('TOP', segs[i - 1].edge, 'TOPLEFT'); t:SetPoint('BOTTOM', segs[i - 1].edge, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
@@ -127,7 +143,7 @@ end
 local function hide()
   if not built then return end
   clip:Hide(); win:Hide()
-  for _, s in ipairs(segs) do s.shown, s.target = 0, 0 end
+  for _, s in ipairs(segs) do s.shown, s.target = 0, 0; s.bite = nil; s.glintAt = nil; s.ghost:Hide(); s.gclip:Hide() end
 end
 
 local function colorOf(name) return COLOR[name] or OTHER end
@@ -156,7 +172,14 @@ local function draw(dots, maxv, hp)
         s.join:SetGradient('HORIZONTAL', CreateColor(c[1] * 1.15, c[2] * 1.15, c[3] * 1.15, 1), CreateColor(n[1] * 1.15, n[2] * 1.15, n[3] * 1.15, 1))
         s.joinLift:SetGradient('HORIZONTAL', CreateColor(c[1] * .7, c[2] * .7, c[3] * .7, 1), CreateColor(n[1] * .7, n[2] * .7, n[3] * .7, 1))
       end
-      if last[d.name] and d.damage < last[d.name] - .5 then s.flashAnim:Stop(); s.flashAnim:Play() end
+      if last[d.name] and d.damage < last[d.name] - .5 then
+        local now = GetTime()
+        s.bite = { from = s.shown, at = now }; s.ghost:SetVertexColor(math.min(1, c[1] * 1.6), math.min(1, c[2] * 1.6), math.min(1, c[3] * 1.6))
+        s.gbar:SetMinMaxValues(0, maxv); s.gbar:SetValue(s.shown); s.ghost:Show()
+        s.glintAt = now; s.gclip:Show()
+        s.flashAnim:Stop(); s.flashAnim:Play()
+        if _G.OmashuPlates_Pulse then pcall(_G.OmashuPlates_Pulse, 'target', d.name) end   -- its ring, same instant
+      end
       last[d.name] = d.damage
     else
       s.target = run
@@ -175,9 +198,24 @@ local function draw(dots, maxv, hp)
 end
 
 -- smooth: each piece glides to its new size (grows in, shrinks on ticks)
+local function smooth(x) x = math.max(0, math.min(1, x)); return x * x * (3 - 2 * x) end
 local function glide(dt)
   if not built or not clip:IsShown() then return end
+  local now = GetTime()
   for _, s in ipairs(segs) do
+    if s.bite then
+      local a = now - s.bite.at
+      if a >= .5 then s.bite = nil; s.ghost:Hide()
+      else
+        local k = a < .12 and 0 or smooth((a - .12) / .38)                -- holds 120 ms, drains over 380 ms
+        s.gbar:SetValue(s.bite.from + (s.shown - s.bite.from) * k)
+        s.ghost:SetAlpha(1 - .6 * k)
+      end
+    end
+    if s.glintAt then
+      local a = (now - s.glintAt) / .45
+      if a >= 1 then s.glintAt = nil; s.gclip:Hide() else s.sweep:SetValue(smooth(a)) end
+    end
     if s.shown ~= s.target then
       s.shown = s.shown + (s.target - s.shown) * math.min(1, dt * 8)
       if math.abs(s.target - s.shown) < .5 then s.shown = s.target end

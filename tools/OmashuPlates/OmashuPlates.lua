@@ -51,7 +51,7 @@ local SPELLS = {
     ids = { 18265, 18879, 18880, 18881, 27264, 30911 } },
   -- channels keep the same ring and timer as before (Joshua: "the original version of the channel was excellent"),
   -- only their own colour: bone white (sheet 28, "Bone white")
-  { key = 'channel', names = { 'Drain Soul', 'Drain Life', 'Drain Mana' }, color = hex('ece2c6'),
+  { key = 'channel', names = { 'Drain Soul', 'Drain Life', 'Drain Mana', 'Wrack' }, color = hex('ece2c6'),   -- Wrack: Forever's channel
     ids = { 1120, 8288, 8289, 11675, 27217, 689, 699, 709, 7651, 11699, 11700, 27219, 27220, 5138, 6226, 11703, 11704, 27221 } },
 }
 
@@ -254,7 +254,25 @@ local function mainOthers(b)
   b:SetDurationText(num, textOpts(NUM_FMT, nil))   -- plain white: no colour change, no breath
 end
 
-local function ringOwn(color, curve)
+-- sheet 27 (approved): on each tick OmaDoomed calls OmashuPlates_Pulse(unit, spell name) and that DoT's ring on that
+-- unit's nameplate breathes brighter for 400 ms, in the same instant as its piece in the bar
+local pulseRings = setmetatable({}, { __mode = 'k' })     -- ring button -> spell key
+local function keyOfName(name)
+  for _, sp in ipairs(SPELLS) do for _, n in ipairs(sp.names) do if n == name then return sp.key end end end
+end
+function OmashuPlates_Pulse(unit, name)
+  local key = keyOfName(name); if not key then return end
+  local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
+  if not plate then return end
+  for b, k in pairs(pulseRings) do
+    if k == key and b:IsVisible() then
+      local p = b; for _ = 1, 12 do p = p and p:GetParent(); if p == plate then break end end
+      if p == plate and b.omPulse then b.omPulse:Stop(); b.omPulse:Play() end
+    end
+  end
+end
+
+local function ringOwn(color, curve, key)
   return function(b)
     b:SetSize(S, S); pcall(b.EnableMouse, b, false)
     local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. 'backing'); back:SetAllPoints(b)
@@ -270,6 +288,14 @@ local function ringOwn(color, curve)
     end
     local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_track')
     b:SetDurationCooldown(cd)
+    if key then
+      local glow = b:CreateTexture(nil, 'OVERLAY', nil, 7); glow:SetTexture(ART .. 'ring'); glow:SetAllPoints(b)
+      glow:SetVertexColor(color[1], color[2], color[3]); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
+      local g = glow:CreateAnimationGroup()
+      local a1 = g:CreateAnimation('Alpha'); a1:SetFromAlpha(0); a1:SetToAlpha(.9); a1:SetDuration(.12); a1:SetOrder(1); a1:SetSmoothing('OUT')
+      local a2 = g:CreateAnimation('Alpha'); a2:SetFromAlpha(.9); a2:SetToAlpha(0); a2:SetDuration(.28); a2:SetOrder(2); a2:SetSmoothing('IN')
+      b.omPulse = g; pulseRings[b] = key
+    end
   end
 end
 
@@ -285,7 +311,7 @@ local GROUPS = {}
 local function buildGroups()
   GROUPS = {}
   for _, sp in ipairs(SPELLS) do
-    GROUPS[#GROUPS + 1] = { key = sp.key, filter = OWN, max = 2, main = mainOwn, ring = ringOwn(sp.color, ringCurves[sp.key]) }
+    GROUPS[#GROUPS + 1] = { key = sp.key, filter = OWN, max = 2, main = mainOwn, ring = ringOwn(sp.color, ringCurves[sp.key], sp.key) }
   end
   GROUPS[#GROUPS + 1] = { key = 'mine', filter = OWN, max = 6, main = mainOwn, ring = ringOwn(DARK_BRASS, mineRingCurve) }
   GROUPS[#GROUPS + 1] = { key = 'others', filter = OTHERS, max = 6, main = mainOthers, ring = ringOthers, layout = { groupSpacing = OTHERS_GAP } }
