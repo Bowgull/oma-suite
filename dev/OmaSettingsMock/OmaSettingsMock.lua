@@ -56,8 +56,20 @@ local function previewGems(v)
   C_Timer.After(4, function() if baseScale and row then row:SetScale(baseScale); baseScale = nil end end)
 end
 
+-- One shared "Oma" parent for every Oma add-on (contract agreed with OmaDoomed, 2026-11-11): whoever loads first
+-- makes it, it is registered once at PLAYER_LOGIN, everyone else hangs a subcategory under it.
+local function omaParent()
+  local O = _G.OmaSuite or {}; _G.OmaSuite = O
+  if not O.parent then
+    O.parent = Settings.RegisterVerticalLayoutCategory('Oma')
+    local f = CreateFrame('Frame'); f:RegisterEvent('PLAYER_LOGIN')
+    f:SetScript('OnEvent', function() if not O.registered then O.registered = true; Settings.RegisterAddOnCategory(O.parent) end end)
+  end
+  return O.parent
+end
+
 local function build()
-  parentCat = Settings.RegisterVerticalLayoutCategory('Oma')
+  parentCat = omaParent()
   cat, layout = Settings.RegisterVerticalLayoutSubcategory(parentCat, 'OmaDemon')
 
   header('Demon Warning')
@@ -85,13 +97,14 @@ local function build()
   if CreateSettingsButtonInitializer then
     layout:AddInitializer(CreateSettingsButtonInitializer('', 'Preview', function() previewEdge(db.edgeStrength or 100) end, 'Shows the demon warning for a few seconds.', true))
   end
-
-  Settings.RegisterAddOnCategory(parentCat)
 end
 
+-- Build at our own ADDON_LOADED, so the subcategory exists before the parent is registered at PLAYER_LOGIN.
 local f = CreateFrame('Frame')
-f:RegisterEvent('PLAYER_LOGIN')
-f:SetScript('OnEvent', function()
+f:RegisterEvent('ADDON_LOADED')
+f:SetScript('OnEvent', function(self, _, name)
+  if name ~= 'OmaSettingsMock' then return end
+  self:UnregisterEvent('ADDON_LOADED')
   local ok, err = pcall(build)
   if not ok then print('|cffc08cffOma mock:|r ' .. tostring(err)) end
 end)
