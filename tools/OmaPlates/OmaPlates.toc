@@ -1,5 +1,5 @@
 ## Interface: 16001
-## Title: Omashu Plates
+## Title: OmaPlates
 ## Notes: Your DoTs above every enemy nameplate: round brass icons, a ring in each spell's colour that drains, and a countdown. Mockup 15 C, Omashu skin.
-## SavedVariables: OmashuPlatesDB
-OmashuPlates.lua
+## SavedVariables: OmaPlatesDB
+OmaPlates.lua

@@ -15,7 +15,7 @@
 -- If that font or its formatter fails the load check, the ring falls back to a plain tinted texture that never goes
 -- gold, and the NUMBER goes gold instead (the ThreatPlates "Highlight Expiring" route, proven on Forever).
 
-local ART = 'Interface\\AddOns\\OmashuPlates\\art\\'
+local ART = 'Interface\\AddOns\\OmaPlates\\art\\'
 local RING_FONT = ART .. 'OmashuRing.ttf'
 local NUM_FONT = STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 
@@ -63,7 +63,7 @@ local REMAINING = (Enum.DurationTextBindingProperty and Enum.DurationTextBinding
 
 local POOL_START, POOL_MIN_FREE, POOL_MAX = 12, 3, 40
 
-OmashuPlatesDB = OmashuPlatesDB or {}
+OmaPlatesDB = OmaPlatesDB or {}
 local db
 local function say(m) print('|cffe8c860Omashu:|r ' .. m) end
 local function log(m) if not db then return end; db.log = db.log or {}; table.insert(db.log, 1, date('%H:%M:%S ') .. m); while #db.log > 40 do table.remove(db.log) end end
@@ -254,13 +254,13 @@ local function mainOthers(b)
   b:SetDurationText(num, textOpts(NUM_FMT, nil))   -- plain white: no colour change, no breath
 end
 
--- sheet 27 (approved): on each tick OmaDoomed calls OmashuPlates_Pulse(unit, spell name) and that DoT's ring on that
+-- sheet 27 (approved): on each tick OmaDoomed calls OmaPlates_Pulse(unit, spell name) and that DoT's ring on that
 -- unit's nameplate breathes brighter for 400 ms, in the same instant as its piece in the bar
 local pulseRings = setmetatable({}, { __mode = 'k' })     -- ring button -> spell key
 local function keyOfName(name)
   for _, sp in ipairs(SPELLS) do for _, n in ipairs(sp.names) do if n == name then return sp.key end end end
 end
-function OmashuPlates_Pulse(unit, name)
+function OmaPlates_Pulse(unit, name)
   local key = keyOfName(name); if not key then return end
   local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
   if not plate then return end
@@ -610,7 +610,7 @@ end
 ev:SetScript('OnEvent', function(_, e, a1, _, a3)
   if e ~= 'PLAYER_LOGIN' and not db then return end
   if e == 'PLAYER_LOGIN' then
-    db = OmashuPlatesDB
+    db = OmaPlatesDB
     if db.enabled == nil then db.enabled = true end
     if db.others == nil then db.others = true end
     db.saved = db.saved or {}; db.learned = db.learned or {}
