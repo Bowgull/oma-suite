@@ -660,7 +660,7 @@ onEvent = (function(_, e, a1, _, a3)
     if db.enabled then blizzardRow(false) end
     fill(); attachAll()
     if db.where ~= 'enemy' then C_Timer.After(1, makeFramePair) end
-    C_Timer.After(1, function() ns.squaresApply() end)
+    ns.squaresApply()
   elseif e == 'NAME_PLATE_UNIT_ADDED' then attach(a1)
   elseif e == 'NAME_PLATE_UNIT_REMOVED' then release(a1)
   elseif e == 'PLAYER_TARGET_CHANGED' then
@@ -679,62 +679,25 @@ onEvent = (function(_, e, a1, _, a3)
   end
 end)
 
--- ---------- Blizzard's squares on the target frame ('All but my DoTs' / 'All' / 'Hide') ----------
--- Blizzard draws them; we only hide theirs. 'All but my DoTs' then draws everyone else's auras ourselves, as squares,
--- through the same aura container (allowed in combat): every debuff except your four DoTs, and the enemy's buffs.
-local SQ = 22
-local sq, sqHooked
-local function blizzSquares(show)
-  local tf = TargetFrame; if not tf then return end
-  local function each(fn)
-    if tf.auraPools and tf.auraPools.EnumerateActive then for f in tf.auraPools:EnumerateActive() do fn(f) end end
-    for i = 1, 40 do for _, n in ipairs({ 'TargetFrameBuff', 'TargetFrameDebuff' }) do local f = _G[n .. i]; if f then fn(f) end end end
-  end
-  local function apply() local ok, err = pcall(function() if db and db.squares and db.squares ~= 'all' then each(function(f) f:SetAlpha(0) end) end end); if not ok then ns.err('squares hook: ' .. tostring(err)) end end
-  if not sqHooked then
-    sqHooked = true
-    if tf.UpdateAuras then hooksecurefunc(tf, 'UpdateAuras', apply) end
-    if _G.TargetFrame_UpdateAuras then hooksecurefunc('TargetFrame_UpdateAuras', apply) end
-  end
-  if show then each(function(f) f:SetAlpha(1) end) else apply() end
-end
-local function squareButton(b)
-  b:SetSize(SQ, SQ); pcall(b.EnableMouse, b, false)
-  local bg = b:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(b); bg:SetColorTexture(0, 0, 0, 1)
-  local icon = b:CreateTexture(nil, 'ARTWORK'); icon:SetPoint('TOPLEFT', 1, -1); icon:SetPoint('BOTTOMRIGHT', -1, 1); icon:SetTexCoord(.07, .93, .07, .93)
-  local cd = CreateFrame('Cooldown', nil, b, 'CooldownFrameTemplate'); cd:SetAllPoints(icon); pcall(cd.SetReverse, cd, true); pcall(cd.SetHideCountdownNumbers, cd, true)
-  b:SetIcon(icon); b:SetDurationCooldown(cd)
-end
-local function makeSquares()
-  if sq or InCombatLockdown() or not TargetFrame then return end
-  local ok, err = pcall(function()
-    local c = CreateFrame('AuraContainer', nil, TargetFrame, 'CustomAuraContainerTemplate')
-    pcall(c.SetEditModePreviewEnabled, c, false)
-    -- where Blizzard's row sat: just above the frame's top-left, growing right then up
-    c:SetFlowLayoutAnchorPoint('BOTTOMLEFT'); c:SetFlowLayoutGrowthDirection(1, 1); c:SetFlowLayoutMaximumLineSize(SQ * 8 + 8)
-    -- everything NOT from you: other players' DoTs, poisons, stuns, the mob's own debuffs, and its buffs (Joshua 2026-11-11)
-    c:AddAuraGroup('sqdebuff', 'HARMFUL|!PLAYER', { initializeFrame = squareButton, sortMethod = SORT, maxFrameCount = 16 })
-    c:AddAuraGroup('sqbuff', 'HELPFUL', { initializeFrame = squareButton, sortMethod = SORT, maxFrameCount = 16 })
-    c:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -16)
-    c:SetUnit('target')
-    sq = c
-  end)
-  if not ok then log('squares failed: ' .. tostring(err)) end
-end
--- Forever draws the target frame's squares in an unnamed aura row hung straight on TargetFrame (found 2026-11-11 by
--- dumping the frame: no aura pools, no named buff frames). Hide it by alpha (never Hide(): it's Blizzard's).
-local function blizzRows(show)
-  if not TargetFrame then return end
-  for _, c in ipairs({ TargetFrame:GetChildren() }) do
-    if c ~= sq and not c:GetName() and not (c.GetParentKey and c:GetParentKey()) then c:SetAlpha(show and 1 or 0) end
-  end
+-- Blizzard's squares on the target frame live in TargetFrame...TargetFrameContentContextual.Auras, a
+-- TargetFrameAuraContainer (Forever source, Blizzard_UnitFrame/Mainline/TargetFrame.lua GetAuraContainer). It has a
+-- public SetDebuffFilterString. 'All but my DoTs' hands it Blizzard's own default plus !PLAYER, so the game itself
+-- leaves out what you (or your pet) cast and keeps everyone else's debuffs, stuns and the mob's buffs.
+local DEFAULT_DEBUFFS = 'HARMFUL|INCLUDE_NAME_PLATE_ONLY'
+local NOT_MINE = 'HARMFUL|!PLAYER|INCLUDE_NAME_PLATE_ONLY'
+local function targetAuras()
+  local c = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual
+  return c and c.Auras
 end
 function ns.squaresApply()
   if not db then return end
+  local au = targetAuras(); if not au then ns.err('squares: no target aura container'); return end
   local mode = db.squares or 'notmine'
-  if mode == 'all' then blizzSquares(true); blizzRows(true); if sq then sq:Hide() end; return end
-  blizzSquares(false); blizzRows(false)
-  if mode == 'notmine' then makeSquares(); if sq then sq:Show() end elseif sq then sq:Hide() end
+  local ok, err = pcall(function()
+    au:SetDebuffFilterString(mode == 'notmine' and NOT_MINE or DEFAULT_DEBUFFS)
+    au:SetAlpha(mode == 'hide' and 0 or 1)
+  end)
+  if not ok then ns.err('squares: ' .. tostring(err)) end
 end
 
 function ns.ringsApply(key)
@@ -764,46 +727,29 @@ function ns.ringsSlash(msg)
     if test and test:IsShown() then stopTest(); say('test off.') else startTest() end
   elseif cmd == 'others' and (arg == 'on' or arg == 'off') then
     setOthers(arg == 'on'); say('other players\' DoTs ' .. ((db.others and othersOK) and 'on' or 'off') .. '.')
-  elseif cmd == 'sq' then   -- test: show or hide only OmaDoomed's own squares row
-    if sq then sq:SetShown(not sq:IsShown()); say("OmaDoomed's own squares: " .. (sq:IsShown() and 'shown' or 'hidden')) else say('no OmaDoomed squares row') end
-  elseif cmd == 'dump' then   -- every frame under the target frame, saved on /reload (OmaDoomedDB.tfdump)
-    local out = {}
-    local function walk(f, path, depth)
-      if depth > 5 or #out > 300 then return end
-      local ok, info = pcall(function()
-        return ('%s %s shown=%s'):format(path, f:GetObjectType(), tostring(f:IsShown()))
-      end)
-      out[#out + 1] = ok and info or (path .. ' ?')
-      local kids = { f:GetChildren() }
-      for i, c in ipairs(kids) do
-        local nm = c:GetName() or (c.GetParentKey and c:GetParentKey()) or ('#' .. i)
-        walk(c, path .. '/' .. tostring(nm), depth + 1)
-      end
-    end
-    pcall(walk, TargetFrame, 'TF', 0)
-    for k, v in pairs(TargetFrame) do if type(v) == 'table' and type(k) == 'string' then out[#out + 1] = 'key ' .. k end end
-    OmaDoomedDB.tfdump = out; say('dumped ' .. #out .. ' lines; /reload to save')
-  elseif cmd == 'squares' then   -- what the squares code can see on the target frame
-    local tf = TargetFrame; local n, names = 0, {}
-    if tf and tf.auraPools and tf.auraPools.EnumerateActive then for f in tf.auraPools:EnumerateActive() do n = n + 1; names[#names + 1] = (f:GetName() or f:GetDebugName() or '?') .. '@' .. string.format('%.1f', f:GetAlpha()) end end
-    say(('squares=%s pools=%s active=%d sq=%s hooked=%s UpdateAuras=%s'):format(tostring(db.squares), tostring(tf and tf.auraPools ~= nil), n, tostring(sq ~= nil), tostring(sqHooked), tostring(tf and tf.UpdateAuras ~= nil)))
-    say(table.concat(names, ' '):sub(1, 220))
-    local kids = {}; for _, c in ipairs({ tf:GetChildren() }) do kids[#kids + 1] = (c:GetName() or c:GetDebugName() or '?'):gsub('^TargetFrame%.?', '') end
-    say('children: ' .. table.concat(kids, ', '):sub(1, 220))
-    -- every shown frame anywhere under the target frame that has an icon (Blizzard's squares)
-    local found = {}
-    local function walk(f, path, depth)
-      if depth > 6 then return end
-      for k, v in pairs(f) do
-        if type(v) == 'table' and type(k) == 'string' and v.GetObjectType and v ~= f and k ~= 'parent' and k:sub(1, 1) ~= '_' then
-          local ok, isFrame = pcall(function() return v:IsObjectType('Frame') end)
-          if ok and isFrame and (v.Icon or v.icon) and v:IsShown() then found[#found + 1] = path .. '.' .. k end
+  elseif cmd == 'find' then   -- every shown frame anchored to the target frame or near its top-left, saved on /reload
+    local out, tfL, tfT = {}, TargetFrame:GetLeft(), TargetFrame:GetTop()
+    local f = EnumerateFrames()
+    while f do
+      local ok, line = pcall(function()
+        if not f:IsVisible() then return end
+        local hit
+        for i = 1, (f.GetNumPoints and f:GetNumPoints() or 0) do local _, rel = f:GetPoint(i); if rel == TargetFrame then hit = 'anch' end end
+        local l, t = f:GetLeft(), f:GetTop()
+        if not hit and l and t and tfL and math.abs(l - tfL) < 60 and t > tfT - 10 and t < tfT + 60 and f:GetWidth() < 40 then hit = 'near' end
+        if hit then
+          local p = f:GetParent(); local tex = f.Icon and f.Icon.GetTexture and f.Icon:GetTexture()
+          return ('%s %s %s parent=%s icon=%s w=%.0f'):format(hit, f:GetObjectType(), tostring(f:GetName() or f:GetDebugName()), tostring(p and (p:GetName() or p:GetDebugName())), tostring(tex), f:GetWidth())
         end
-      end
-      for _, c in ipairs({ f:GetChildren() }) do walk(c, path .. '/' .. (c:GetName() or c:GetDebugName() or '?'):gsub('^.*%.', ''), depth + 1) end
+      end)
+      if ok and line then out[#out + 1] = line end
+      f = EnumerateFrames(f)
     end
-    pcall(walk, tf, 'TF', 0)
-    say('icons: ' .. table.concat(found, ' '):sub(1, 400))
+    OmaDoomedDB.tffind = out; say('found ' .. #out .. '; /reload to save')
+  elseif cmd == 'squares' then
+    local au = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual and TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
+    local ok, f = pcall(function() return au and au:GetDebuffFilterString() end)
+    say(('squares=%s container=%s filter=%s'):format(tostring(db.squares), tostring(au ~= nil), tostring(ok and f or f)))
   elseif cmd == 'log' then
     for i = math.min(10, #(db.log or {})), 1, -1 do print(db.log[i]) end
   else
