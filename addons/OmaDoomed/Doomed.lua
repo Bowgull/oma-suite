@@ -249,7 +249,7 @@ local function render()
         local hot = mix(colorOf(d.name), { math.min(1, tone[1] * 1.1), math.min(1, tone[2] * 1.1), math.min(1, tone[3] * 1.1) }, .6)
         local base = colorOf(d.name); local ember = mix(base, EMPTY, .75)
         local col = (now - P.bites[d.name].at) < .06 and mix(base, hot, flare) or mix(ember, hot, flare)
-        s.gtarget = before + bl; s.ghost:SetVertexColor(col[1], col[2], col[3]); s.ghost:Show()
+        s.gtarget = before + bl; s.ghost:SetVertexColor(math.min(1, col[1] * 1.85), math.min(1, col[2] * 1.85), math.min(1, col[3] * 1.85)); s.ghost:Show()   -- 1.85: base 1.15 + lift .7, as the pieces
         local a = flare * .4
         s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
         if CreateColor then
@@ -292,6 +292,17 @@ end
 local function draw(dots, maxv, hp)
   if not build() then return end
   local now = GetTime()
+  local drop = false
+  for _, d in ipairs(dots) do if last[d.name] and d.damage < last[d.name] - .5 then drop = true end end
+  -- WoW lowers the health about 0.2 s before DoesItDie reports the tick that did it (filmed in a real fight,
+  -- 2026-11-11), so the pieces jumped left and the slide started late. Hold our health's end until the tick
+  -- arrives, then move both in the same frame. Anything that isn't a tick (a melee hit) shows after 0.35 s.
+  if drop then P.lastDrop = now end
+  if P.holdAt and not drop and now - P.holdAt < .35 and P.hasHeld and now - (P.lastDrop or -9) > .35 then
+    hp = P.hpHeld
+  else
+    P.hpHeld = hp; P.hasHeld = true; P.holdAt = nil
+  end
   for _, d in ipairs(dots) do
     if last[d.name] and d.damage < last[d.name] - .5 then
       local was = biteNow(d.name, now)
@@ -355,7 +366,7 @@ function P.start()
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
-  ev:SetScript('OnEvent', function(_, e) if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
+  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then P.holdAt = P.holdAt or GetTime() end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; P.hpHeld = nil; P.hasHeld = nil; P.holdAt = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
   ev:SetScript('OnUpdate', function(_, dt) P.dt = dt; local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
