@@ -1,4 +1,5 @@
--- Omashu Plates: your DoTs above every enemy nameplate, in the Omashu skin (mockup 15, section C, style 3, approved).
+-- OmaDoomed, the rings (was Omashu Plates / OmaPlates; one add-on since 2026-11-11, Joshua: "the now unified name is
+-- omadoomed"): your DoTs above every enemy nameplate, in the Omashu skin (mockup 15, section C, style 3, approved).
 -- Rules this file is built on: reports/Nameplate DoT rules.md and research_notes/Nameplate DoT timers/.
 --
 -- The one hard rule on Forever: addon code may not read enemy auras in combat (every C_UnitAuras call errors). So we
@@ -15,7 +16,8 @@
 -- If that font or its formatter fails the load check, the ring falls back to a plain tinted texture that never goes
 -- gold, and the NUMBER goes gold instead (the ThreatPlates "Highlight Expiring" route, proven on Forever).
 
-local ART = 'Interface\\AddOns\\OmaPlates\\art\\'
+local ADDON, ns = ...
+local ART = 'Interface\\AddOns\\OmaDoomed\\Art\\rings\\'
 local RING_FONT = ART .. 'OmashuRing.ttf'
 local NUM_FONT = STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 
@@ -63,9 +65,8 @@ local REMAINING = (Enum.DurationTextBindingProperty and Enum.DurationTextBinding
 
 local POOL_START, POOL_MIN_FREE, POOL_MAX = 12, 3, 40
 
-OmaPlatesDB = OmaPlatesDB or {}
 local db
-local function say(m) print('|cffe8c860Omashu:|r ' .. m) end
+local function say(m) print('|cffb48cffOmaDoomed:|r ' .. m) end
 local function log(m) if not db then return end; db.log = db.log or {}; table.insert(db.log, 1, date('%H:%M:%S ') .. m); while #db.log > 40 do table.remove(db.log) end end
 local function secret(v) return issecretvalue and issecretvalue(v) or false end
 
@@ -254,13 +255,13 @@ local function mainOthers(b)
   b:SetDurationText(num, textOpts(NUM_FMT, nil))   -- plain white: no colour change, no breath
 end
 
--- sheet 27 (approved): on each tick OmaDoomed calls OmaPlates_Pulse(unit, spell name) and that DoT's ring on that
+-- sheet 27 (approved): on each tick the bar calls ns.ringsPulse(unit, spell name) and that DoT's ring on that
 -- unit's nameplate breathes brighter for 400 ms, in the same instant as its piece in the bar
 local pulseRings = setmetatable({}, { __mode = 'k' })     -- ring button -> spell key
 local function keyOfName(name)
   for _, sp in ipairs(SPELLS) do for _, n in ipairs(sp.names) do if n == name then return sp.key end end end
 end
-function OmaPlates_Pulse(unit, name)
+function ns.ringsPulse(unit, name)
   local key = keyOfName(name); if not key then return end
   local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
   if not plate then return end
@@ -446,7 +447,7 @@ local function setOthers(on)
   end
 end
 
--- ---------- Blizzard's own debuff row: off while we show ours, old value kept so /omplates off puts it back ----------
+-- ---------- Blizzard's own debuff row: off while we show ours, old value kept so /omadoomed rings off puts it back ----------
 local CVARS = {
   { name = 'nameplateEnemyNpcAuraDisplay', bit = Enum.NamePlateEnemyNpcAuraDisplay and Enum.NamePlateEnemyNpcAuraDisplay.Debuffs or 2 },
   { name = 'nameplateEnemyPlayerAuraDisplay', bit = Enum.NamePlateEnemyPlayerAuraDisplay and Enum.NamePlateEnemyPlayerAuraDisplay.Debuffs or 2 },
@@ -477,7 +478,7 @@ local function blizzardState()
   return table.concat(out, ', ')
 end
 
--- ---------- /omplates test: a fake row on your target, plain frames, out of combat only ----------
+-- ---------- /omadoomed rings test: a fake row on your target, plain frames, out of combat only ----------
 local test
 local TEST_ROW = {
   { sp = 1, dur = 18, left = 11.4 }, { sp = 2, dur = 24, left = 19.2 },
@@ -610,11 +611,16 @@ end
 ev:SetScript('OnEvent', function(_, e, a1, _, a3)
   if e ~= 'PLAYER_LOGIN' and not db then return end
   if e == 'PLAYER_LOGIN' then
-    db = OmaPlatesDB
+    -- settings live in OmaDoomedDB.rings; the old separate OmaPlatesDB is moved in once
+    OmaDoomedDB = OmaDoomedDB or {}
+    if OmaPlatesDB and not OmaDoomedDB.rings then OmaDoomedDB.rings = OmaPlatesDB end
+    OmaPlatesDB = nil
+    OmaDoomedDB.rings = OmaDoomedDB.rings or {}
+    db = OmaDoomedDB.rings
     if db.enabled == nil then db.enabled = true end
     if db.others == nil then db.others = true end
     db.saved = db.saved or {}; db.learned = db.learned or {}
-    if not (C_UnitAuras and C_NamePlate and C_CurveUtil and C_StringUtil) then say('this client is missing the aura container APIs; Omashu Plates is off.'); db = nil; return end
+    if not (C_UnitAuras and C_NamePlate and C_CurveUtil and C_StringUtil) then say('this client is missing the aura container APIs; the OmaDoomed rings are off.'); db = nil; return end
     probe(); buildGroups()
     if db.enabled then blizzardRow(false) end
     fill(); attachAll()
@@ -633,9 +639,8 @@ ev:SetScript('OnEvent', function(_, e, a1, _, a3)
   end
 end)
 
--- ---------- /omplates ----------
-SLASH_OMASHUPLATES1 = '/omplates'
-SlashCmdList.OMASHUPLATES = function(msg)
+-- ---------- /omadoomed rings ... ----------
+function ns.ringsSlash(msg)
   if not db then return end
   local cmd, arg = (msg or ''):match('^(%S*)%s*(.-)$'); cmd = cmd:lower(); arg = arg:lower()
   if cmd == 'off' then

@@ -16,7 +16,7 @@ local COLOR = {   -- sheet 25 (approved 2026-11-11): one colour per DoT, shared 
 }
 local GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- gold means only 'ending soon' (last 3 s); at the green's strength like the other pieces
 local LOW = 3
-local function breath(x)              -- the rings' own breath (OmaPlates): 1 at 3 s, 0.3 at 2.25 s, 1 at 1.5 s ...
+local function breath(x)              -- the rings' own breath (Rings.lua): 1 at 3 s, 0.3 at 2.25 s, 1 at 1.5 s ...
   local ph = (LOW - x) / 1.5 % 1; return .3 + .7 * (math.cos(ph * 2 * math.pi) * .5 + .5)
 end
 local OTHER = { .55, .45, .65 }
@@ -163,7 +163,7 @@ P.bites = {}                         -- DoT name -> { amt, at }
 local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
 local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
-local RINGTONE = {   -- the rings' own colours (OmaPlates), for the flare
+local RINGTONE = {   -- the rings' own colours (Rings.lua), for the flare
   ['Corruption'] = { 95 / 255, 216 / 255, 232 / 255 }, ['Curse of Agony'] = { 196 / 255, 108 / 255, 1 }, ['Bane of Agony'] = { 196 / 255, 108 / 255, 1 },
   ['Immolate'] = { 1, 150 / 255, 64 / 255 }, ['Siphon Life'] = { 214 / 255, 48 / 255, 72 / 255 },
 }
@@ -243,7 +243,7 @@ local function draw(dots, maxv, hp)
   for _, d in ipairs(dots) do
     if last[d.name] and d.damage < last[d.name] - .5 then
       P.bites[d.name] = { amt = last[d.name] - d.damage, at = now }
-      if _G.OmaPlates_Pulse then pcall(_G.OmaPlates_Pulse, 'target', d.name) end   -- its ring, same instant
+      if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end   -- its ring, same instant
     end
     last[d.name] = d.damage
   end

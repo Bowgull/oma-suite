@@ -13,9 +13,11 @@ f:SetScript('OnEvent', function()
 end)
 SLASH_OMADOOMED1 = '/omadoomed'
 SlashCmdList.OMADOOMED = function(m)
-  m = 'doomed ' .. (m or ''):lower()
+  m = (m or ''):lower()
+  local rest = m:match('^rings%s*(.*)$'); if rest then return ns.ringsSlash and ns.ringsSlash(rest) end
+  m = 'doomed ' .. m
   local p = ns.parts[m:match('^(%S+)')]
   if p and p.slash then p.slash(m:match('^%S+%s*(.*)$')) return end
   local on = {}; for k in pairs(ns.parts) do on[#on + 1] = k .. (ns.db[k] and ' on' or ' off') end
-  ns.say(table.concat(on, ', ') .. '. /omadoomed (on/off, test, test die, test off, join fade|thin|none)')
+  ns.say(table.concat(on, ', ') .. '. /omadoomed (on/off, test, test off) · /omadoomed rings (on/off, test, others on|off)')
 end

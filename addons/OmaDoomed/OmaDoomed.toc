@@ -1,9 +1,10 @@
 ## Interface: 16001
 ## Title: OmaDoomed
-## Notes: on your target's health bar, the health your DoTs will still take shows in their colours, and a skull and bones marks a mob they will finish.
+## Notes: Your DoTs as coloured rings over every enemy nameplate, and on your target's health bar the health your DoTs will still take shows in their colours, and a skull and bones marks a mob they will finish.
 ## Author: Omashu
 ## Version: 0.1.0
-## SavedVariables: OmaDoomedDB
+## SavedVariables: OmaDoomedDB, OmaPlatesDB
 ## OptionalDeps: DoesItDie
 Core.lua
 Doomed.lua
+Rings.lua
