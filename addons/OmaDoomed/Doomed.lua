@@ -301,7 +301,7 @@ local function render()
       local sh = P.shownBy[d.name] or 0
       if want > sh then sh = sh + (want - sh) * (1 - math.exp(-(P.dt or .033) * 9)) else sh = want end
       P.shownBy[d.name] = sh; seen[d.name] = true
-      run = run + sh; s.shown = run
+      run = run + sh; s.shown = run; s.sz = sh
       local left = d.expires and (d.expires - now)
       local lowNow = left and left > 0 and left <= LOW
       local c = colorOf(d.name)
@@ -321,9 +321,11 @@ local function render()
         s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
       end
       if bl > 0 then
-        local tone = lowNow and RINGGOLD or (RINGTONE[d.name] or c)
-        local hot = mix(colorOf(d.name), tone, .45)
-        local base = colorOf(d.name); local ember = mix(base, EMPTY, .75)
+        -- 2026-11-11 'when a DoT ends there's still a flash': its last tick always lands in the gold last 3 s, and lit up
+        -- in bright ring gold x1.85, near white. The light now comes from the piece's own colour, like every other tick.
+        local tone = lowNow and { math.min(1, c[1] * 1.3), math.min(1, c[2] * 1.3), math.min(1, c[3] * 1.3) } or (RINGTONE[d.name] or c)
+        local hot = mix(c, tone, .45)
+        local base = c; local ember = mix(base, EMPTY, .75)
         local col = (anow - P.bites[d.name].at) < .12 and mix(base, hot, flare) or mix(ember, hot, flare)
         s.gtarget = before + bl; s.ghost:SetVertexColor(math.min(1, col[1] * 1.85), math.min(1, col[2] * 1.85), math.min(1, col[3] * 1.85)); s.ghost:Show()   -- 1.85: base 1.15 + lift .7, as the pieces
         local a = flare * .4
@@ -337,12 +339,14 @@ local function render()
         s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
       end
     else
-      s.shown = run; s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
+      s.shown = run; s.sz = 0; s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
     end
     local on = d and true or false
     local mode = ns.db.doomedJoin or 'crease'
     local jw = mode == 'crease' and 0 or (JOIN[mode] or 0)
-    s.creaseL:SetShown(on and i > 1 and mode == 'crease'); s.creaseR:SetShown(on and i > 1 and mode == 'crease')
+    -- no crease next to an empty piece (a DoT that just ended): two creases stacked on one spot, then popped away
+    local cr = on and i > 1 and mode == 'crease' and (s.sz or 0) > .3 and (segs[i - 1].sz or 0) > .3
+    s.creaseL:SetShown(cr); s.creaseR:SetShown(cr)
     if jw > 0 then s.join:SetWidth(px(jw, hb)); s.joinLift:SetWidth(px(jw, hb)) end
     s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(false); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
   end
