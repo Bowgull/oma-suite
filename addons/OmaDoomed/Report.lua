@@ -6,8 +6,8 @@
 -- /omadoomed report show  opens the newest report, selected, ready for Ctrl+C.
 local ADDON, ns = ...
 
-local KEEP, MAXREPORTS = 15, 5
-local buf, head, size = {}, 0, 150      -- 15 s at 10 rows a second
+local KEEP, MAXREPORTS = 60, 5   -- 60 s: long enough to open Options after seeing the bug
+local buf, head, size = {}, 0, 600      -- 60 s at 10 rows a second
 
 -- called by the kill bar 10 times a second with what it is about to draw
 function ns.recordRow(cur, extra)

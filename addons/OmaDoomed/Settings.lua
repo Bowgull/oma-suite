@@ -110,6 +110,16 @@ function ns.buildSettings()
   slider(rdb, 'alpha', 'Ring opacity', 20, 100, 5, 'How solid your own rings are.', pct)
   slider(rdb, 'othersAlpha', "Other players' DoTs", 0, 100, 5, "How solid other players' rings are. 0 hides them.",
     function(v) return v == 0 and 'Hidden' or ('%d%%'):format(v) end)
+
+  header('Help')
+  if CreateSettingsButtonInitializer then
+    layout:AddInitializer(CreateSettingsButtonInitializer('Bug report', 'Save a bug report',
+      function() if ns.saveReport then ns.saveReport('settings') end end,
+      'Saves the last minute of what OmaDoomed drew, your settings, recent errors and a screenshot. No names or chat. You can also bind a key: Key Bindings > OmaDoomed.', true))
+    layout:AddInitializer(CreateSettingsButtonInitializer('', 'Show last report',
+      function() if ns.showReport then ns.showReport() end end,
+      'Opens your last bug report, selected, ready to copy with Ctrl+C.', true))
+  end
 end
 
 local f = CreateFrame('Frame'); f:RegisterEvent('ADDON_LOADED')
