@@ -67,7 +67,8 @@ local POOL_START, POOL_MIN_FREE, POOL_MAX = 24, 4, 40   -- review #7: 12 ran out
 
 local db
 local function say(m) print('|cffb48cffOmaDoomed:|r ' .. m) end
-local function log(m) if not db then return end; db.log = db.log or {}; table.insert(db.log, 1, date('%H:%M:%S ') .. m); while #db.log > 40 do table.remove(db.log) end end
+-- failures go to the error list (/omadoomed errors and bug reports); start-up probes are kept quiet
+local function log(m) if ns.err and not m:find('^probe') and not m:find('^number formatter') then ns.err('rings: ' .. m) end end
 local function secret(v) return issecretvalue and issecretvalue(v) or false end
 
 -- ---------- what the load check decides (out of combat, before any container exists) ----------
@@ -796,33 +797,6 @@ function ns.ringsSlash(msg)
     if test and test:IsShown() then stopTest(); say('test off.') else startTest() end
   elseif cmd == 'others' and (arg == 'on' or arg == 'off') then
     setOthers(arg == 'on'); say('other players\' DoTs ' .. ((db.others and othersOK) and 'on' or 'off') .. '.')
-  elseif cmd == 'find' then   -- every shown frame anchored to the target frame or near its top-left, saved on /reload
-    local out, tfL, tfT = {}, TargetFrame:GetLeft(), TargetFrame:GetTop()
-    local f = EnumerateFrames()
-    while f do
-      local ok, line = pcall(function()
-        if not f:IsVisible() then return end
-        local hit
-        for i = 1, (f.GetNumPoints and f:GetNumPoints() or 0) do local _, rel = f:GetPoint(i); if rel == TargetFrame then hit = 'anch' end end
-        local l, t = f:GetLeft(), f:GetTop()
-        if not hit and l and t and tfL and math.abs(l - tfL) < 60 and t > tfT - 10 and t < tfT + 60 and f:GetWidth() < 40 then hit = 'near' end
-        if hit then
-          local p = f:GetParent(); local tex = f.Icon and f.Icon.GetTexture and f.Icon:GetTexture()
-          return ('%s %s %s parent=%s icon=%s w=%.0f'):format(hit, f:GetObjectType(), tostring(f:GetName() or f:GetDebugName()), tostring(p and (p:GetName() or p:GetDebugName())), tostring(tex), f:GetWidth())
-        end
-      end)
-      if ok and line then out[#out + 1] = line end
-      f = EnumerateFrames(f)
-    end
-    OmaDoomedDB.tffind = out; say('found ' .. #out .. '; /reload to save')
-  elseif cmd == 'where' and (arg == 'enemy' or arg == 'split' or arg == 'frame' or arg == 'both') then
-    db.where = arg; ns.ringsApply('where'); say('rings: ' .. arg)
-  elseif cmd == 'squares' then
-    local au = targetAuras()
-    local ok, m = pcall(function() return au and au:GetMaxDebuffs() end)
-    say(('squares=%s container=%s maxDebuffs=%s hooked=%s'):format(tostring(db.squares), tostring(au ~= nil), tostring(m), tostring(sqHooked)))
-  elseif cmd == 'log' then
-    for i = math.min(10, #(db.log or {})), 1, -1 do print(db.log[i]) end
   else
     local n = 0; for _ in pairs(active) do n = n + 1 end
     say(('%s. Rows on %d plates, %d spare.'):format(db.enabled and 'On' or 'Off', n, #free))

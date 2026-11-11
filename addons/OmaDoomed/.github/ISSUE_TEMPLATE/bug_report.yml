@@ -1,0 +1,41 @@
+name: Bug report
+description: Something OmaDoomed showed looked wrong, or an error popped up.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: OmaDoomed version
+      description: Shown at the top of the report (/omadoomed report show).
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: The report
+      description: Press your bug report key (or type /omadoomed report) right after it happens, then /omadoomed report show, Ctrl+C, and paste here.
+      render: text
+  - type: textarea
+    id: what
+    attributes:
+      label: What you saw, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Lua error, if any
+      description: From BugSack, or /console scriptErrors 1.
+      render: text
+  - type: textarea
+    id: shots
+    attributes:
+      label: Screenshot or video
+      description: Drag files here. The report key saves one in your Screenshots folder. Please crop out names and chat.
+  - type: dropdown
+    id: alone
+    attributes:
+      label: Does it happen with only OmaDoomed and DoesItDie turned on?
+      options: ["Yes", "No", "Didn't try"]
+    validations:
+      required: true

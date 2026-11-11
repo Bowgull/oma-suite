@@ -14,6 +14,8 @@ f:RegisterEvent('PLAYER_LOGIN')
 f:SetScript('OnEvent', function()
   OmaDoomedDB = OmaDoomedDB or {}
   for k, v in pairs(DEFAULTS) do if OmaDoomedDB[k] == nil then OmaDoomedDB[k] = v end end
+  OmaDoomedDB.trace, OmaDoomedDB.traceErr, OmaDoomedDB.tffind = nil, nil, nil   -- left by test builds' debug commands
+  if type(OmaDoomedDB.rings) == 'table' then OmaDoomedDB.rings.log = nil end
   ns.db = OmaDoomedDB
   for _, p in pairs(ns.parts) do pcall(p.start) end
 end)
@@ -21,7 +23,6 @@ SLASH_OMADOOMED1 = '/omadoomed'
 SlashCmdList.OMADOOMED = function(m)
   m = (m or ''):lower()
   local rest = m:match('^rings%s*(.*)$'); if rest then return ns.ringsSlash and ns.ringsSlash(rest) end
-  if m == 'trace' then return ns.startTrace and ns.startTrace() end
   if m == 'report' then return ns.saveReport and ns.saveReport('command') end
   if m == 'report show' then return ns.showReport and ns.showReport() end
   if m == 'errors' then for i = math.min(8, #(OmaDoomedDB.errs or {})), 1, -1 do print(OmaDoomedDB.errs[i]) end; return end

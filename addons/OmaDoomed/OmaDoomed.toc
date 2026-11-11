@@ -2,7 +2,10 @@
 ## Title: OmaDoomed
 ## Notes: Your DoTs as coloured rings over every enemy nameplate, and on your target's health bar the health your DoTs will still take shows in their colours, and a skull and bones marks a mob they will finish.
 ## Author: Omashu
-## Version: 0.1.0
+## Version: @project-version@
+## Category: Buffs & Debuffs
+## IconTexture: Interface\AddOns\OmaDoomed\Art\doomed-mark
+## X-License: MIT
 ## SavedVariables: OmaDoomedDB, OmaPlatesDB
 ## OptionalDeps: DoesItDie
 Core.lua

@@ -1,0 +1,12 @@
+# BigWigs packager settings (https://github.com/BigWigsMods/packager). A tag push builds the zip and uploads it.
+package-as: OmaDoomed
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - .github
+  - Art/rings/make_art.py
+  - Art/rings/make_font.py
+  - "*.md"

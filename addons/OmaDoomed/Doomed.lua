@@ -33,7 +33,6 @@ local segs = {}
 local win, longBar, mark
 local last = {}                      -- damage per DoT name last time (a drop = a tick: flash)
 local test
-local trace                          -- /omadoomed trace: 30 s of numbers, health changes and tick drops (saved on /reload)
 local JOIN = { crease = 4, fade = 6, thin = 2, none = 0 }   -- sheet 25: 'crease' = hard join + soft dark crease (Blizzard's way)
 
 local function atlasOK(n) return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(n) ~= nil end
@@ -269,13 +268,8 @@ function P.onHealth()
   -- review #2: any hit near a DoT's beat looked like its tick. In a group others hit all the time, so only predict solo.
   if IsInGroup and IsInGroup() then return end
   local now = GetTime()
-  local note = trace and { string.format('HEALTH %.3f', now - trace.t0) }
   for _, d in ipairs(cur.dots) do
     local beat = d.appliedAt and (BEAT[d.name] or 3)
-    if note then
-      local kk = beat and math.floor((now - d.appliedAt) / beat + .5)
-      note[#note + 1] = d.name:sub(1, 3) .. (beat and string.format(' k%d off%.3f pk%d', kk, now - (d.appliedAt + kk * beat), P.predK[d.name] or 0) or ' noApplied') .. (d.provisional and ' P' or '')
-    end
     if beat and P.predApplied[d.name] ~= d.appliedAt then P.predApplied[d.name] = d.appliedAt; P.predK[d.name] = nil end   -- review #13: a recast starts the count again
     if beat and not d.provisional then
       local k = math.floor((now - d.appliedAt) / beat + .5)
@@ -287,11 +281,9 @@ function P.onHealth()
         P.bites[d.name] = { amt = was + est, at = aclock() }
         P.pred[d.name] = { est = est, at = now }
         if ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', d.name) end
-        if note then note[#note + 1] = 'PREDICTED ' .. d.name:sub(1, 3) .. string.format(' est%.1f', est) end
       end
     end
   end
-  if note then trace.rows[#trace.rows + 1] = table.concat(note, ' | ') end
 end
 P.predK = {}
 P.predApplied = {}
@@ -325,20 +317,6 @@ biteNow = function(name, now)    -- what is still left of a bite (0 when done), 
   return left, flare
 end
 
-function ns.startTrace() trace = { t0 = GetTime(), untilT = GetTime() + 150, rows = {} }; OmaDoomedDB.trace = trace.rows; ns.say('tracing 150 s (saved as it goes)') end
-local traceRow
-local function traceFrame(now) if trace then local ok, e = pcall(traceRow, now); if not ok then OmaDoomedDB.traceErr = tostring(e); trace = nil end end end
-traceRow = function(now)
-  if now > trace.untilT then OmaDoomedDB.trace = trace.rows; trace = nil; ns.say('trace saved (' .. #OmaDoomedDB.trace .. ' frames); /reload to write it'); return end
-  local row = { string.format('%.3f', now - trace.t0), string.format('dt%.3f', P.dt or 0) }
-  row[#row + 1] = 'hp' .. tostring(cur and cur.hp)
-  for i, d in ipairs(cur and cur.dots or {}) do row[#row + 1] = d.name:sub(1, 3) .. string.format('%.1f', d.damage) .. (d.provisional and 'P' or '') .. (d.ending and 'E' or '') end
-  for i = 1, 3 do local s = segs[i]; row[#row + 1] = s and (string.format('%.2f', s.shown) .. (s.mark.side or '?')) or '-' end
-  for n, v in pairs(P.shownBy) do row[#row + 1] = n:sub(1, 3) .. '=' .. string.format('%.2f', v) end
-  row[#row + 1] = 'S' .. string.format('%.2f', P.slideV or 0)
-  for n, b in pairs(P.bites) do row[#row + 1] = n:sub(1, 3) .. string.format('%.2f', now - b.at) end
-  trace.rows[#trace.rows + 1] = table.concat(row, ' ')
-end
 local function render()
   if not cur or not built then return end
   local dots, maxv, hp = cur.dots, cur.maxv, cur.hp
@@ -470,7 +448,7 @@ local function render()
       s.shown = run; s.sz = 0; s.cpr = nil; s.wash:Hide(); s.motes:Hide(); for k = 1, 5 do s.parts[k]:Hide() end; s.cbase:Hide(); s.clift:Hide(); s.spark:Hide(); s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
     end
     local on = d and true or false
-    local mode = ns.db.doomedJoin or 'crease'
+    local mode = 'crease'
     local jw = mode == 'crease' and 0 or (JOIN[mode] or 0)
     -- no crease next to an empty piece (a DoT that just ended): two creases stacked on one spot, then popped away
     local cr = on and i > 1 and mode == 'crease' and (s.sz or 0) > .3 and order[i - 1] and (order[i - 1].sz or 0) > .3
@@ -490,8 +468,6 @@ local function render()
     if s.ghost:IsShown() and s.gtarget then setMark(s.gmark, slide - s.gtarget, maxv) end
     if s.cpr then setMark(s.cmark, slide - s.shown + s.cpr * (s.sz or 0), maxv) end
   end
-  P.slideV = slide
-  traceFrame(now)
   local far = order[#order] or segs[1]
   shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
   -- the skull: hidden when the mob already carries a real raid mark (that one wins)
@@ -532,7 +508,6 @@ local function draw(dots, maxv, hp)
     if last[d.name] and d.damage < last[d.name] - .5 then
       local real = last[d.name] - d.damage
       local pr = P.pred[d.name]
-      if trace then trace.rows[#trace.rows + 1] = string.format('DROP %.3f %s real%.1f %s', now - trace.t0, d.name:sub(1, 3), real, pr and string.format('pred est%.1f %.3fs ago', pr.est, now - pr.at) or 'unpredicted') end
       if pr and now - pr.at < 1 then
         -- already showing: this tick was predicted on its beat. Only the size is corrected (a small change).
         local b = P.bites[d.name]; if b then b.amt = math.max(0, b.amt + real - pr.est) end
@@ -650,16 +625,18 @@ function P.start()
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() P.dirty = true end) end
 end
 
--- /omadoomed            on/off
--- /omadoomed test       fake DoTs on your current target (live)   /omadoomed test die   (doomed)   ... test off
+-- /omadoomed on | off    the kill bar part on or off
+-- /omadoomed test        fake DoTs on your current target (live)   ... test off
 function P.slash(m)
-  local j = m:match('^join (%a+)'); if j and JOIN[j] then ns.db.doomedJoin = j; ns.say('Doomed join: ' .. j); return update() end
-  if m == 'test off' then test = nil; if built then P.lost:Hide(); P.hangOn(fill) end; ns.say('Doomed test off'); return update() end
+  if m == 'test off' then test = nil; if built then P.lost:Hide(); P.hangOn(fill) end; ns.say('test off.'); return update() end
   if m:match('^test') then
     test = {}; wipe(last); wipe(P.bites)
-    ns.say('Doomed test on your target (Bujuju\'s real ticks, sheet 30). /omadoomed test off'); return update()
+    ns.say('test DoTs on your target. /omadoomed test off'); return update()
   end
-  ns.db.doomed = not ns.db.doomed; quiet(ns.db.doomed); ns.say('Doomed ' .. (ns.db.doomed and 'on' or 'off (DoesItDie back after /reload)')); update()
+  if m == 'on' or m == 'off' then
+    ns.db.doomed = (m == 'on'); quiet(ns.db.doomed); ns.say('kill bar ' .. (ns.db.doomed and 'on.' or 'off (DoesItDie\'s own marker is back after /reload).')); return update()
+  end
+  ns.say('/omadoomed on|off, options, report, report show, errors · /omadoomed rings on|off, others on|off')
 end
 
 -- a setting changed on the Options page (Settings.lua): show it at once
