@@ -616,7 +616,9 @@ function P.start()
   local ev = CreateFrame('Frame')
   ev:RegisterUnitEvent('UNIT_SPELLCAST_SUCCEEDED', 'player')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
-  ev:SetScript('OnEvent', function(_, e, unit, _, spellID)
+  local onEv
+  ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEv, ...); if not ok then ns.err('bar event: ' .. tostring(err)) end end)
+  onEv = (function(_, e, unit, _, spellID)
     if e == 'UNIT_SPELLCAST_SUCCEEDED' then
       local n = spellID and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
       if n and COLOR[n] and P.fullBy[n] then P.landed = { name = n, at = GetTime(), dmg = P.fullBy[n] } end

@@ -664,7 +664,7 @@ onEvent = (function(_, e, a1, _, a3)
   elseif e == 'NAME_PLATE_UNIT_ADDED' then attach(a1)
   elseif e == 'NAME_PLATE_UNIT_REMOVED' then release(a1)
   elseif e == 'PLAYER_TARGET_CHANGED' then
-    visible()
+    visible(); if ns.squaresApply then ns.squaresApply() end
     -- the name can appear or move when the target changes; keep each row on top of its name
     for u, p in pairs(active) do local plate = C_NamePlate.GetNamePlateForUnit(u, false); if plate then place(p.anchor, plate) end end
   elseif e == 'PLAYER_REGEN_DISABLED' then stopTest(); visible()
@@ -720,11 +720,19 @@ local function makeSquares()
   end)
   if not ok then log('squares failed: ' .. tostring(err)) end
 end
+-- Forever draws the target frame's squares in an unnamed aura row hung straight on TargetFrame (found 2026-11-11 by
+-- dumping the frame: no aura pools, no named buff frames). Hide it by alpha (never Hide(): it's Blizzard's).
+local function blizzRows(show)
+  if not TargetFrame then return end
+  for _, c in ipairs({ TargetFrame:GetChildren() }) do
+    if c ~= sq and not c:GetName() and not (c.GetParentKey and c:GetParentKey()) then c:SetAlpha(show and 1 or 0) end
+  end
+end
 function ns.squaresApply()
   if not db then return end
   local mode = db.squares or 'notmine'
-  if mode == 'all' then blizzSquares(true); if sq then sq:Hide() end; return end
-  blizzSquares(false)
+  if mode == 'all' then blizzSquares(true); blizzRows(true); if sq then sq:Hide() end; return end
+  blizzSquares(false); blizzRows(false)
   if mode == 'notmine' then makeSquares(); if sq then sq:Show() end elseif sq then sq:Hide() end
 end
 
@@ -755,6 +763,46 @@ function ns.ringsSlash(msg)
     if test and test:IsShown() then stopTest(); say('test off.') else startTest() end
   elseif cmd == 'others' and (arg == 'on' or arg == 'off') then
     setOthers(arg == 'on'); say('other players\' DoTs ' .. ((db.others and othersOK) and 'on' or 'off') .. '.')
+  elseif cmd == 'sq' then   -- test: show or hide only OmaDoomed's own squares row
+    if sq then sq:SetShown(not sq:IsShown()); say("OmaDoomed's own squares: " .. (sq:IsShown() and 'shown' or 'hidden')) else say('no OmaDoomed squares row') end
+  elseif cmd == 'dump' then   -- every frame under the target frame, saved on /reload (OmaDoomedDB.tfdump)
+    local out = {}
+    local function walk(f, path, depth)
+      if depth > 5 or #out > 300 then return end
+      local ok, info = pcall(function()
+        return ('%s %s shown=%s'):format(path, f:GetObjectType(), tostring(f:IsShown()))
+      end)
+      out[#out + 1] = ok and info or (path .. ' ?')
+      local kids = { f:GetChildren() }
+      for i, c in ipairs(kids) do
+        local nm = c:GetName() or (c.GetParentKey and c:GetParentKey()) or ('#' .. i)
+        walk(c, path .. '/' .. tostring(nm), depth + 1)
+      end
+    end
+    pcall(walk, TargetFrame, 'TF', 0)
+    for k, v in pairs(TargetFrame) do if type(v) == 'table' and type(k) == 'string' then out[#out + 1] = 'key ' .. k end end
+    OmaDoomedDB.tfdump = out; say('dumped ' .. #out .. ' lines; /reload to save')
+  elseif cmd == 'squares' then   -- what the squares code can see on the target frame
+    local tf = TargetFrame; local n, names = 0, {}
+    if tf and tf.auraPools and tf.auraPools.EnumerateActive then for f in tf.auraPools:EnumerateActive() do n = n + 1; names[#names + 1] = (f:GetName() or f:GetDebugName() or '?') .. '@' .. string.format('%.1f', f:GetAlpha()) end end
+    say(('squares=%s pools=%s active=%d sq=%s hooked=%s UpdateAuras=%s'):format(tostring(db.squares), tostring(tf and tf.auraPools ~= nil), n, tostring(sq ~= nil), tostring(sqHooked), tostring(tf and tf.UpdateAuras ~= nil)))
+    say(table.concat(names, ' '):sub(1, 220))
+    local kids = {}; for _, c in ipairs({ tf:GetChildren() }) do kids[#kids + 1] = (c:GetName() or c:GetDebugName() or '?'):gsub('^TargetFrame%.?', '') end
+    say('children: ' .. table.concat(kids, ', '):sub(1, 220))
+    -- every shown frame anywhere under the target frame that has an icon (Blizzard's squares)
+    local found = {}
+    local function walk(f, path, depth)
+      if depth > 6 then return end
+      for k, v in pairs(f) do
+        if type(v) == 'table' and type(k) == 'string' and v.GetObjectType and v ~= f and k ~= 'parent' and k:sub(1, 1) ~= '_' then
+          local ok, isFrame = pcall(function() return v:IsObjectType('Frame') end)
+          if ok and isFrame and (v.Icon or v.icon) and v:IsShown() then found[#found + 1] = path .. '.' .. k end
+        end
+      end
+      for _, c in ipairs({ f:GetChildren() }) do walk(c, path .. '/' .. (c:GetName() or c:GetDebugName() or '?'):gsub('^.*%.', ''), depth + 1) end
+    end
+    pcall(walk, tf, 'TF', 0)
+    say('icons: ' .. table.concat(found, ' '):sub(1, 400))
   elseif cmd == 'log' then
     for i = math.min(10, #(db.log or {})), 1, -1 do print(db.log[i]) end
   else

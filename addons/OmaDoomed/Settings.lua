@@ -32,7 +32,7 @@ end
 local function reg(tbl, key, default, vartype, label)
   if tbl[key] == nil then tbl[key] = default end
   local s = Settings.RegisterAddOnSetting(cat, 'OMADOOMED_' .. key, key, tbl, vartype, label, default)
-  Settings.SetOnValueChangedCallback('OMADOOMED_' .. key, function() if ns.applySetting then pcall(ns.applySetting, key) end end)
+  Settings.SetOnValueChangedCallback('OMADOOMED_' .. key, function() if ns.applySetting then local ok, e = pcall(ns.applySetting, key); if not ok then ns.err('setting ' .. key .. ': ' .. tostring(e)) end end end)
   return s
 end
 local function child(init, parent)

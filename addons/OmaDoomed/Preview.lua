@@ -136,7 +136,7 @@ local function build(host)
     squares[i] = q
   end
   P.plan = plan(); t0 = GetTime()
-  P:SetScript('OnUpdate', function() local ok, err = pcall(ns.previewDraw); if not ok then P:SetScript('OnUpdate', nil); print('|cffb48cffOmaDoomed:|r preview stopped: ' .. tostring(err)) end end)
+  P:SetScript('OnUpdate', function() local ok, err = pcall(ns.previewDraw); if not ok then P:SetScript('OnUpdate', nil); ns.err('preview: ' .. tostring(err)); print('|cffb48cffOmaDoomed:|r preview stopped: ' .. tostring(err)) end end)
   built = true
 end
 
