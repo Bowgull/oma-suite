@@ -301,6 +301,8 @@ local RINGTONE = {   -- the rings' own colours (Rings.lua), for the tick
   ['Corruption'] = { 176 / 255, 120 / 255, 1 }, ['Curse of Agony'] = { 240 / 255, 84 / 255, 150 / 255 }, ['Bane of Agony'] = { 240 / 255, 84 / 255, 150 / 255 },
   ['Immolate'] = { 1, 138 / 255, 61 / 255 }, ['Siphon Life'] = { 214 / 255, 48 / 255, 72 / 255 },
 }
+ns.doomedTone = RINGTONE                  -- the precast stripes and motes over every dotted mob (KillPlates.lua)
+
 local RINGGOLD = { 1, 214 / 255, 110 / 255 }
 
 biteNow = function(name, now)    -- what is still left of a bite (0 when done), and its flare 0..1
