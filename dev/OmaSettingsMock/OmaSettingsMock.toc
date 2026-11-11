@@ -1,0 +1,6 @@
+## Interface: 16001
+## Title: Oma settings (mockup)
+## Notes: Throwaway: OmaDemon's proposed settings page. Changes nothing.
+## SavedVariables: OmaSettingsMockDB
+
+OmaSettingsMock.lua
