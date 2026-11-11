@@ -213,6 +213,10 @@ local function colorOf(name) return COLOR[name] or OTHER end
 -- bite flares hot in that DoT's colour (60 ms), holds (to 160 ms), then cools to an ember while the gap closes, fast
 -- then settling (340 ms); it lights 9 px of its neighbours. The green never moves. Its ring breathes the same instant.
 P.bites = {}                         -- DoT name -> { amt, at }
+local biteNow                        -- defined below; P.onHealth needs it (it was a nil global before)
+-- the animation clock: like GetTime, but a stall of the game (0.15-0.2 s seen in town) only moves it one frame, so a
+-- slide carries on from where it was instead of skipping ahead
+local function aclock() return P.clock or GetTime() end
 P.pred = {}                          -- DoT name -> { est, at, k }: a tick shown on its beat, waiting for DoesItDie's number
 local BEAT = { ['Corruption'] = 3, ['Curse of Agony'] = 2, ['Bane of Agony'] = 2, ['Immolate'] = 3, ['Siphon Life'] = 3 }
 -- the health just changed: if a DoT is due to tick right now (its beat, within 0.25 s), start its bite this frame
@@ -227,8 +231,8 @@ function P.onHealth()
         P.predK[d.name] = k
         local ticksLeft = math.max(1, math.floor(((d.expires or now) - (d.appliedAt + k * beat)) / beat + .5) + 1)
         local est = d.damage / ticksLeft
-        local was = biteNow(d.name, now)
-        P.bites[d.name] = { amt = was + est, at = now }
+        local was = biteNow(d.name, aclock())
+        P.bites[d.name] = { amt = was + est, at = aclock() }
         P.pred[d.name] = { est = est, at = now }
         if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end
       end
@@ -248,7 +252,7 @@ local RINGTONE = {   -- the rings' own colours (Rings.lua), for the tick
 }
 local RINGGOLD = { 1, 214 / 255, 110 / 255 }
 
-local function biteNow(name, now)    -- what is still left of a bite (0 when done), and its flare 0..1
+biteNow = function(name, now)    -- what is still left of a bite (0 when done), and its flare 0..1
   local b = P.bites[name]; if not b then return 0, 0 end
   local a = now - b.at
   if a >= .7 then P.bites[name] = nil; return 0, 0 end
@@ -262,14 +266,16 @@ end
 
 local cur                            -- the latest dots, maxv, hp (from update), drawn every frame
 local trace                          -- /omadoomed trace: per-frame positions for 4 s (saved on /reload)
-function ns.startTrace() trace = { t0 = GetTime(), untilT = GetTime() + 4, rows = {} }; ns.say('tracing 4 s') end
+function ns.startTrace() trace = { t0 = GetTime(), untilT = GetTime() + 30, rows = {} }; ns.say('tracing 30 s') end
 local traceRow
 local function traceFrame(now) if trace then local ok, e = pcall(traceRow, now); if not ok then OmaDoomedDB.traceErr = tostring(e); trace = nil end end end
 traceRow = function(now)
   if now > trace.untilT then OmaDoomedDB.trace = trace.rows; trace = nil; ns.say('trace saved (' .. #OmaDoomedDB.trace .. ' frames); /reload to write it'); return end
   local row = { string.format('%.3f', now - trace.t0), string.format('dt%.3f', P.dt or 0) }
   row[#row + 1] = 'hp' .. tostring(cur and cur.hp)
-  for i = 1, 3 do local x = segs[i] and segs[i].shown; row[#row + 1] = (x and string.format('%.2f', x) or '-') end
+  for i, d in ipairs(cur and cur.dots or {}) do row[#row + 1] = d.name:sub(1, 3) .. string.format('%.1f', d.damage) .. (d.provisional and 'P' or '') .. (d.ending and 'E' or '') end
+  for i = 1, 3 do local s = segs[i]; row[#row + 1] = s and (string.format('%.2f', s.shown) .. (s.mark.side or '?')) or '-' end
+  for n, v in pairs(P.shownBy) do row[#row + 1] = n:sub(1, 3) .. '=' .. string.format('%.2f', v) end
   row[#row + 1] = 'S' .. string.format('%.2f', P.slideV or 0)
   for n, b in pairs(P.bites) do row[#row + 1] = n:sub(1, 3) .. string.format('%.2f', now - b.at) end
   trace.rows[#trace.rows + 1] = table.concat(row, ' ')
@@ -280,12 +286,13 @@ local function render()
   if #dots == 0 then return hide() end
   clip:Show()
   local now = GetTime()
+  local anow = aclock()
   local run, slide = 0, 0
   local seen = {}
   for i, s in ipairs(segs) do
     local d = dots[i]
     if d then
-      local bl, flare = biteNow(d.name, now); slide = slide + bl
+      local bl, flare = biteNow(d.name, anow); slide = slide + bl
       local before = run                                 -- where this piece starts, from the bar's end
       local pr = P.pred[d.name]
       -- each DoT remembers its OWN size (2026-11-11: sizes were kept per slot, so when a DoT ended the others moved up a
@@ -306,9 +313,9 @@ local function render()
         s.preGlow:SetVertexColor(tn[1], tn[2], tn[3], .6); s.preGlow:Show()
         P.wasPre[d.name] = true
       else
-        if P.wasPre[d.name] then P.landAt[d.name] = now; P.wasPre[d.name] = nil end
+        if P.wasPre[d.name] then P.landAt[d.name] = anow; P.wasPre[d.name] = nil end
         s.pre:Hide(); s.preGlow:Hide()
-        local la = P.landAt[d.name] and (now - P.landAt[d.name]) or 9   -- it landed: the stripes fill in with one soft light
+        local la = P.landAt[d.name] and (anow - P.landAt[d.name]) or 9   -- it landed: the stripes fill in with one soft light
         local lf = la < .5 and math.exp(-la / .14) or 0
         s.base:SetVertexColor(math.min(1, c[1] * 1.15 + tn[1] * .5 * lf), math.min(1, c[2] * 1.15 + tn[2] * .5 * lf), math.min(1, c[3] * 1.15 + tn[3] * .5 * lf))
         s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
@@ -317,7 +324,7 @@ local function render()
         local tone = lowNow and RINGGOLD or (RINGTONE[d.name] or c)
         local hot = mix(colorOf(d.name), tone, .45)
         local base = colorOf(d.name); local ember = mix(base, EMPTY, .75)
-        local col = (now - P.bites[d.name].at) < .12 and mix(base, hot, flare) or mix(ember, hot, flare)
+        local col = (anow - P.bites[d.name].at) < .12 and mix(base, hot, flare) or mix(ember, hot, flare)
         s.gtarget = before + bl; s.ghost:SetVertexColor(math.min(1, col[1] * 1.85), math.min(1, col[2] * 1.85), math.min(1, col[3] * 1.85)); s.ghost:Show()   -- 1.85: base 1.15 + lift .7, as the pieces
         local a = flare * .4
         s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
@@ -371,10 +378,10 @@ local function draw(dots, maxv, hp)
       local remaining = (last[name] or 0) - (pr and pr.est or 0)
       if remaining > .5 then
         local b = P.bites[name]
-        if b then b.amt = b.amt + remaining else P.bites[name] = { amt = remaining, at = now }; if ns.ringsPulse then pcall(ns.ringsPulse, 'target', name) end end
+        if b then b.amt = b.amt + remaining else P.bites[name] = { amt = remaining, at = aclock() }; if ns.ringsPulse then pcall(ns.ringsPulse, 'target', name) end end
       end
       P.pred[name] = nil; last[name] = 0
-      if P.bites[name] and biteNow(name, now) > 0 then
+      if P.bites[name] and biteNow(name, aclock()) > 0 then
         table.insert(dots, math.min(idx, #dots + 1), { name = name, damage = 0, expires = P.exp and P.exp[name], ending = true })
       else last[name] = nil end
     end
@@ -392,8 +399,8 @@ local function draw(dots, maxv, hp)
         local b = P.bites[d.name]; if b then b.amt = math.max(0, b.amt + real - pr.est) end
         P.pred[d.name] = nil
       else
-        local was = biteNow(d.name, now)
-        P.bites[d.name] = { amt = was + real, at = now }
+        local was = biteNow(d.name, aclock())
+        P.bites[d.name] = { amt = was + real, at = aclock() }
         if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end   -- its ring, same instant
       end
     end
@@ -461,7 +468,7 @@ function P.start()
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
   ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); wipe(P.shownBy); wipe(P.wasPre); P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
-  ev:SetScript('OnUpdate', function(_, dt) P.dt = dt; local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
+  ev:SetScript('OnUpdate', function(_, dt) P.dt = math.min(dt, .05); P.clock = aclock() + math.min(dt, .05); local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
 end
 
