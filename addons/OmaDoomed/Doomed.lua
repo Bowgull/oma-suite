@@ -132,6 +132,14 @@ local function build()
     -- sheet 27 (approved "Looks right"): the bite. A second bar holds where this piece's edge WAS; the chunk between it and
     -- the new edge glows bright in the DoT's colour, holds 120 ms, then drains over 380 ms.
     s.gmark = newMark(); s.gedge = s.gmark.f
+    -- sheet 36 C 'charging' (Joshua 2026-11-11: "Yes, build it"): while you cast, the piece fills with your cast bar in
+    -- its landed colour (so landing changes nothing), an ember glow in its own colour at the front; never white
+    s.cmark = newMark()
+    s.cbase = art:CreateTexture(nil, 'ARTWORK', nil, 1); barTex(s.cbase); s.cbase:Hide()
+    s.clift = art:CreateTexture(nil, 'ARTWORK', nil, 2); barTex(s.clift); s.clift:SetBlendMode('ADD'); s.clift:Hide()
+    for _, t in ipairs({ s.cbase, s.clift }) do t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', s.cmark.f, 'BOTTOMLEFT') end
+    s.spark = art:CreateTexture(nil, 'OVERLAY', nil, 5); barTex(s.spark); s.spark:SetBlendMode('ADD'); s.spark:Hide()
+    s.spark:SetPoint('TOPRIGHT', s.cmark.f, 'TOPLEFT', px(2, hb), 0); s.spark:SetPoint('BOTTOMRIGHT', s.cmark.f, 'BOTTOMLEFT', px(2, hb), 0); s.spark:SetWidth(px(8, hb))
     s.ghost = art:CreateTexture(nil, 'ARTWORK', nil, 5); barTex(s.ghost); s.ghost:Hide()   -- the bite: solid, its own colour
     -- while you cast it (DoesItDie marks it provisional): Blizzard's own shield stripes and shield edge glow, tinted
     s.pre = art:CreateTexture(nil, 'ARTWORK', nil, 4); s.pre:SetTexture('Interface/RaidFrame/Shield-Overlay', 'REPEAT', 'REPEAT')
@@ -143,7 +151,7 @@ local function build()
     s.spillR = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillR); s.spillR:SetBlendMode('ADD'); s.spillR:Hide()
     -- every texture of a piece keeps to the health bar's own shape (2026-11-11: Joshua saw colour outside the bar once)
     if P.barMask then
-      for _, t in ipairs({ s.base, s.lift, s.flash, s.join, s.joinLift, s.creaseL, s.creaseR, s.ghost, s.spillL, s.spillC, s.spillR, s.pre, s.preGlow }) do t:AddMaskTexture(P.barMask) end
+      for _, t in ipairs({ s.base, s.lift, s.flash, s.join, s.joinLift, s.creaseL, s.creaseR, s.ghost, s.spillL, s.spillC, s.spillR, s.pre, s.preGlow, s.cbase, s.clift, s.spark }) do t:AddMaskTexture(P.barMask) end
     end
     segs[i] = s
   end
@@ -274,6 +282,7 @@ P.landAt = {}
 P.shownBy = {}               -- DoT name -> its piece's size on screen
 P.wasPre = {}
 P.slotOf = {}                -- DoT name -> the slot (textures and edges) it owns
+P.fullBy = {}                -- DoT name -> its full damage when fresh (for a first cast DoesItDie doesn't list yet)
 local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
 local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
@@ -353,17 +362,27 @@ local function render()
       local c = colorOf(d.name)
       if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
       local tn = RINGTONE[d.name] or c
-      if d.provisional and ns.db.doomedPrecast ~= false then   -- still being cast (test only until Joshua picks a look): dark underneath, Blizzard's stripes and edge glow in its ring colour
-        s.base:SetVertexColor(c[1] * .6, c[2] * .6, c[3] * .6); s.lift:SetVertexColor(0, 0, 0)
-        s.pre:SetVertexColor(tn[1], tn[2], tn[3], 1); s.pre:Show()
-        s.preGlow:SetVertexColor(tn[1], tn[2], tn[3], .6); s.preGlow:Show()
+      local sp = mix(c, tn, .7)   -- the glow: its own colour, low (no white: warlock light)
+      local function spark(al)
+        if CreateColor then s.spark:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(sp[1] * al, sp[2] * al, sp[3] * al, 1)) end
+        s.spark:Show()
+      end
+      s.pre:Hide(); s.preGlow:Hide()
+      if d.provisional and ns.db.doomedPrecast ~= false then   -- still being cast: dark, filling with the cast bar
+        local pr = 1
+        if d.castStart and d.castEnd and d.castEnd > d.castStart then pr = math.max(0, math.min(1, (now - d.castStart) / (d.castEnd - d.castStart))) end
+        s.cpr = pr
+        s.base:SetVertexColor(c[1] * .45, c[2] * .45, c[3] * .45); s.lift:SetVertexColor(0, 0, 0)
+        s.cbase:SetVertexColor(math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15)); s.cbase:Show()
+        s.clift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7); s.clift:Show()
+        spark(.45)
         P.wasPre[d.name] = true
       else
         if P.wasPre[d.name] then P.landAt[d.name] = anow; P.wasPre[d.name] = nil end
-        s.pre:Hide(); s.preGlow:Hide()
-        local la = P.landAt[d.name] and (anow - P.landAt[d.name]) or 9   -- it landed: the stripes fill in with one soft light
-        local lf = la < .5 and math.exp(-la / .14) or 0
-        s.base:SetVertexColor(math.min(1, c[1] * 1.15 + tn[1] * .5 * lf), math.min(1, c[2] * 1.15 + tn[2] * .5 * lf), math.min(1, c[3] * 1.15 + tn[3] * .5 * lf))
+        s.cbase:Hide(); s.clift:Hide()
+        local la = P.landAt[d.name] and (anow - P.landAt[d.name]) or 9   -- it landed: nothing changes but the glow fading where it ended
+        if la < .35 then s.cpr = 1; spark(.45 * (1 - la / .35) ^ 2) else s.cpr = nil; s.spark:Hide() end
+        s.base:SetVertexColor(math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15))
         s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
       end
       if bl > 0 then
@@ -385,7 +404,7 @@ local function render()
         s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
       end
     else
-      s.shown = run; s.sz = 0; s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
+      s.shown = run; s.sz = 0; s.cpr = nil; s.cbase:Hide(); s.clift:Hide(); s.spark:Hide(); s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
     end
     local on = d and true or false
     local mode = ns.db.doomedJoin or 'crease'
@@ -405,6 +424,7 @@ local function render()
   for _, s in ipairs(order) do
     setMark(s.mark, slide - s.shown, maxv)
     if s.ghost:IsShown() and s.gtarget then setMark(s.gmark, slide - s.gtarget, maxv) end
+    if s.cpr then setMark(s.cmark, slide - s.shown + s.cpr * (s.sz or 0), maxv) end
   end
   P.slideV = slide
   traceFrame(now)
@@ -484,7 +504,7 @@ local function update()
         local done, left = 0, 0
         for k, v in ipairs(d.ticks) do if t >= first + (k - 1) * d.every then done = done + v else left = left + v end end
         hp = hp - done
-        if left > 0 then dots[#dots + 1] = { name = d.n, damage = left, expires = test.t0 + land + d.dur, provisional = t < land } end
+        if left > 0 then dots[#dots + 1] = { name = d.n, damage = left, expires = test.t0 + land + d.dur, provisional = t < land, castStart = test.t0 + d.cast[1], castEnd = test.t0 + d.cast[2] } end
       end
     end
     table.sort(dots, function(a, b) return a.expires < b.expires end)
@@ -495,7 +515,26 @@ local function update()
   local list = DoesItDie.GetDoTs('target')
   table.sort(list, function(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end)   -- runs out first = nearest the green
   local dots = {}
-  for _, e in ipairs(list) do if (e.damage or 0) > 0 then dots[#dots + 1] = { name = e.name, damage = e.damage, expires = e.expiresAt, appliedAt = e.appliedAt, provisional = e.provisional } end end
+  local cName, _, _, cStart, cEnd = UnitCastingInfo('player')
+  for _, e in ipairs(list) do if (e.damage or 0) > 0 then
+    local d = { name = e.name, damage = e.damage, expires = e.expiresAt, appliedAt = e.appliedAt, provisional = e.provisional }
+    if e.provisional and cName == e.name and cStart and cEnd then d.castStart, d.castEnd = cStart / 1000, cEnd / 1000 end
+    if not e.provisional and e.appliedAt and GetTime() - e.appliedAt < 4 then P.fullBy[e.name] = math.max(P.fullBy[e.name] or 0, e.damage) end
+    dots[#dots + 1] = d
+  end end
+  -- DoesItDie leaves a fresh DoT out until its first tick, so a first cast showed nothing (Joshua: "i didnt see precast").
+  -- While you cast a DoT it doesn't list, show it at the size it last had when fresh.
+  if cName and COLOR[cName] and cStart and cEnd and P.fullBy[cName] then
+    local listed = false; for _, d in ipairs(dots) do if d.name == cName then listed = true end end
+    if not listed then dots[#dots + 1] = { name = cName, damage = P.fullBy[cName], expires = cEnd / 1000 + 30, provisional = true, castStart = cStart / 1000, castEnd = cEnd / 1000 } end
+  end
+  -- and once it lands, keep it (solid) until DoesItDie lists it at its first tick, so it doesn't blink out for 3 s
+  local ld = P.landed
+  if ld and not cName then
+    local listed = false; for _, d in ipairs(dots) do if d.name == ld.name then listed = true end end
+    if listed or GetTime() - ld.at > 4.5 then P.landed = nil
+    else dots[#dots + 1] = { name = ld.name, damage = ld.dmg, expires = ld.at + 30 } end
+  end
   local ok, err = pcall(draw, dots, UnitHealthMax('target'), UnitHealth('target'))
   if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide() end
 end
@@ -516,8 +555,15 @@ function P.start()
   if not (DoesItDie and DoesItDie.GetDoTs) then ns.say('Doomed needs DoesItDie for now (its maths).'); return end
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
+  ev:RegisterUnitEvent('UNIT_SPELLCAST_SUCCEEDED', 'player')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
-  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); wipe(P.shownBy); wipe(P.wasPre); wipe(P.slotOf); for _, s in ipairs(segs) do s.owner = nil end; P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
+  ev:SetScript('OnEvent', function(_, e, unit, _, spellID)
+    if e == 'UNIT_SPELLCAST_SUCCEEDED' then
+      local n = spellID and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
+      if n and COLOR[n] and P.fullBy[n] then P.landed = { name = n, at = GetTime(), dmg = P.fullBy[n] } end
+      return
+    end
+    if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); wipe(P.shownBy); wipe(P.wasPre); wipe(P.slotOf); P.landed = nil; for _, s in ipairs(segs) do s.owner = nil end; P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
   ev:SetScript('OnUpdate', function(_, dt) P.dt = math.min(dt, .05); P.clock = aclock() + math.min(dt, .05); local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
