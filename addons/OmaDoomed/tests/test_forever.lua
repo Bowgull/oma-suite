@@ -54,4 +54,34 @@ return {
     F.cast(6222); F.wait(0.1)                                          -- rank 2: tooltip 108 over 15 s = 5 x 21.6
     T.near(F.dots().Corruption.damage, 108 * 18 / 11.75, 1.5, 'not the bare 108')
   end,
+
+  ['Curse of Weakness uses up Amplify Curse'] = function(W, T)
+    local F = setup(W); F.cast(18288); F.cast(702); F.cast(980); F.wait(0.1)
+    T.eq(F.dots()['Bane of Agony'].damage, 84)
+  end,
+  ['Conflagrate eats Immolate without Shadow and Flame'] = function(W, T)
+    local F = setup(W); F.cast(348); F.hit('nameplate1', 4); F.wait(1); F.cast(17962); F.wait(0.1)
+    T.eq(F.dots().Immolate, nil)
+  end,
+  ['Shadow and Flame 5/5 keeps Immolate, and Shadow DoTs +20% for 20 s'] = function(W, T)
+    local F = setup(W); F.talents({ ['Shadow and Flame'] = 5 })
+    F.cast(348); F.hit('nameplate1', 4); F.cast(172); F.wait(0.5)
+    T.eq(F.dots().Corruption.damage, 47)
+    F.cast(17962); F.wait(0.1)
+    T.ok(F.dots().Immolate, 'Immolate kept')
+    T.eq(F.dots().Corruption.damage, 56, 'all 4 ticks inside the 20 s: 47 x 1.2')
+  end,
+  ['Shadow and Flame 2/5: Immolate may stay, so it is kept (missed ticks decide)'] = function(W, T)
+    local F = setup(W); F.talents({ ['Shadow and Flame'] = 2 })
+    F.cast(348); F.hit('nameplate1', 4); F.wait(1); F.cast(17962); F.wait(0.1); T.ok(F.dots().Immolate)
+  end,
+  ['Curse of the Elements: +10% on that mob\'s DoTs, ended by your next Curse there'] = function(W, T)
+    local F = setup(W); F.cast(172); F.cast(1490); F.wait(0.1)
+    T.eq(F.dots().Corruption.damage, 52, '47 x 1.1')
+    F.cast(702); F.wait(0.1); T.eq(F.dots().Corruption.damage, 47, 'Weakness replaced it')
+  end,
+  ['Curse of the Elements on one mob leaves another alone'] = function(W, T)
+    local F = setup(W); F.mob('nameplate2', 'Creature-B', 'Gnoll')
+    F.cast(1490); F.target('Creature-B'); F.cast(172); F.wait(0.1); T.eq(F.dots().Corruption.damage, 47)
+  end,
 }

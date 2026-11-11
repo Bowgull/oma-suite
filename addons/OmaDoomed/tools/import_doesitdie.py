@@ -109,6 +109,33 @@ def engine():
         '                    db.omaRatio[t.name] = db.ticks[key] / t.descTick\n'
         '                end\n',
         'ratio from the meter')
+    # Timed boosts (Curse of the Elements on a mob, Shadow and Flame after Conflagrate...) only count for the ticks
+    # that land while they last: remaining damage is summed tick by tick with OmaDoomed's multiplier (Track/Forever.lua).
+    s = edit(s, """local function remainingDamage(dot)
+    if dot.nextTickAt > dot.expiresAt + dot.interval / 2 then return 0 end
+    local ticksLeft = math.floor((dot.expiresAt - dot.nextTickAt) / dot.interval + 0.5) + 1
+    if not dot.shape then return ticksLeft * expectedTick(dot) end
+    local average, total = expectedTick(dot), 0
+    for number = math.max(1, dot.totalTicks - ticksLeft + 1), dot.totalTicks do
+        total = total + average * tickShape(dot, number)
+    end
+    return total
+end""", """local function remainingDamage(dot, key) -- OMA: key, and timed boosts per tick (ns.omaTickMult)
+    if dot.nextTickAt > dot.expiresAt + dot.interval / 2 then return 0 end
+    local ticksLeft = math.floor((dot.expiresAt - dot.nextTickAt) / dot.interval + 0.5) + 1
+    local mult = ns.omaTickMult
+    if not dot.shape and not mult then return ticksLeft * expectedTick(dot) end
+    local average, total = expectedTick(dot), 0
+    local first = math.max(1, dot.totalTicks - ticksLeft + 1)
+    if not dot.shape then first = 1 end
+    for number = first, dot.shape and dot.totalTicks or ticksLeft do
+        local at = dot.nextTickAt + (number - first) * dot.interval
+        total = total + average * (dot.shape and tickShape(dot, number) or 1) * (mult and mult(dot, at, key) or 1)
+    end
+    return total
+end""", 'remaining damage per tick')
+    s = edit(s, "expiresAt = dot.expiresAt, damage = remainingDamage(dot) })", "expiresAt = dot.expiresAt, damage = remainingDamage(dot, key) }) -- OMA: key", 'breakdown key')
+    s = edit(s, "damage = remainingDamage(cast.dot),", "damage = remainingDamage(cast.dot, key), -- OMA: key", 'breakdown key (cast)')
     # No slash commands: /did belongs to DoesItDie (both can be installed).
     cut = s.find('---------------------------------------------------------------------------\n-- Slash commands')
     if cut < 0: sys.exit('import_doesitdie: slash command block not found')

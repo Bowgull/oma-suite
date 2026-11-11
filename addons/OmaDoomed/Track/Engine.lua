@@ -1406,13 +1406,17 @@ local function housekeep(now)
     end
 end
 
-local function remainingDamage(dot)
+local function remainingDamage(dot, key) -- OMA: key, and timed boosts per tick (ns.omaTickMult)
     if dot.nextTickAt > dot.expiresAt + dot.interval / 2 then return 0 end
     local ticksLeft = math.floor((dot.expiresAt - dot.nextTickAt) / dot.interval + 0.5) + 1
-    if not dot.shape then return ticksLeft * expectedTick(dot) end
+    local mult = ns.omaTickMult
+    if not dot.shape and not mult then return ticksLeft * expectedTick(dot) end
     local average, total = expectedTick(dot), 0
-    for number = math.max(1, dot.totalTicks - ticksLeft + 1), dot.totalTicks do
-        total = total + average * tickShape(dot, number)
+    local first = math.max(1, dot.totalTicks - ticksLeft + 1)
+    if not dot.shape then first = 1 end
+    for number = first, dot.shape and dot.totalTicks or ticksLeft do
+        local at = dot.nextTickAt + (number - first) * dot.interval
+        total = total + average * (dot.shape and tickShape(dot, number) or 1) * (mult and mult(dot, at, key) or 1)
     end
     return total
 end
@@ -1427,12 +1431,12 @@ local function dotBreakdown(key)
     for name, dot in pairs(dots or {}) do
         if not isWaiting(dot) and not (cast and name == cast.name) then
             table.insert(list, { name = name, spellID = dot.spellID, school = dot.school, appliedAt = dot.appliedAt,
-                expiresAt = dot.expiresAt, damage = remainingDamage(dot) })
+                expiresAt = dot.expiresAt, damage = remainingDamage(dot, key) }) -- OMA: key
         end
     end
     if cast and not isWaiting(cast.dot) then
         table.insert(list, { name = cast.name, spellID = cast.spellID, school = cast.dot.school,
-            appliedAt = cast.dot.appliedAt, expiresAt = cast.dot.expiresAt, damage = remainingDamage(cast.dot),
+            appliedAt = cast.dot.appliedAt, expiresAt = cast.dot.expiresAt, damage = remainingDamage(cast.dot, key), -- OMA: key
             provisional = true })
     end
     table.sort(list, function(a, b) return a.appliedAt < b.appliedAt end)

@@ -19,6 +19,10 @@ F.SPELLS = {
   [80240] = { name = 'Bane of Havoc', desc = 'Banes the target for 5 min, causing 15% of all damage done by the Warlock to other targets to also be dealt to this target.' },
   [18288] = { name = 'Amplify Curse', desc = 'Increases the effect of your next Curse of Weakness or Bane of Agony by 50%, or your next Curse of Exhaustion by 20%. Lasts 30 sec.' },
   [6222] = { name = 'Corruption', desc = 'Corrupts the target, causing 108 Shadow damage over 15 sec.' },
+  [17962] = { name = 'Conflagrate', desc = 'Ignites a target that is already afflicted by your Immolate, dealing 120 to 150 Fire damage and consuming your Immolate effect.' },
+  [1490] = { name = 'Curse of the Elements', desc = 'Curses the target for 5 min, reducing Magic resistances by 75 and increasing Magic damage taken by 10%. Only one Curse per Warlock can be active on any one target.' },
+  [702] = { name = 'Curse of Weakness', desc = 'Target\'s Physical damage is reduced by 4 for 2 min. Only one Curse per Warlock can be active on any one target.' },
+  [17877] = { name = 'Shadowburn', desc = 'Instantly blasts the target for 62 to 70 Shadow damage.' },
   [1978] = { name = 'Serpent Sting', desc = 'Stings the target, causing 20 Nature damage over 15 sec.' },
 }
 
@@ -46,6 +50,15 @@ function F.start(opts)
 end
 
 -- mob(token, guid, name, hp, opts): opts.secretGuid (instances), opts.dead, opts.friendly
+-- talents{ ['Shadow and Flame'] = 5 }: what the talent API answers, read like at login
+function F.talents(t)
+  local list = {}; for n, r in pairs(t) do list[#list + 1] = { n, r } end
+  GetNumTalentTabs = function() return 1 end
+  GetNumTalents = function() return #list end
+  GetTalentInfo = function(_, i) return list[i][1], nil, 1, 1, list[i][2], 5 end
+  local c = W.combat; W.combat = false; F.oma.readTalents(); W.combat = c   -- talents are read out of combat
+end
+
 function F.mob(token, guid, name, hp, o)
   o = o or {}
   local u = { guid = guid, name = name or guid, hp = hp or 200, maxhp = hp or 200, enemy = not o.friendly,
