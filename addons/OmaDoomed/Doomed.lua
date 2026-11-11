@@ -141,7 +141,6 @@ local function build()
     s.parts = {}
     for k = 1, 5 do local t = art:CreateTexture(nil, 'OVERLAY', nil, 6); t:SetBlendMode('ADD'); t:Hide(); s.parts[k] = t end
     s.motes = art:CreateTexture(nil, 'ARTWORK', nil, 3); s.motes:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\motes', 'REPEAT', 'REPEAT'); s.motes:SetBlendMode('ADD'); s.motes:Hide()
-    s.motes:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); s.motes:SetPoint('BOTTOMRIGHT', s.edge, 'BOTTOMRIGHT')
     s.cmark = newMark()
     s.cbase = art:CreateTexture(nil, 'ARTWORK', nil, 1); barTex(s.cbase); s.cbase:Hide()
     s.clift = art:CreateTexture(nil, 'ARTWORK', nil, 2); barTex(s.clift); s.clift:SetBlendMode('ADD'); s.clift:Hide()
@@ -151,7 +150,12 @@ local function build()
     s.ghost = art:CreateTexture(nil, 'ARTWORK', nil, 5); barTex(s.ghost); s.ghost:Hide()   -- the bite: solid, its own colour
     -- while you cast it (DoesItDie marks it provisional): Blizzard's own shield stripes and shield edge glow, tinted
     s.pre = art:CreateTexture(nil, 'ARTWORK', nil, 4); s.pre:SetTexture('Interface/RaidFrame/Shield-Overlay', 'REPEAT', 'REPEAT')
-    s.pre:SetHorizTile(true); s.pre:SetVertTile(true); s.pre:SetDesaturated(true); s.pre:SetBlendMode('ADD'); s.pre:Hide()   -- the art is shield-blue: grey it, then tint
+    s.pre:SetDesaturated(true); s.pre:SetBlendMode('ADD'); s.pre:Hide()   -- the art is shield-blue: grey it, then tint
+    -- stripes and motes lie across the WHOLE bar (its width never changes, so they can slide at a fixed size) and a
+    -- stencil the shape of this piece cuts them down to it (a piece's own width is hidden in combat on Forever)
+    for _, t in ipairs({ s.pre, s.motes }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', hb, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT') end
+    s.pmask = art:CreateMaskTexture(); s.pmask:SetTexture('Interface\\Buttons\\WHITE8X8', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE')
+    s.pre:AddMaskTexture(s.pmask); s.motes:AddMaskTexture(s.pmask)
     s.preGlow = art:CreateTexture(nil, 'OVERLAY', nil, 3); s.preGlow:SetTexture('Interface/RaidFrame/Shield-Overshield'); s.preGlow:SetBlendMode('ADD'); s.preGlow:SetDesaturated(true); s.preGlow:Hide()
     -- the light it casts: 9 screen px onto each neighbour, fading out (left fade, core, right fade), the bar's own shape
     s.spillL = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillL); s.spillL:SetBlendMode('ADD'); s.spillL:Hide()
@@ -191,7 +195,7 @@ local function build()
     -- the piece touching the health's end runs 1 screen px past it: Blizzard's green snaps to whole pixels and ours
     -- don't, so a 1 px sliver of green showed beside it (Joshua, 2026-11-11: 'a tiny bit of green peeking out')
     local dx = (right == P.E[0].f) and px(1, hb) or 0
-    for _, t in ipairs({ s.base, s.lift, s.flash, s.pre, s.motes }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
+    for _, t in ipairs({ s.base, s.lift, s.flash, s.pmask }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
     for _, t in ipairs({ s.ghost, s.spillC }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
     s.spillR:ClearAllPoints(); s.spillR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, 'BOTTOMLEFT'); s.spillR:SetWidth(px(9, hb))
     for _, t in ipairs({ s.join, s.joinLift }) do t:ClearAllPoints(); t:SetPoint('TOP', right, 'TOPLEFT'); t:SetPoint('BOTTOM', right, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
@@ -396,10 +400,11 @@ local function render()
           local k = pr ^ 1.6
           s.base:SetVertexColor(c[1] * (.3 + .85 * k), c[2] * (.3 + .85 * k), c[3] * (.3 + .85 * k)); s.lift:SetVertexColor(c[1] * .7 * k, c[2] * .7 * k, c[3] * .7 * k)
         elseif look == 'stripes' then   -- Blizzard's shield stripes in its ring colour, drifting toward the green
-          s.pre:SetVertexColor(tn[1], tn[2], tn[3], .55); s.pre:Show()
+          local bw, bh = hb:GetWidth(), hb:GetHeight(); local o = (anow * .35) % 1
+          s.pre:SetTexCoord(o, o + bw / 24, 0, bh / 24); s.pre:SetVertexColor(tn[1], tn[2], tn[3], .55); s.pre:Show()
         elseif look == 'motes' then   -- small pixels drifting through the dim piece toward the green
-          local o = (anow * .08) % 1
-          s.motes:SetTexCoord(o, o + 3, 0, 1); s.motes:SetVertexColor(tn[1] * .8, tn[2] * .8, tn[3] * .8); s.motes:Show()
+          local bw = hb:GetWidth(); local o = (anow * .08) % 1
+          s.motes:SetTexCoord(o, o + bw / 128 * 2, 0, 1); s.motes:SetVertexColor(tn[1] * .8, tn[2] * .8, tn[3] * .8); s.motes:Show()
         end
         P.wasPre[d.name] = look
       else

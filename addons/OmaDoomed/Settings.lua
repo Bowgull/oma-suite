@@ -86,6 +86,7 @@ function ns.buildSettings()
   cat, layout = Settings.RegisterVerticalLayoutSubcategory(omaParent(), 'OmaDoomed')
   ns.settingsCategory = cat
 
+  local pv = ns.previewInitializer and ns.previewInitializer(); if pv then layout:AddInitializer(pv) end
   header('Kill bar')
   local bar = check(db, 'doomed', 'Kill bar', "Your DoTs' coming damage, in their own colours, inside the enemy's health bar.")
   check(db, 'skull', 'Skull', 'A skull and bones on the portrait ring when your DoTs alone will finish the enemy.', bar)

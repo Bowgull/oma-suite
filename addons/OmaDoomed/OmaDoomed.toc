@@ -8,4 +8,5 @@
 Core.lua
 Doomed.lua
 Rings.lua
+Preview.lua
 Settings.lua
