@@ -382,7 +382,8 @@ end
 -- (dropSnapshots).
 local function expectedTick(dot)
     if dot.normalTicks > 0 then return dot.tickSum / dot.normalTicks end
-    return dot.learnedAtApply or (dot.tickKey and db.ticks[dot.tickKey]) or (dot.total / dot.totalTicks)
+    return (dot.learnedAtApply or (dot.tickKey and db.ticks[dot.tickKey]) or dot.omaGuess or (dot.total / dot.totalTicks))
+        * (dot.omaScale or 1) -- OMA: guess from other ranks; known buffs
 end
 
 -- Which tick of the DoT (1 = first) lands around `when`.
@@ -804,6 +805,10 @@ local function newDot(spellID, tickKey, name, total, school, duration, statedInt
         -- The size learned before this cast: a same-slot collision is judged against it, not against the value
         -- the disputed tick just wrote (referenceTickSize).
         learnedAtApply = tickKey and db.ticks[tickKey] or nil,
+        -- OMA: no size learned for this rank yet: the tooltip times how much harder this spell really hit on ranks fought with
+        omaGuess = not (tickKey and db.ticks[tickKey]) and db.omaRatio and db.omaRatio[name] and total
+            and total / math.max(1, math.floor(duration / (statedInterval or KNOWN_TICK_INTERVALS[name] or DEFAULT_TICK_INTERVAL) + 0.5))
+            * db.omaRatio[name] or nil,
         school = SCHOOL_BY_NAME[name] or school,
         total = total,
         duration = duration,
@@ -998,6 +1003,10 @@ end
 local function saveLearnedTick(dot)
     if dot.tickKey and dot.normalTicks > 0 then
         db.ticks[dot.tickKey] = math.floor(dot.tickSum / dot.normalTicks * 10 + 0.5) / 10
+        if dot.name and dot.total and dot.totalTicks and dot.total > 0 then -- OMA: how much harder than its tooltip
+            db.omaRatio = db.omaRatio or {}
+            db.omaRatio[dot.name] = db.ticks[dot.tickKey] / (dot.total / dot.totalTicks)
+        end
         combatReadable[dot.tickKey] = true -- the meter's total then holds ticks the tally didn't count
     end
 end
@@ -1265,6 +1274,10 @@ local function learnFromMeter(spells, counted)
                 local blended = (((old or 0) * weight) + tick * t.factors) / (weight + t.factors)
                 db.ticks[key] = math.floor(blended * 10 + 0.5) / 10
                 db.tickWeights[key] = weight + t.factors
+                if t.name and t.descTick and t.descTick > 0 then -- OMA: how much harder than its tooltip
+                    db.omaRatio = db.omaRatio or {}
+                    db.omaRatio[t.name] = db.ticks[key] / t.descTick
+                end
                 dropSnapshots(key)
                 learned = learned + 1
                 trace(string.format("LEARN %s: meter %d over %d tick(s)%s = %.1f per tick (description %.1f), saved %.1f",
@@ -1372,14 +1385,14 @@ local function housekeep(now)
             while dot.nextTickAt < now - TICK_MATCH_WINDOW - late and dot.nextTickAt <= dot.expiresAt do
                 dot.nextTickAt = dot.nextTickAt + dot.interval
                 -- Only a tick that could have been seen counts as missed.
-                if dot.ticksSeen == 0 and isObservable(key) then dot.missed = dot.missed + 1 end
+                if isObservable(key) then dot.missed = dot.missed + 1 end -- OMA: misses after ticking count too
             end
             if now > dot.expiresAt + TICK_MATCH_WINDOW then
                 dots[name] = nil
                 trace("EXPIRE " .. name)
-            elseif dot.ticksSeen == 0 and dot.missed >= MISSED_TICKS_BEFORE_DROP then
+            elseif dot.missed >= MISSED_TICKS_BEFORE_DROP then -- OMA: also after ticking
                 dots[name] = nil
-                trace("DROP " .. name .. " never ticked (resisted or immune?)")
+                trace("DROP " .. name .. (dot.ticksSeen == 0 and " never ticked (resisted or immune?)" or " stopped ticking (dispelled, replaced or mob reset?)"))
             end
         end
         if next(dots) == nil then dotsByTarget[key] = nil end

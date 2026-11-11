@@ -2,7 +2,7 @@
 local W = require('fakewow')
 local L = {}
 local TRACK = { 'Track/Shim.lua', 'Track/Locale.lua', 'Track/Locale_deDE.lua', 'Track/Locale_esES.lua', 'Track/Locale_frFR.lua',
-  'Track/Locale_koKR.lua', 'Track/Locale_ptBR.lua', 'Track/Locale_zhCN.lua', 'Track/Locale_ruRU.lua', 'Track/Engine.lua', 'Track/Wrack.lua' }
+  'Track/Locale_koKR.lua', 'Track/Locale_ptBR.lua', 'Track/Locale_zhCN.lua', 'Track/Locale_ruRU.lua', 'Track/Engine.lua', 'Track/Wrack.lua', 'Track/Forever.lua' }
 L.TRACK = TRACK
 
 -- spells: id -> { name=, desc= } (what C_Spell would answer on Forever)

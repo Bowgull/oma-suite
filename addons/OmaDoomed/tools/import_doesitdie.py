@@ -73,6 +73,42 @@ def engine():
         '            end\n'
         '        end\n'
         '        db = OmaDoomedDB.track\n', 'saved variables')
+    # A DoT that ticked and then misses two ticks in a row is gone: a decurse, the mob resetting, Conflagrate eating
+    # Immolate, Bane of Doom/Havoc replacing Agony... (DoesItDie only drops DoTs that never ticked.)
+    s = edit(s, '                if dot.ticksSeen == 0 and isObservable(key) then dot.missed = dot.missed + 1 end',
+        '                if isObservable(key) then dot.missed = dot.missed + 1 end -- OMA: misses after ticking count too',
+        'count misses after ticking')
+    s = edit(s, '            elseif dot.ticksSeen == 0 and dot.missed >= MISSED_TICKS_BEFORE_DROP then\n                dots[name] = nil\n                trace("DROP " .. name .. " never ticked (resisted or immune?)")',
+        '            elseif dot.missed >= MISSED_TICKS_BEFORE_DROP then -- OMA: also after ticking\n                dots[name] = nil\n'
+        '                trace("DROP " .. name .. (dot.ticksSeen == 0 and " never ticked (resisted or immune?)" or " stopped ticking (dispelled, replaced or mob reset?)"))',
+        'drop after missed ticks')
+    # The first guess for a rank never fought with: the tooltip times what this spell really did on other ranks
+    # (gear and spell power), instead of the bare tooltip. And a per-DoT scale for known buffs (Amplify Curse).
+    s = edit(s, '    return dot.learnedAtApply or (dot.tickKey and db.ticks[dot.tickKey]) or (dot.total / dot.totalTicks)',
+        '    return (dot.learnedAtApply or (dot.tickKey and db.ticks[dot.tickKey]) or dot.omaGuess or (dot.total / dot.totalTicks))\n'
+        '        * (dot.omaScale or 1) -- OMA: guess from other ranks; known buffs',
+        'expected tick: guess and scale')
+    s = edit(s, '        learnedAtApply = tickKey and db.ticks[tickKey] or nil,\n',
+        '        learnedAtApply = tickKey and db.ticks[tickKey] or nil,\n'
+        '        -- OMA: no size learned for this rank yet: the tooltip times how much harder this spell really hit on ranks fought with\n'
+        '        omaGuess = not (tickKey and db.ticks[tickKey]) and db.omaRatio and db.omaRatio[name] and total\n'
+        '            and total / math.max(1, math.floor(duration / (statedInterval or KNOWN_TICK_INTERVALS[name] or DEFAULT_TICK_INTERVAL) + 0.5))\n'
+        '            * db.omaRatio[name] or nil,\n',
+        'new dot guess')
+    s = edit(s, '        db.ticks[dot.tickKey] = math.floor(dot.tickSum / dot.normalTicks * 10 + 0.5) / 10\n',
+        '        db.ticks[dot.tickKey] = math.floor(dot.tickSum / dot.normalTicks * 10 + 0.5) / 10\n'
+        '        if dot.name and dot.total and dot.totalTicks and dot.total > 0 then -- OMA: how much harder than its tooltip\n'
+        '            db.omaRatio = db.omaRatio or {}\n'
+        '            db.omaRatio[dot.name] = db.ticks[dot.tickKey] / (dot.total / dot.totalTicks)\n'
+        '        end\n',
+        'ratio from readable ticks')
+    s = edit(s, '                db.tickWeights[key] = weight + t.factors\n',
+        '                db.tickWeights[key] = weight + t.factors\n'
+        '                if t.name and t.descTick and t.descTick > 0 then -- OMA: how much harder than its tooltip\n'
+        '                    db.omaRatio = db.omaRatio or {}\n'
+        '                    db.omaRatio[t.name] = db.ticks[key] / t.descTick\n'
+        '                end\n',
+        'ratio from the meter')
     # No slash commands: /did belongs to DoesItDie (both can be installed).
     cut = s.find('---------------------------------------------------------------------------\n-- Slash commands')
     if cut < 0: sys.exit('import_doesitdie: slash command block not found')

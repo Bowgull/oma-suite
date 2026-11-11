@@ -15,6 +15,10 @@ F.SPELLS = {
   [689] = { name = 'Drain Life', desc = 'Transfers 10 health every 1 sec from the target to the caster. Lasts 5 sec.' },
   [11719] = { name = 'Curse of Tongues', desc = 'Forces the target to speak in Demonic, increasing the casting time of all spells by 50%. Only one Curse per Warlock can be active on any one target. Lasts 30 sec.' },
   [1316697] = { name = 'Wrack', desc = 'Channels shadow energy at the enemy, dealing 30 Shadow damage every 1 sec. Lasts 6 sec. While channeling, your Siphon Life, Corruption and Bane of Agony on the target deal their periodic damage 100% faster.' },
+  [603] = { name = 'Bane of Doom', desc = 'Curses the target with impending doom, causing 1742 Shadow damage after 1 min. If the target dies from this damage, there is a chance that a Doomguard will be summoned.' },
+  [80240] = { name = 'Bane of Havoc', desc = 'Banes the target for 5 min, causing 15% of all damage done by the Warlock to other targets to also be dealt to this target.' },
+  [18288] = { name = 'Amplify Curse', desc = 'Increases the effect of your next Curse of Weakness or Bane of Agony by 50%, or your next Curse of Exhaustion by 20%. Lasts 30 sec.' },
+  [6222] = { name = 'Corruption', desc = 'Corrupts the target, causing 108 Shadow damage over 15 sec.' },
   [1978] = { name = 'Serpent Sting', desc = 'Stings the target, causing 20 Nature damage over 15 sec.' },
 }
 
