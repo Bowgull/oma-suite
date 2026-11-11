@@ -25,7 +25,9 @@ local NUM_FONT = STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 -- Debuff Scale 140% (1.4) = 56 units, square, no gaps; at that scale Blizzard puts 6 per row and grows rows upward.
 local S = 25 * 1.6                -- 2026-11-10 Joshua: 56 was too big; Blizzard Huge at 100% = 40
 local PER_ROW = 6
-local FRAME_ROW = 3                 -- target frame row (Haunt / Target frame): 3 rings fit before the portrait
+local FRAME_ROW = 5                 -- target frame row (Haunt / Target frame): 5 rings fit under the bars, before the level badge
+local FRAME_SCALE = 0.56            -- sheet 42 B: 40 px under the frame (they were 72 px over it: "too big")
+local FRAME_GAP = 3                 -- between the bars' bottom edge and the rings
 local OS = S * 0.6                  -- other players' DoTs: 60% size
 local OTHERS_ALPHA = 0.55           -- and 55% alpha (settings 'Other players' DoTs' replaces it when the rings load)
 local OTHERS_GAP = S * 6 / 70       -- mockup: 6 units gap on a 70-unit cell
@@ -506,7 +508,7 @@ end
 -- ---------- settings: size, opacity, where, which ----------
 -- framePair: the row above the target frame ('Where the rings show': frame / split), declared above
 look = function(p)
-  p.anchor:SetScale((db.size or 40) / 40); if p.curA then p.anchor:SetAlpha(p.curA * (db.alpha or 100) / 100) end
+  p.anchor:SetScale((db.size or 40) / 40 * (p.frameScale or 1)); if p.curA then p.anchor:SetAlpha(p.curA * (db.alpha or 100) / 100) end
 end
 -- which plate is your target: compare nameplate FRAMES, not units. Frames are never secret, so this keeps working in
 -- combat, where Forever can hide unit comparisons (Haunt would otherwise show your target's rings in both places)
@@ -590,10 +592,15 @@ local function makeFramePair()
   for i, q in ipairs(free) do if q == p then table.remove(free, i) break end end
   framePair = p
   p.anchor:SetParent(TargetFrame); p.anchor:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
-  p.anchor:ClearAllPoints(); p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14); p.anchor:SetSize(S * FRAME_ROW, 1)
-  -- sheet 41 (Joshua's film 2026-11-11: the skull covered the third ring): the row used to sit centred on a 6-wide
-  -- anchor, so it started mid-frame and ran under the skull. Now it starts at the name box's left edge and wraps
-  -- upward after FRAME_ROW rings, which end before the portrait.
+  -- sheet 42 B (Joshua 2026-11-11: "B"): a row UNDER the bars, where WoW itself puts your debuffs on a target, 40 px
+  -- (it was 72 px over the name box and looked like a hat). Hung on the mana bar's bottom left (the frame's lowest
+  -- bar); the row's own bottom sits S + gap below it, in the row's own scaled units.
+  local main = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
+  local low = main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
+  p.anchor:ClearAllPoints(); p.anchor:SetSize(S * FRAME_ROW, 1)
+  if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', 0, -(S + FRAME_GAP))
+  else p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14) end
+  p.frameScale = FRAME_SCALE
   p.pt = 'BOTTOMLEFT'
   for _, c in ipairs({ p.ring, p.main }) do
     c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, S * FRAME_ROW + 0.01)
