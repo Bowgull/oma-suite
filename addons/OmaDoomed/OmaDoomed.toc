@@ -19,6 +19,7 @@ Track\Locale_ptBR.lua
 Track\Locale_zhCN.lua
 Track\Locale_ruRU.lua
 Track\Engine.lua
+Track\Wrack.lua
 Doomed.lua
 Rings.lua
 Preview.lua

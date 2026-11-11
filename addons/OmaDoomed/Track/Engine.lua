@@ -1712,3 +1712,7 @@ meterFrame:SetScript("OnEvent", function()
 end)
 
 -- OMA: DoesItDie's /did slash commands are left out (DoesItDie keeps them when it is installed too).
+-- OMA: what OmaDoomed's own additions (Track/Wrack.lua) need from the engine.
+ns.tracking.dotsByTarget = dotsByTarget
+ns.tracking.castTargetKey = castTargetKey
+ns.tracking.trace = trace

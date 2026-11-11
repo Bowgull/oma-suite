@@ -76,7 +76,11 @@ def engine():
     # No slash commands: /did belongs to DoesItDie (both can be installed).
     cut = s.find('---------------------------------------------------------------------------\n-- Slash commands')
     if cut < 0: sys.exit('import_doesitdie: slash command block not found')
-    s = s[:cut] + '-- OMA: DoesItDie\'s /did slash commands are left out (DoesItDie keeps them when it is installed too).\n'
+    s = s[:cut] + ('-- OMA: DoesItDie\'s /did slash commands are left out (DoesItDie keeps them when it is installed too).\n'
+        '-- OMA: what OmaDoomed\'s own additions (Track/Wrack.lua) need from the engine.\n'
+        'ns.tracking.dotsByTarget = dotsByTarget\n'
+        'ns.tracking.castTargetKey = castTargetKey\n'
+        'ns.tracking.trace = trace\n')
     open(os.path.join(OUT, 'Engine.lua'), 'w', encoding='utf-8').write(s)
 
 os.makedirs(OUT, exist_ok=True)

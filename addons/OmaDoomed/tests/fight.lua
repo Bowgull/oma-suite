@@ -14,6 +14,7 @@ F.SPELLS = {
   [686] = { name = 'Shadow Bolt', desc = 'Sends a shadowy bolt at the enemy, causing 13 to 18 Shadow damage.' },
   [689] = { name = 'Drain Life', desc = 'Transfers 10 health every 1 sec from the target to the caster. Lasts 5 sec.' },
   [11719] = { name = 'Curse of Tongues', desc = 'Forces the target to speak in Demonic, increasing the casting time of all spells by 50%. Only one Curse per Warlock can be active on any one target. Lasts 30 sec.' },
+  [1316697] = { name = 'Wrack', desc = 'Channels shadow energy at the enemy, dealing 30 Shadow damage every 1 sec. Lasts 6 sec. While channeling, your Siphon Life, Corruption and Bane of Agony on the target deal their periodic damage 100% faster.' },
   [1978] = { name = 'Serpent Sting', desc = 'Stings the target, causing 20 Nature damage over 15 sec.' },
 }
 
@@ -71,6 +72,19 @@ function F.cast(id, o)
     W.fire('UNIT_SPELLCAST_STOP', 'player', guid, id)
   end
   W.fire('UNIT_SPELLCAST_SUCCEEDED', 'player', guid, id)
+  return guid
+end
+
+-- channel(spellID, seconds, { stopEarly = s }): a channel at the target; its own ticks aren't sent (add hits yourself)
+function F.channel(id, secs, o)
+  o = o or {}
+  castN = castN + 1
+  local guid = 'Chan-' .. castN
+  W.fire('UNIT_SPELLCAST_SENT', 'player', W.units.target and W.units.target.name, guid, id)
+  W.fire('UNIT_SPELLCAST_CHANNEL_START', 'player', guid, id)
+  W.fire('UNIT_SPELLCAST_SUCCEEDED', 'player', guid, id)
+  F.wait(o.stopEarly or secs)
+  W.fire('UNIT_SPELLCAST_CHANNEL_STOP', 'player', guid, id)
   return guid
 end
 
