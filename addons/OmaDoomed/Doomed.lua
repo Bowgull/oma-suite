@@ -37,7 +37,11 @@ local JOIN = { crease = 4, fade = 6, thin = 2, none = 0 }   -- sheet 25: 'crease
 local function atlasOK(n) return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(n) ~= nil end
 -- the bar's own grain: a thin middle slice of Blizzard's health texture (the whole texture stretched into a short piece
 -- carried its left-to-right shading, so each colour went dark-to-bright and duller than the green)
+-- 2026-11-11 'jumpy and bouncy': WoW snaps every texture edge to whole pixels, so a slow slide moved in 1-2 px hops
+-- and anchored edges hopped out of step. Ours glide on sub-pixels instead.
+local function nosnap(t) if t and t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(false); t:SetTexelSnappingBias(0) end end
 local function barTex(t)
+  nosnap(t)
   local a = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(FILL)
   if a and a.file then
     t:SetTexture(a.file); local l, r = a.leftTexCoord, a.rightTexCoord
@@ -69,13 +73,13 @@ local function build()
   -- our own copy of the health's end (2026-11-11, 'really jumpy'): pinning to Blizzard's fill mixed two clocks, so on a
   -- tick the pieces jumped left for one frame before the bite caught them. Now the health's end and the bite move in
   -- the same SetValue pass, every frame. Health may be a hidden number: only a status bar is handed it.
-  P.base = CreateFrame('StatusBar', nil, clip); P.base:SetPoint('TOPLEFT', fill, 'TOPLEFT'); P.base:SetPoint('BOTTOMLEFT', fill, 'BOTTOMLEFT'); P.base:SetWidth(hb:GetWidth())
+  P.base = CreateFrame('StatusBar', nil, clip); P.base:SetPoint('TOPLEFT', hb, 'TOPLEFT'); P.base:SetPoint('BOTTOMLEFT', hb, 'BOTTOMLEFT'); P.base:SetWidth(hb:GetWidth())
   P.base:SetStatusBarTexture(WHITE); P.base:SetStatusBarColor(0, 0, 0, 0); P.base:SetMinMaxValues(0, 1); P.base:SetValue(0)
-  local baseEdge = P.base:GetStatusBarTexture()
+  local baseEdge = P.base:GetStatusBarTexture(); nosnap(baseEdge)
   P.slide = CreateFrame('StatusBar', nil, clip); P.slide:SetWidth(hb:GetWidth())
   P.slide:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); P.slide:SetPoint('BOTTOMLEFT', baseEdge, 'BOTTOMRIGHT')
   P.slide:SetStatusBarTexture(WHITE); P.slide:SetStatusBarColor(0, 0, 0, 0); P.slide:SetMinMaxValues(0, 1); P.slide:SetValue(0)
-  local slideEdge = P.slide:GetStatusBarTexture()
+  local slideEdge = P.slide:GetStatusBarTexture(); nosnap(slideEdge)
   holder = CreateFrame('Frame', nil, clip)
   holder:SetPoint('TOPRIGHT', slideEdge, 'TOPRIGHT'); holder:SetPoint('BOTTOMRIGHT', slideEdge, 'BOTTOMRIGHT'); holder:SetWidth(hb:GetWidth())
   local art = CreateFrame('Frame', nil, clip); art:SetAllPoints(clip); art:SetFrameLevel(clip:GetFrameLevel() + 2)
@@ -84,7 +88,7 @@ local function build()
   for i = 1, MAX do
     local bar = CreateFrame('StatusBar', nil, holder); bar:SetAllPoints(holder); bar:SetReverseFill(true)
     bar:SetStatusBarTexture(WHITE); bar:SetStatusBarColor(0, 0, 0, 0); bar:SetMinMaxValues(0, 1); bar:SetValue(0)
-    local s = { bar = bar, edge = bar:GetStatusBarTexture(), shown = 0, target = 0 }
+    local s = { bar = bar, edge = bar:GetStatusBarTexture(), shown = 0, target = 0 }; nosnap(s.edge)
     s.base = art:CreateTexture(nil, 'ARTWORK', nil, 1); barTex(s.base)
     s.lift = art:CreateTexture(nil, 'ARTWORK', nil, 2); barTex(s.lift); s.lift:SetBlendMode('ADD')
     -- the flash and the shine use the bar's own texture: a plain white one also lit the bar's see-through top edge
@@ -103,7 +107,7 @@ local function build()
     -- the new edge glows bright in the DoT's colour, holds 120 ms, then drains over 380 ms.
     s.gbar = CreateFrame('StatusBar', nil, holder); s.gbar:SetAllPoints(holder); s.gbar:SetReverseFill(true)
     s.gbar:SetStatusBarTexture(WHITE); s.gbar:SetStatusBarColor(0, 0, 0, 0); s.gbar:SetMinMaxValues(0, 1); s.gbar:SetValue(0)
-    s.gedge = s.gbar:GetStatusBarTexture()
+    s.gedge = s.gbar:GetStatusBarTexture(); nosnap(s.gedge)
     s.ghost = art:CreateTexture(nil, 'ARTWORK', nil, 5); barTex(s.ghost); s.ghost:Hide()   -- the bite: solid, its own colour
     -- the light it casts: 9 screen px onto each neighbour, fading out (left fade, core, right fade), the bar's own shape
     s.spillL = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillL); s.spillL:SetBlendMode('ADD'); s.spillL:Hide()
@@ -155,6 +159,7 @@ end
 
 local function hide()
   if not built then return end
+  P.hpLate = nil
   clip:Hide(); win:Hide()
   for _, s in ipairs(segs) do s.shown = 0; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide() end
   wipe(P.bites)
@@ -180,8 +185,9 @@ local function biteNow(name, now)    -- what is still left of a bite (0 when don
   local b = P.bites[name]; if not b then return 0, 0 end
   local a = now - b.at
   if a >= .5 then P.bites[name] = nil; return 0, 0 end
-  local left = b.amt * (1 - easeOut((a - .16) / .34))
-  local flare = a < .06 and a / .06 or (a < .16 and 1 or math.max(0, 1 - (a - .16) / .34))
+  local k = math.max(0, math.min(1, (a - .06) / .44)); k = k < .5 and 2 * k * k or 1 - (-2 * k + 2) ^ 2 / 2   -- ease in-out: no snap at the start
+  local left = b.amt * (1 - k)
+  local flare = a < .06 and a / .06 or math.max(0, 1 - (a - .06) / .44)
   return left, flare
 end
 
@@ -226,7 +232,7 @@ local function render()
         local tone = lowNow and RINGGOLD or (RINGTONE[d.name] or c)
         local hot = mix(colorOf(d.name), { math.min(1, tone[1] * 1.1), math.min(1, tone[2] * 1.1), math.min(1, tone[3] * 1.1) }, .6)
         local base = colorOf(d.name); local ember = mix(base, EMPTY, .75)
-        local col = (now - P.bites[d.name].at) < .16 and mix(base, hot, flare) or mix(ember, hot, flare)
+        local col = (now - P.bites[d.name].at) < .06 and mix(base, hot, flare) or mix(ember, hot, flare)
         s.gbar:SetValue(before + bl); s.ghost:SetVertexColor(col[1], col[2], col[3]); s.ghost:Show()
         local a = flare * .4
         s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
@@ -234,7 +240,7 @@ local function render()
           s.spillL:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 0), CreateColor(tone[1] * a, tone[2] * a, tone[3] * a, 1))
           s.spillR:SetGradient('HORIZONTAL', CreateColor(tone[1] * a, tone[2] * a, tone[3] * a, 1), CreateColor(0, 0, 0, 0))
         end
-        s.spillL:Show(); s.spillC:Show(); s.spillR:Show()
+        s.spillC:Show(); s.spillL:Hide(); s.spillR:Hide()   -- 2026-11-11 'bouncy': the light past the bite's edges made the bar swell out and back; the glow stays on the bite
       else
         s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
       end
@@ -248,6 +254,8 @@ local function render()
     if jw > 0 then s.join:SetWidth(px(jw, hb)); s.joinLift:SetWidth(px(jw, hb)) end
     s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(false); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
   end
+  -- the pieces hang one status bar deeper than the health's end, and WoW lays each level out a frame later; so the end
+  -- takes its new value one frame late too, or on every tick the pieces slipped 2 px for a frame (filmed 2026-11-11)
   P.base:SetMinMaxValues(0, maxv); P.base:SetValue(hp)
   P.slide:SetMinMaxValues(0, maxv); P.slide:SetValue(slide); P.slideV = slide
   traceFrame(now)
