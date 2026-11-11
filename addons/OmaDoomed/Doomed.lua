@@ -64,8 +64,14 @@ local function build()
   -- clipped to the bar, minus the see-through margin Blizzard's texture has at its left end (measured: 5 screen px)
   clip = CreateFrame('Frame', nil, hb); clip:SetPoint('TOPLEFT', hb, 'TOPLEFT', px(5, hb), 0); clip:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')
   clip:SetClipsChildren(true); clip:SetFrameLevel(hb:GetFrameLevel() + 1)
+  -- sheet 30: while a bite closes, everything nearer the bar's end sits a little to the right and slides back. A 0..max
+  -- bar starting at the health's end carries that offset (a plain number, the bite left), so no size is ever read.
+  P.slide = CreateFrame('StatusBar', nil, clip); P.slide:SetWidth(hb:GetWidth())
+  P.slide:SetPoint('TOPLEFT', fill, 'TOPRIGHT'); P.slide:SetPoint('BOTTOMLEFT', fill, 'BOTTOMRIGHT')
+  P.slide:SetStatusBarTexture(WHITE); P.slide:SetStatusBarColor(0, 0, 0, 0); P.slide:SetMinMaxValues(0, 1); P.slide:SetValue(0)
+  local slideEdge = P.slide:GetStatusBarTexture()
   holder = CreateFrame('Frame', nil, clip)
-  holder:SetPoint('TOPRIGHT', fill, 'TOPRIGHT'); holder:SetPoint('BOTTOMRIGHT', fill, 'BOTTOMRIGHT'); holder:SetWidth(hb:GetWidth())
+  holder:SetPoint('TOPRIGHT', slideEdge, 'TOPRIGHT'); holder:SetPoint('BOTTOMRIGHT', slideEdge, 'BOTTOMRIGHT'); holder:SetWidth(hb:GetWidth())
   local art = CreateFrame('Frame', nil, clip); art:SetAllPoints(clip); art:SetFrameLevel(clip:GetFrameLevel() + 2)
   P.lost = art:CreateTexture(nil, 'ARTWORK', nil, 0); barTex(P.lost); P.lost:SetVertexColor(.14, .09, .05); P.lost:Hide()   -- test only: the empty bar
   for i = 1, MAX do
@@ -91,16 +97,11 @@ local function build()
     s.gbar = CreateFrame('StatusBar', nil, holder); s.gbar:SetAllPoints(holder); s.gbar:SetReverseFill(true)
     s.gbar:SetStatusBarTexture(WHITE); s.gbar:SetStatusBarColor(0, 0, 0, 0); s.gbar:SetMinMaxValues(0, 1); s.gbar:SetValue(0)
     s.gedge = s.gbar:GetStatusBarTexture()
-    s.ghost = art:CreateTexture(nil, 'OVERLAY', nil, 3); barTex(s.ghost); s.ghost:SetBlendMode('ADD'); s.ghost:Hide()
-    s.ghost:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); s.ghost:SetPoint('BOTTOMRIGHT', s.edge, 'BOTTOMLEFT')
-    -- the glint: one soft light crossing the piece in 450 ms (a 0..1 bar inside the piece carries it, so no size is read)
-    s.gclip = CreateFrame('Frame', nil, art); s.gclip:SetClipsChildren(true); s.gclip:SetFrameLevel(art:GetFrameLevel() + 1)
-    s.sweep = CreateFrame('StatusBar', nil, s.gclip); s.sweep:SetAllPoints(s.gclip)
-    s.sweep:SetStatusBarTexture(WHITE); s.sweep:SetStatusBarColor(0, 0, 0, 0); s.sweep:SetMinMaxValues(0, 1); s.sweep:SetValue(0)
-    s.glint = s.gclip:CreateTexture(nil, 'OVERLAY'); barTex(s.glint); s.glint:SetBlendMode('ADD'); s.glint:SetWidth(px(14, hb))
-    s.glint:SetPoint('TOP', s.sweep:GetStatusBarTexture(), 'TOPRIGHT'); s.glint:SetPoint('BOTTOM', s.sweep:GetStatusBarTexture(), 'BOTTOMRIGHT')
-    if CreateColor then s.glint:SetGradient('HORIZONTAL', CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, .55)) end
-    s.gclip:Hide()
+    s.ghost = art:CreateTexture(nil, 'ARTWORK', nil, 5); barTex(s.ghost); s.ghost:Hide()   -- the bite: solid, its own colour
+    -- the light it casts: 9 screen px onto each neighbour, fading out (left fade, core, right fade), the bar's own shape
+    s.spillL = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillL); s.spillL:SetBlendMode('ADD'); s.spillL:Hide()
+    s.spillC = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillC); s.spillC:SetBlendMode('ADD'); s.spillC:Hide()
+    s.spillR = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillR); s.spillR:SetBlendMode('ADD'); s.spillR:Hide()
     segs[i] = s
   end
   for i, s in ipairs(segs) do
@@ -108,7 +109,12 @@ local function build()
     for _, t in ipairs({ s.base, s.lift, s.flash }) do
       t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, rp)
     end
-    s.gclip:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); s.gclip:SetPoint('BOTTOMRIGHT', right, rp)
+    -- the bite sits at this piece's end nearest the bar's end: from the bite bar's edge to the previous piece's edge
+    s.ghost:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); s.ghost:SetPoint('BOTTOMRIGHT', right, rp)
+    local sp = px(9, hb)
+    s.spillC:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); s.spillC:SetPoint('BOTTOMRIGHT', right, rp)
+    s.spillL:SetPoint('TOPRIGHT', s.gedge, 'TOPLEFT'); s.spillL:SetPoint('BOTTOMRIGHT', s.gedge, 'BOTTOMLEFT'); s.spillL:SetWidth(sp)
+    s.spillR:SetPoint('TOPLEFT', right, (i == 1) and 'TOPRIGHT' or 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, rp); s.spillR:SetWidth(sp)
     -- the join sits on this piece's right edge, fading from this colour into the previous (nearer the green) one
     if i > 1 then
       for _, t in ipairs({ s.join, s.joinLift }) do t:SetPoint('TOP', segs[i - 1].edge, 'TOPLEFT'); t:SetPoint('BOTTOM', segs[i - 1].edge, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
@@ -143,108 +149,138 @@ end
 local function hide()
   if not built then return end
   clip:Hide(); win:Hide()
-  for _, s in ipairs(segs) do s.shown, s.target = 0, 0; s.bite = nil; s.glintAt = nil; s.ghost:Hide(); s.gclip:Hide() end
+  for _, s in ipairs(segs) do s.shown = 0; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide() end
+  wipe(P.bites)
 end
 
 local function colorOf(name) return COLOR[name] or OTHER end
 
--- dots: { {name, damage} } nearest-the-green first; maxv / hp may be hidden numbers (only handed to status bars)
-local function draw(dots, maxv, hp)
-  if not build() then return end
+-- sheet 30 (approved "Yes, build it", 2026-11-11). Every frame. dots: { {name, damage, expires} } nearest the bar's end
+-- first; maxv / hp may be hidden numbers (only handed to status bars). A tick spends part of its own DoT's piece: the
+-- bite flares hot in that DoT's colour (60 ms), holds (to 160 ms), then cools to an ember while the gap closes, fast
+-- then settling (340 ms); it lights 9 px of its neighbours. The green never moves. Its ring breathes the same instant.
+P.bites = {}                         -- DoT name -> { amt, at }
+local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
+local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
+local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
+local RINGTONE = {   -- the rings' own colours (OmashuPlates), for the flare
+  ['Corruption'] = { 95 / 255, 216 / 255, 232 / 255 }, ['Curse of Agony'] = { 196 / 255, 108 / 255, 1 }, ['Bane of Agony'] = { 196 / 255, 108 / 255, 1 },
+  ['Immolate'] = { 1, 150 / 255, 64 / 255 }, ['Siphon Life'] = { 214 / 255, 48 / 255, 72 / 255 },
+}
+local RINGGOLD = { 1, 214 / 255, 110 / 255 }
+
+local function biteNow(name, now)    -- what is still left of a bite (0 when done), and its flare 0..1
+  local b = P.bites[name]; if not b then return 0, 0 end
+  local a = now - b.at
+  if a >= .5 then P.bites[name] = nil; return 0, 0 end
+  local left = b.amt * (1 - easeOut((a - .16) / .34))
+  local flare = a < .06 and a / .06 or (a < .16 and 1 or math.max(0, 1 - (a - .16) / .34))
+  return left, flare
+end
+
+local cur                            -- the latest dots, maxv, hp (from update), drawn every frame
+local function render()
+  if not cur or not built then return end
+  local dots, maxv, hp = cur.dots, cur.maxv, cur.hp
   if #dots == 0 then return hide() end
   clip:Show()
-  local run = 0
+  local now = GetTime()
+  local run, slide = 0, 0
   for i, s in ipairs(segs) do
     local d = dots[i]
-    s.bar:SetMinMaxValues(0, maxv)
+    s.bar:SetMinMaxValues(0, maxv); s.gbar:SetMinMaxValues(0, maxv)
     if d then
-      run = run + d.damage; s.target = run
-      local c = colorOf(d.name)
-      local left = d.expires and (d.expires - GetTime())
-      local a = 1
+      local bl, flare = biteNow(d.name, now); slide = slide + bl
+      local before = run                                 -- where this piece starts, from the bar's end
+      run = run + d.damage + bl
+      -- a new DoT grows in; shrinking happens only through bites
+      if run > s.shown then s.shown = s.shown + (run - s.shown) * .25 else s.shown = run end
+      s.bar:SetValue(s.shown)
+      local left = d.expires and (d.expires - now)
       local lowNow = left and left > 0 and left <= LOW
-      -- ending soon: gold, breathing in brightness on the rings' beat (fading it see-through let the green show: lime)
+      local c = colorOf(d.name)
       if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
-      s.base:SetVertexColor(c[1] * 1.15, c[2] * 1.15, c[3] * 1.15, a)
-      s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7, a)
-      local n = segs[i - 1] and dots[i - 1] and colorOf(dots[i - 1].name)
-      if n and CreateColor then
-        s.join:SetGradient('HORIZONTAL', CreateColor(c[1] * 1.15, c[2] * 1.15, c[3] * 1.15, 1), CreateColor(n[1] * 1.15, n[2] * 1.15, n[3] * 1.15, 1))
-        s.joinLift:SetGradient('HORIZONTAL', CreateColor(c[1] * .7, c[2] * .7, c[3] * .7, 1), CreateColor(n[1] * .7, n[2] * .7, n[3] * .7, 1))
+      s.base:SetVertexColor(c[1] * 1.15, c[2] * 1.15, c[3] * 1.15)
+      s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
+      if bl > 0 then
+        local tone = lowNow and RINGGOLD or (RINGTONE[d.name] or c)
+        local hot = mix({ math.min(1, tone[1] * 1.25), math.min(1, tone[2] * 1.25), math.min(1, tone[3] * 1.25) }, { 1, .98, .92 }, .2)
+        local base = colorOf(d.name); local ember = mix(base, EMPTY, .75)
+        local col = (now - P.bites[d.name].at) < .16 and mix(base, hot, flare) or mix(ember, hot, flare)
+        s.gbar:SetValue(before + bl); s.ghost:SetVertexColor(col[1], col[2], col[3]); s.ghost:Show()
+        local a = flare * .8
+        s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
+        if CreateColor then
+          s.spillL:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 0), CreateColor(tone[1] * a, tone[2] * a, tone[3] * a, 1))
+          s.spillR:SetGradient('HORIZONTAL', CreateColor(tone[1] * a, tone[2] * a, tone[3] * a, 1), CreateColor(0, 0, 0, 0))
+        end
+        s.spillL:Show(); s.spillC:Show(); s.spillR:Show()
+      else
+        s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
       end
-      if last[d.name] and d.damage < last[d.name] - .5 then
-        local now = GetTime()
-        s.bite = { from = s.shown, at = now }; s.ghost:SetVertexColor(math.min(1, c[1] * 1.6), math.min(1, c[2] * 1.6), math.min(1, c[3] * 1.6))
-        s.gbar:SetMinMaxValues(0, maxv); s.gbar:SetValue(s.shown); s.ghost:Show()
-        s.glintAt = now; s.gclip:Show()
-        s.flashAnim:Stop(); s.flashAnim:Play()
-        if _G.OmashuPlates_Pulse then pcall(_G.OmashuPlates_Pulse, 'target', d.name) end   -- its ring, same instant
-      end
-      last[d.name] = d.damage
     else
-      s.target = run
+      s.shown = run; s.bar:SetValue(run); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
     end
     local on = d and true or false
     local mode = ns.db.doomedJoin or 'crease'
     local jw = mode == 'crease' and 0 or (JOIN[mode] or 0)
     s.creaseL:SetShown(on and i > 1 and mode == 'crease'); s.creaseR:SetShown(on and i > 1 and mode == 'crease')
     if jw > 0 then s.join:SetWidth(px(jw, hb)); s.joinLift:SetWidth(px(jw, hb)) end
-    s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(on); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
+    s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(false); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
   end
+  P.slide:SetMinMaxValues(0, maxv); P.slide:SetValue(slide)
   local far = segs[math.min(#dots, MAX)]
   shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', holder, 'TOPRIGHT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
   -- the skull: hidden when the mob already carries a real raid mark (that one wins)
-  if GetRaidTargetIndex('target') then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(run) end
+  local total = 0; for _, d in ipairs(dots) do total = total + d.damage end
+  if GetRaidTargetIndex('target') then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(total) end
 end
 
--- smooth: each piece glides to its new size (grows in, shrinks on ticks)
-local function smooth(x) x = math.max(0, math.min(1, x)); return x * x * (3 - 2 * x) end
-local function glide(dt)
-  if not built or not clip:IsShown() then return end
+-- new numbers (10 times a second and on events): notice ticks, keep them for render
+local function draw(dots, maxv, hp)
+  if not build() then return end
   local now = GetTime()
-  for _, s in ipairs(segs) do
-    if s.bite then
-      local a = now - s.bite.at
-      if a >= .5 then s.bite = nil; s.ghost:Hide()
-      else
-        local k = a < .12 and 0 or smooth((a - .12) / .38)                -- holds 120 ms, drains over 380 ms
-        s.gbar:SetValue(s.bite.from + (s.shown - s.bite.from) * k)
-        s.ghost:SetAlpha(1 - .6 * k)
-      end
+  for _, d in ipairs(dots) do
+    if last[d.name] and d.damage < last[d.name] - .5 then
+      P.bites[d.name] = { amt = last[d.name] - d.damage, at = now }
+      if _G.OmashuPlates_Pulse then pcall(_G.OmashuPlates_Pulse, 'target', d.name) end   -- its ring, same instant
     end
-    if s.glintAt then
-      local a = (now - s.glintAt) / .45
-      if a >= 1 then s.glintAt = nil; s.gclip:Hide() else s.sweep:SetValue(smooth(a)) end
-    end
-    if s.shown ~= s.target then
-      s.shown = s.shown + (s.target - s.shown) * math.min(1, dt * 8)
-      if math.abs(s.target - s.shown) < .5 then s.shown = s.target end
-      s.bar:SetValue(s.shown)
-    end
+    last[d.name] = d.damage
   end
+  cur = { dots = dots, maxv = maxv, hp = hp }
+  render()
 end
 
 local function update()
-  if not ns.db or not ns.db.doomed then return hide() end
+  if not ns.db or not ns.db.doomed then cur = nil; return hide() end
   if test then
-    if not UnitExists('target') then return hide() end
-    local m = UnitHealthMax('target'); local frac = .62; local h = m * frac
+    if not UnitExists('target') then cur = nil; return hide() end
     local now = GetTime()
-    for _, d in ipairs(test.dots) do   -- fake ticks: Agony every 2 s, the rest every 3 s, each takes a bite; refills when it runs out
-      local every = d[1] == 'Curse of Agony' and 2 or 3
-      d.next = d.next or now + every
-      if now >= d.next then d.next = now + every; d.left = (d.left or d[2]) - d[2] / 6; if d.left <= 0 then d.left = d[2] end end
+    if not test.t0 or now - test.t0 > 27 then   -- sheet 30's numbers, from DoesItDie's log: 198-health mob at 140
+      test.t0 = now
+      local ag = {}; for k = 1, 12 do ag[k] = 6.1 * (k <= 4 and .5 or (k <= 8 and 1 or 1.5)) end
+      test.dots = { { n = 'Corruption', ticks = { 10.25, 10.25, 10.25, 10.25 }, every = 3, first = 3, dur = 12 },
+        { n = 'Immolate', ticks = { 3, 3, 3, 3, 3 }, every = 3, first = 3, dur = 15 },
+        { n = 'Curse of Agony', ticks = ag, every = 2, first = 2, dur = 24 } }
     end
-    -- test: Immolate stays in its last 3 s (gold, breathing like its ring's test); the others have time left
-    local dots = {}; for _, d in ipairs(test.dots) do dots[#dots + 1] = { name = d[1], damage = m * (d.left or d[2]), expires = d[1] == 'Immolate' and (now + 3 - (now % 3) - .01) or now + 12 } end
-    if build() then   -- pretend the mob is at 62% (or 20%): the pieces start there, the rest of the bar shows empty
+    local t = now - test.t0
+    local m, hp = 198, 140
+    local dots = {}
+    for _, d in ipairs(test.dots) do
+      local done, left = 0, 0
+      for k, v in ipairs(d.ticks) do if t >= d.first + (k - 1) * d.every then done = done + v else left = left + v end end
+      hp = hp - done
+      if left > 0 then dots[#dots + 1] = { name = d.n, damage = left, expires = test.t0 + d.dur } end
+    end
+    table.sort(dots, function(a, b) return a.expires < b.expires end)
+    if build() then   -- the health's end, as Blizzard's bar would draw it
       local W = hb:GetWidth()
-      holder:ClearAllPoints(); holder:SetPoint('TOPRIGHT', hb, 'TOPLEFT', W * frac, 0); holder:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMLEFT', W * frac, 0)
-      P.lost:ClearAllPoints(); P.lost:SetPoint('TOPLEFT', hb, 'TOPLEFT', W * frac, 0); P.lost:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT'); P.lost:Show()
+      P.slide:ClearAllPoints(); P.slide:SetPoint('TOPLEFT', hb, 'TOPLEFT', W * hp / m, 0); P.slide:SetPoint('BOTTOMLEFT', hb, 'BOTTOMLEFT', W * hp / m, 0)
+      P.lost:ClearAllPoints(); P.lost:SetPoint('TOPLEFT', hb, 'TOPLEFT', W * hp / m, 0); P.lost:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT'); P.lost:Show()
     end
-    return draw(dots, m, h)
+    return draw(dots, m, hp)
   end
-  if not UnitExists('target') or UnitIsDead('target') or not (DoesItDie and DoesItDie.GetDoTs) then return hide() end
+  if not UnitExists('target') or UnitIsDead('target') or not (DoesItDie and DoesItDie.GetDoTs) then cur = nil; return hide() end
   local list = DoesItDie.GetDoTs('target')
   table.sort(list, function(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end)   -- runs out first = nearest the green
   local dots = {}
@@ -270,9 +306,9 @@ function P.start()
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
-  ev:SetScript('OnEvent', function(_, e) if e == 'PLAYER_TARGET_CHANGED' then wipe(last); for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
+  ev:SetScript('OnEvent', function(_, e) if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
-  ev:SetScript('OnUpdate', function(_, dt) glide(dt); acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
+  ev:SetScript('OnUpdate', function(_, dt) local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
 end
 
@@ -280,12 +316,10 @@ end
 -- /omadoomed test       fake DoTs on your current target (live)   /omadoomed test die   (doomed)   ... test off
 function P.slash(m)
   local j = m:match('^join (%a+)'); if j and JOIN[j] then ns.db.doomedJoin = j; ns.say('Doomed join: ' .. j); return update() end
-  if m == 'test off' then test = nil; if built then P.lost:Hide(); holder:ClearAllPoints(); holder:SetPoint('TOPRIGHT', fill, 'TOPRIGHT'); holder:SetPoint('BOTTOMRIGHT', fill, 'BOTTOMRIGHT') end; ns.say('Doomed test off'); return update() end
+  if m == 'test off' then test = nil; if built then P.lost:Hide(); P.slide:ClearAllPoints(); P.slide:SetPoint('TOPLEFT', fill, 'TOPRIGHT'); P.slide:SetPoint('BOTTOMLEFT', fill, 'BOTTOMRIGHT') end; ns.say('Doomed test off'); return update() end
   if m:match('^test') then
-    -- sheet 22's own numbers (health 62%; of the 224-px bar: lives 22/30/36 px, dies 40/60/80 px)
-    test = { die = m:match('die') and true or false, dots = { { 'Immolate', 22 / 224 }, { 'Curse of Agony', 30 / 224 }, { 'Corruption', 36 / 224 } } }
-    if test.die then test.dots = { { 'Immolate', 40 / 224 }, { 'Curse of Agony', 60 / 224 }, { 'Corruption', 80 / 224 } } end
-    ns.say('Doomed test on your target' .. (test.die and ' (doomed)' or '') .. '. /omadoomed test off'); return update()
+    test = {}; wipe(last); wipe(P.bites)
+    ns.say('Doomed test on your target (Bujuju\'s real ticks, sheet 30). /omadoomed test off'); return update()
   end
   ns.db.doomed = not ns.db.doomed; quiet(ns.db.doomed); ns.say('Doomed ' .. (ns.db.doomed and 'on' or 'off (DoesItDie back after /reload)')); update()
 end
