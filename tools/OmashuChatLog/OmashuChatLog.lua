@@ -4,7 +4,7 @@
 --
 -- The strip: blocks of 2x2 screen pixels on the bottom two rows. Block 1 magenta, block 2 cyan (the start), then
 -- 6 bits per block, 2 in each of red, green and blue as 0 / 85 / 170 / 255. The bytes:
---   flags (1: chat box open) | how many lines (1) | each line: number (2) + length (2) + UTF-8 |
+--   flags (1: chat box open, 2: aux's search box is on screen, 4: aux's search box has the keyboard) | how many lines (1) | each line: number (2) + length (2) + UTF-8 |
 --   check (2: sum of every byte before it)
 -- It always shows the NEWEST lines that fit (300 bytes, at most ~40% of the screen width), so a line stays on the strip for several looks and
 -- Couch Mode loses nothing if it misses a moment; it keeps the lines whose number it hasn't had yet.
@@ -46,6 +46,45 @@ end
 
 local function boxOpen() return ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() and 1 or 0 end
 
+-- Auction search from the phone (sheet omashu/remote/14). aux keeps its search box private, so it's found on screen:
+-- the EditBox carrying aux's own enter/complete/char handlers (aux's search bar is the only one with all three).
+-- While it's on screen, Ctrl+Shift+F11 (a binding only while the auction house is open) puts the keyboard in it,
+-- empty, so Couch Mode can type the search and press Enter (aux's own search). Couch Mode types only after the strip
+-- says the box has the keyboard (flag 4), so letters never reach the game's key bindings.
+local auxBox, lookedAt = nil, 0
+local function findAuxBox()
+  if auxBox then return auxBox end
+  if GetTime() - lookedAt < 1 then return nil end   -- the scan walks every frame: at most once a second
+  lookedAt = GetTime()
+  if not (AuctionFrame or AuctionHouseFrame or IsAddOnLoaded and IsAddOnLoaded("auxForever")) then return nil end
+  local f = EnumerateFrames()
+  while f do
+    if f.IsObjectType and f:IsObjectType("EditBox") and type(f.enter) == "function" and type(f.complete) == "function"
+      and type(f.char) == "function" then auxBox = f; return f end
+    f = EnumerateFrames(f)
+  end
+end
+local ahOpen = false
+local focusBtn = CreateFrame("Button", "OmashuAuxSearchFocus", UIParent)
+focusBtn:SetScript("OnClick", function()
+  local b = ahOpen and findAuxBox()
+  if b and b:IsVisible() then b:SetFocus(); b:SetText(""); b:SetCursorPosition(0) end
+end)
+local KEY = "CTRL-SHIFT-F11"
+local ahEv = CreateFrame("Frame")
+ahEv:RegisterEvent("AUCTION_HOUSE_SHOW"); ahEv:RegisterEvent("AUCTION_HOUSE_CLOSED")
+ahEv:SetScript("OnEvent", function(_, e)
+  ahOpen = (e == "AUCTION_HOUSE_SHOW")
+  if InCombatLockdown() then return end
+  if ahOpen then SetOverrideBindingClick(focusBtn, true, KEY, "OmashuAuxSearchFocus") else ClearOverrideBindings(focusBtn) end
+end)
+local function auxFlags()
+  if not ahOpen then return 0 end
+  local b = findAuxBox()
+  if not (b and b:IsVisible()) then return 0 end
+  return 2 + (b:HasFocus() and 4 or 0)
+end
+
 -- The newest lines that fit, oldest first.
 local function packet(flags)
   local pick, used = {}, 0
@@ -63,7 +102,7 @@ local function packet(flags)
 end
 
 strip:SetScript("OnUpdate", function()
-  local now, flags = GetTime(), boxOpen()
+  local now, flags = GetTime(), boxOpen() + auxFlags()
   if flags ~= lastFlags then dirty = true end
   if dirty and now - drawnAt >= GAP then draw(packet(flags)); drawnAt = now; dirty = false; lastFlags = flags end
 end)
