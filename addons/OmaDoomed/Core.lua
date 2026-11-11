@@ -2,7 +2,7 @@
 local ADDON, ns = ...
 ns.say = function(m) print('|cffb48cffOmaDoomed:|r ' .. tostring(m)) end
 ns.parts = {}
-local DEFAULTS = { doomed = true }
+local DEFAULTS = { doomed = true }   -- the rest: Settings.lua (ns.DEFAULTS)
 local f = CreateFrame('Frame')
 f:RegisterEvent('PLAYER_LOGIN')
 f:SetScript('OnEvent', function()
@@ -16,6 +16,7 @@ SlashCmdList.OMADOOMED = function(m)
   m = (m or ''):lower()
   local rest = m:match('^rings%s*(.*)$'); if rest then return ns.ringsSlash and ns.ringsSlash(rest) end
   if m == 'trace' then return ns.startTrace and ns.startTrace() end
+  if m == 'options' or m == 'settings' then return ns.openSettings and ns.openSettings() end
   m = 'doomed ' .. m
   local p = ns.parts[m:match('^(%S+)')]
   if p and p.slash then p.slash(m:match('^%S+%s*(.*)$')) return end

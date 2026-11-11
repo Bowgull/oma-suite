@@ -15,9 +15,10 @@ local COLOR = {   -- sheet 34 B 'shadow and fire' (Joshua 2026-11-11: "shadow an
   ['Siphon Life'] = { 110 / 255, 20 / 255, 30 / 255 },
 }
 local GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- gold means only 'ending soon' (last 3 s); at the green's strength like the other pieces
-local LOW = 3
-local function breath(x)              -- the rings' own breath (Rings.lua): 1 at 3 s, 0.3 at 2.25 s, 1 at 1.5 s ...
-  local ph = (LOW - x) / 1.5 % 1; return .3 + .7 * (math.cos(ph * 2 * math.pi) * .5 + .5)
+local function LOWS() return (ns.db and ns.db.low) or 3 end   -- 'Ending soon' (settings): seconds of gold
+local function breath(x)              -- the rings' own breath (Rings.lua): 1 at the start, 0.3 halfway, 1 every 1.5 s
+  if ns.db and ns.db.lowlook == 'steady' then return 1 end
+  local ph = (LOWS() - x) / 1.5 % 1; return .3 + .7 * (math.cos(ph * 2 * math.pi) * .5 + .5)
 end
 local OTHER = { .55, .45, .65 }
 local FILL = 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health'
@@ -134,6 +135,13 @@ local function build()
     s.gmark = newMark(); s.gedge = s.gmark.f
     -- sheet 36 C 'charging' (Joshua 2026-11-11: "Yes, build it"): while you cast, the piece fills with your cast bar in
     -- its landed colour (so landing changes nothing), an ember glow in its own colour at the front; never white
+    -- tick light parts (settings 'Tick light'): a soft wash that reaches into the piece, and five particles
+    s.wash = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.wash); s.wash:SetBlendMode('ADD'); s.wash:Hide()
+    s.wash:SetPoint('TOPRIGHT', s.gedge, 'TOPLEFT'); s.wash:SetPoint('BOTTOMRIGHT', s.gedge, 'BOTTOMLEFT'); s.wash:SetWidth(px(16, hb))
+    s.parts = {}
+    for k = 1, 5 do local t = art:CreateTexture(nil, 'OVERLAY', nil, 6); t:SetBlendMode('ADD'); t:Hide(); s.parts[k] = t end
+    s.motes = art:CreateTexture(nil, 'ARTWORK', nil, 3); s.motes:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\motes', 'REPEAT', 'REPEAT'); s.motes:SetBlendMode('ADD'); s.motes:Hide()
+    s.motes:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); s.motes:SetPoint('BOTTOMRIGHT', s.edge, 'BOTTOMRIGHT')
     s.cmark = newMark()
     s.cbase = art:CreateTexture(nil, 'ARTWORK', nil, 1); barTex(s.cbase); s.cbase:Hide()
     s.clift = art:CreateTexture(nil, 'ARTWORK', nil, 2); barTex(s.clift); s.clift:SetBlendMode('ADD'); s.clift:Hide()
@@ -151,7 +159,7 @@ local function build()
     s.spillR = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillR); s.spillR:SetBlendMode('ADD'); s.spillR:Hide()
     -- every texture of a piece keeps to the health bar's own shape (2026-11-11: Joshua saw colour outside the bar once)
     if P.barMask then
-      for _, t in ipairs({ s.base, s.lift, s.flash, s.join, s.joinLift, s.creaseL, s.creaseR, s.ghost, s.spillL, s.spillC, s.spillR, s.pre, s.preGlow, s.cbase, s.clift, s.spark }) do t:AddMaskTexture(P.barMask) end
+      for _, t in ipairs({ s.base, s.lift, s.flash, s.join, s.joinLift, s.creaseL, s.creaseR, s.ghost, s.spillL, s.spillC, s.spillR, s.pre, s.preGlow, s.cbase, s.clift, s.spark, s.wash, s.motes, s.parts[1], s.parts[2], s.parts[3], s.parts[4], s.parts[5] }) do t:AddMaskTexture(P.barMask) end
     end
     segs[i] = s
   end
@@ -183,7 +191,7 @@ local function build()
     -- the piece touching the health's end runs 1 screen px past it: Blizzard's green snaps to whole pixels and ours
     -- don't, so a 1 px sliver of green showed beside it (Joshua, 2026-11-11: 'a tiny bit of green peeking out')
     local dx = (right == P.E[0].f) and px(1, hb) or 0
-    for _, t in ipairs({ s.base, s.lift, s.flash, s.pre }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
+    for _, t in ipairs({ s.base, s.lift, s.flash, s.pre, s.motes }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
     for _, t in ipairs({ s.ghost, s.spillC }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
     s.spillR:ClearAllPoints(); s.spillR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, 'BOTTOMLEFT'); s.spillR:SetWidth(px(9, hb))
     for _, t in ipairs({ s.join, s.joinLift }) do t:ClearAllPoints(); t:SetPoint('TOP', right, 'TOPLEFT'); t:SetPoint('BOTTOM', right, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
@@ -270,7 +278,7 @@ function P.onHealth()
         local was = biteNow(d.name, aclock())
         P.bites[d.name] = { amt = was + est, at = aclock() }
         P.pred[d.name] = { est = est, at = now }
-        if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end
+        if ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', d.name) end
         if note then note[#note + 1] = 'PREDICTED ' .. d.name:sub(1, 3) .. string.format(' est%.1f', est) end
       end
     end
@@ -279,6 +287,7 @@ function P.onHealth()
 end
 P.predK = {}
 P.landAt = {}
+P.landLook = {}
 P.shownBy = {}               -- DoT name -> its piece's size on screen
 P.wasPre = {}
 P.slotOf = {}                -- DoT name -> the slot (textures and edges) it owns
@@ -361,7 +370,7 @@ local function render()
       P.shownBy[d.name] = sh; seen[d.name] = true
       run = run + sh; s.shown = run; s.sz = sh
       local left = d.expires and (d.expires - now)
-      local lowNow = left and left <= LOW   -- gold through its last 3 s and on past zero while it glides out (it flipped back)
+      local lowNow = left and left <= LOWS()   -- gold through its last 3 s and on past zero while it glides out (it flipped back)
       local c = colorOf(d.name)
       if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
       local tn = RINGTONE[d.name] or c
@@ -370,44 +379,85 @@ local function render()
         if CreateColor then s.spark:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(sp[1] * al, sp[2] * al, sp[3] * al, 1)) end
         s.spark:Show()
       end
-      s.pre:Hide(); s.preGlow:Hide()
-      if d.provisional and ns.db.doomedPrecast ~= false then   -- still being cast: dark, filling with the cast bar
+      local look = ns.db.cast or 'charging'
+      s.pre:Hide(); s.preGlow:Hide(); s.motes:Hide()
+      local full = { math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15) }
+      if d.provisional then   -- still being cast (settings 'While you cast')
         local pr = 1
         if d.castStart and d.castEnd and d.castEnd > d.castStart then pr = math.max(0, math.min(1, (now - d.castStart) / (d.castEnd - d.castStart))) end
-        s.cpr = pr
         s.base:SetVertexColor(c[1] * .45, c[2] * .45, c[3] * .45); s.lift:SetVertexColor(0, 0, 0)
-        s.cbase:SetVertexColor(math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15)); s.cbase:Show()
-        s.clift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7); s.clift:Show()
-        spark(.45)
-        P.wasPre[d.name] = true
-      else
-        if P.wasPre[d.name] then P.landAt[d.name] = anow; P.wasPre[d.name] = nil end
-        s.cbase:Hide(); s.clift:Hide()
-        local la = P.landAt[d.name] and (anow - P.landAt[d.name]) or 9   -- it landed: nothing changes but the glow fading where it ended
-        if la < .35 then s.cpr = 1; spark(.45 * (1 - la / .35) ^ 2) else s.cpr = nil; s.spark:Hide() end
-        s.base:SetVertexColor(math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15))
-        s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
-      end
-      if bl > 0 then
-        -- 2026-11-11 'when a DoT ends there's still a flash': its last tick always lands in the gold last 3 s, and lit up
-        -- in bright ring gold x1.85, near white. The light now comes from the piece's own colour, like every other tick.
-        local tone = lowNow and { math.min(1, c[1] * 1.3), math.min(1, c[2] * 1.3), math.min(1, c[3] * 1.3) } or (RINGTONE[d.name] or c)
-        local hot = mix(c, tone, .4)
-        local base = c; local ember = mix(base, EMPTY, .75)
-        local col = mix(base, hot, flare)
-        s.gtarget = before + bl; s.ghost:SetVertexColor(math.min(1, col[1] * 1.85), math.min(1, col[2] * 1.85), math.min(1, col[3] * 1.85)); s.ghost:Show()   -- 1.85: base 1.15 + lift .7, as the pieces
-        local a = flare * .4
-        s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a)
-        if CreateColor then
-          s.spillL:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 0), CreateColor(tone[1] * a, tone[2] * a, tone[3] * a, 1))
-          s.spillR:SetGradient('HORIZONTAL', CreateColor(tone[1] * a, tone[2] * a, tone[3] * a, 1), CreateColor(0, 0, 0, 0))
+        s.cbase:Hide(); s.clift:Hide(); s.spark:Hide(); s.cpr = nil
+        if look == 'charging' then   -- fills with your cast bar in its landed colour, an ember at the front
+          s.cpr = pr
+          s.cbase:SetVertexColor(full[1], full[2], full[3]); s.cbase:Show()
+          s.clift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7); s.clift:Show()
+          spark(.45)
+        elseif look == 'smoulder' then   -- its colour rises out of the dark as you cast
+          local k = pr ^ 1.6
+          s.base:SetVertexColor(c[1] * (.3 + .85 * k), c[2] * (.3 + .85 * k), c[3] * (.3 + .85 * k)); s.lift:SetVertexColor(c[1] * .7 * k, c[2] * .7 * k, c[3] * .7 * k)
+        elseif look == 'stripes' then   -- Blizzard's shield stripes in its ring colour, drifting toward the green
+          s.pre:SetVertexColor(tn[1], tn[2], tn[3], .55); s.pre:Show()
+        elseif look == 'motes' then   -- small pixels drifting through the dim piece toward the green
+          local o = (anow * .08) % 1
+          s.motes:SetTexCoord(o, o + 3, 0, 1); s.motes:SetVertexColor(tn[1] * .8, tn[2] * .8, tn[3] * .8); s.motes:Show()
         end
-        s.spillC:Show(); s.spillL:Hide(); s.spillR:Hide()   -- 2026-11-11 'bouncy': the light past the bite's edges made the bar swell out and back; the glow stays on the bite
+        P.wasPre[d.name] = look
       else
-        s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
+        local was = P.wasPre[d.name]
+        if was then P.landAt[d.name] = anow; P.landLook[d.name] = was; P.wasPre[d.name] = nil end
+        s.cbase:Hide(); s.clift:Hide()
+        local la = P.landAt[d.name] and (anow - P.landAt[d.name]) or 9
+        local ll = P.landLook[d.name]
+        if ll == 'charging' and la < .35 then s.cpr = 1; spark(.45 * (1 - la / .35) ^ 2) else s.cpr = nil; s.spark:Hide() end
+        local k = 1   -- the other looks ease from dim to full colour as it lands (no snap)
+        if ll and ll ~= 'charging' and ll ~= 'smoulder' and la < .3 then local v = la / .3; k = .4 + .6 * v * v * (3 - 2 * v) end
+        s.base:SetVertexColor(full[1] * k, full[2] * k, full[3] * k)
+        s.lift:SetVertexColor(c[1] * .7 * k, c[2] * .7 * k, c[3] * .7 * k)
+      end
+      local tl = ns.db.tick or 'ember'
+      s.biteK = 1
+      for k = 1, 5 do s.parts[k]:Hide() end
+      if bl > 0 then
+        -- settings 'Tick light'. The bitten part keeps its piece's colour; the light (Ember, Cinders, Essence) washes up out
+        -- of the piece across the seam into it (sheet 37: no hard cut, no band) and settles back into its own colour.
+        local tone = lowNow and { math.min(1, c[1] * 1.3), math.min(1, c[2] * 1.3), math.min(1, c[3] * 1.3) } or (RINGTONE[d.name] or c)
+        local b = P.bites[d.name]
+        s.biteK = (b and b.amt > 0) and math.min(1, bl / b.amt) or 0
+        s.gtarget = before + bl; s.ghost:SetVertexColor(full[1] + c[1] * .7, full[2] + c[2] * .7, full[3] + c[3] * .7); s.ghost:Show()
+        if tl == 'plain' then
+          s.spillC:Hide(); s.wash:Hide()
+        else
+          local a = flare * .55
+          s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a); s.spillC:Show()
+          if CreateColor then s.wash:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(tone[1] * a * .6, tone[2] * a * .6, tone[3] * a * .6, 1)) end
+          s.wash:Show()
+          if (tl == 'cinders' or tl == 'essence') and b and s.right then
+            local age = anow - b.at; local life = age / .7; local H = hb:GetHeight()
+            for k = 1, 5 do
+              local l = math.max(0, math.min(1, (life - (k - 1) * .04) / .9))
+              if l > 0 and l < 1 then
+                local t = s.parts[k]; local fade = math.sin(math.pi * math.min(1, l * 1.15)); local e = 1 - (1 - l) ^ 2
+                local sd = (b.at * 7.3 + k * .618) % 1
+                t:ClearAllPoints()
+                t:SetPoint('CENTER', s.right, 'LEFT', -px(2 + (k - 1) * 3 + math.sin(age * 4 + k * 1.7) * 2, hb), -H * .3 + e * H * (.5 + sd * .3))
+                if tl == 'cinders' then
+                  t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\mote'); local z = px(5 - 2 * l, hb); t:SetSize(z, z)
+                  t:SetVertexColor(tone[1], tone[2], tone[3], .7 * fade)
+                else
+                  t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\haze'); local z = px(12 + 16 * l, hb); t:SetSize(z, z)
+                  local hz = mix(c, tone, .45); t:SetVertexColor(hz[1], hz[2], hz[3], .45 * fade)
+                end
+                t:Show()
+              end
+            end
+          end
+        end
+        s.spillL:Hide(); s.spillR:Hide()
+      else
+        s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide(); s.wash:Hide()
       end
     else
-      s.shown = run; s.sz = 0; s.cpr = nil; s.cbase:Hide(); s.clift:Hide(); s.spark:Hide(); s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
+      s.shown = run; s.sz = 0; s.cpr = nil; s.wash:Hide(); s.motes:Hide(); for k = 1, 5 do s.parts[k]:Hide() end; s.cbase:Hide(); s.clift:Hide(); s.spark:Hide(); s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
     end
     local on = d and true or false
     local mode = ns.db.doomedJoin or 'crease'
@@ -415,6 +465,7 @@ local function render()
     -- no crease next to an empty piece (a DoT that just ended): two creases stacked on one spot, then popped away
     local cr = on and i > 1 and mode == 'crease' and (s.sz or 0) > .3 and order[i - 1] and (order[i - 1].sz or 0) > .3
     s.creaseL:SetShown(cr); s.creaseR:SetShown(cr)
+    local ck = (ns.db.tick ~= 'plain' and d and s.biteK) and (1 - .85 * s.biteK) or 1; s.creaseL:SetAlpha(ck); s.creaseR:SetAlpha(ck)
     if jw > 0 then s.join:SetWidth(px(jw, hb)); s.joinLift:SetWidth(px(jw, hb)) end
     s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(false); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
   end
@@ -435,7 +486,7 @@ local function render()
   shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
   -- the skull: hidden when the mob already carries a real raid mark (that one wins)
   local total = 0; for _, d in ipairs(dots) do total = total + d.damage end
-  if GetRaidTargetIndex('target') then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(total) end
+  if GetRaidTargetIndex('target') or ns.db.skull == false then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(total) end
 end
 
 -- new numbers (10 times a second and on events): notice ticks, keep them for render
@@ -451,7 +502,7 @@ local function draw(dots, maxv, hp)
       local remaining = (last[name] or 0) - (pr and pr.est or 0)
       if remaining > .5 then
         local b = P.bites[name]
-        if b then b.amt = b.amt + remaining else P.bites[name] = { amt = remaining, at = aclock() }; if ns.ringsPulse then pcall(ns.ringsPulse, 'target', name) end end
+        if b then b.amt = b.amt + remaining else P.bites[name] = { amt = remaining, at = aclock() }; if ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', name) end end
       end
       P.pred[name] = nil; last[name] = 0
       if P.bites[name] and biteNow(name, aclock()) > 0 then
@@ -475,7 +526,7 @@ local function draw(dots, maxv, hp)
       else
         local was = biteNow(d.name, aclock())
         P.bites[d.name] = { amt = was + real, at = aclock() }
-        if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end   -- its ring, same instant
+        if ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', d.name) end   -- its ring, same instant
       end
     end
     last[d.name] = d.damage
@@ -582,4 +633,11 @@ function P.slash(m)
     ns.say('Doomed test on your target (Bujuju\'s real ticks, sheet 30). /omadoomed test off'); return update()
   end
   ns.db.doomed = not ns.db.doomed; quiet(ns.db.doomed); ns.say('Doomed ' .. (ns.db.doomed and 'on' or 'off (DoesItDie back after /reload)')); update()
+end
+
+-- a setting changed on the Options page (Settings.lua): show it at once
+function ns.applySetting(key)
+  if key == 'doomed' then quiet(ns.db.doomed); update()
+  elseif ns.RING_DEFAULTS and ns.RING_DEFAULTS[key] ~= nil then if ns.ringsApply then ns.ringsApply(key) end
+  end   -- every other kill bar setting is read each frame
 end
