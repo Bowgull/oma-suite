@@ -63,7 +63,7 @@ local SORT = (AuraContainerSortMethod and AuraContainerSortMethod.AuraInstanceID
 local UP = (Enum.NumericRuleFormatRounding and Enum.NumericRuleFormatRounding.Up) or 1
 local REMAINING = (Enum.DurationTextBindingProperty and Enum.DurationTextBindingProperty.RemainingDuration) or 0
 
-local POOL_START, POOL_MIN_FREE, POOL_MAX = 12, 3, 40
+local POOL_START, POOL_MIN_FREE, POOL_MAX = 24, 4, 40   -- review #7: 12 ran out in big pulls
 
 local db
 local function say(m) print('|cffb48cffOmaDoomed:|r ' .. m) end
@@ -261,9 +261,12 @@ local pulseRings = setmetatable({}, { __mode = 'k' })     -- ring button -> spel
 local function keyOfName(name)
   for _, sp in ipairs(SPELLS) do for _, n in ipairs(sp.names) do if n == name then return sp.key end end end
 end
+local framePair, attachAll           -- defined further down (forward-declared so earlier code sees them, not a nil global)
 function ns.ringsPulse(unit, name)
   local key = keyOfName(name); if not key then return end
   local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
+  -- review #9: in Haunt and Target frame the ring you can see is the one on the target frame
+  if unit == 'target' and db and (db.where == 'split' or db.where == 'frame') and framePair then plate = framePair.anchor end
   if not plate then return end
   for b, k in pairs(pulseRings) do
     if k == key and b:IsVisible() then
@@ -315,7 +318,8 @@ local function buildGroups()
     GROUPS[#GROUPS + 1] = { key = sp.key, filter = OWN, max = 2, main = mainOwn, ring = ringOwn(sp.color, ringCurves[sp.key], sp.key) }
   end
   GROUPS[#GROUPS + 1] = { key = 'mine', filter = OWN, max = 6, main = mainOwn, ring = ringOwn(DARK_BRASS, mineRingCurve) }
-  GROUPS[#GROUPS + 1] = { key = 'others', filter = OTHERS, max = 6, main = mainOthers, ring = ringOthers, layout = { groupSpacing = OTHERS_GAP } }
+  GROUPS[#GROUPS + 1] = { key = 'others', filter = OTHERS, max = 3,   -- review #10: a pack's rings crowded the next plate
+    main = mainOthers, ring = ringOthers, layout = { groupSpacing = OTHERS_GAP } }
 end
 
 -- ---------- the pool: containers can't be created in combat, so we keep spares and fill up after each fight ----------
@@ -407,6 +411,7 @@ local function release(unit)
   if ns.ringsUnfade then ns.ringsUnfade(p) end
   p.anchor:Hide(); p.anchor:ClearAllPoints(); p.anchor:SetParent(holder)
   free[#free + 1] = p
+  if InCombatLockdown() and attachAll then C_Timer.After(0, function() attachAll() end) end   -- review #7: hand it to a plate that has no row
 end
 
 local look, visible                 -- settings helpers, defined below (attach needs them)
@@ -422,11 +427,11 @@ local function attach(unit)
   p.anchor:SetFrameLevel(plate:GetFrameLevel() + 20)
   place(p.anchor, plate)
   p.ring:SetUnit(unit); p.main:SetUnit(unit)   -- while hidden: no event churn; Show re-reads every aura
-  p.want = nil; p.anchor:SetAlpha(0); p.anchor:Show(); look(p); p.want = false; p.curA = 0; visible()
+  p.want = nil; p.anchor:SetAlpha(0); p.anchor:Hide(); look(p); p.want = false; p.curA = 0; visible()
 end
 
 -- ---------- settings: size, opacity, where, which ----------
-local framePair                      -- the row above the target frame ('Where the rings show': frame / both)
+-- framePair: the row above the target frame ('Where the rings show': frame / split), declared above
 look = function(p)
   p.anchor:SetScale((db.size or 40) / 40); if p.curA then p.anchor:SetAlpha(p.curA * (db.alpha or 100) / 100) end
 end
@@ -464,7 +469,7 @@ local function fadeStep(p, now)
 end
 fader:SetScript('OnUpdate', function()
   local now, any = GetTime(), false
-  for p in pairs(fading) do if fadeStep(p, now) then fading[p] = nil else any = true end end
+  for p in pairs(fading) do if fadeStep(p, now) then fading[p] = nil; if not p.want then p.anchor:Hide() end else any = true end end   -- review #8
   if not any then fader:Hide() end
 end)
 fader:Hide()
@@ -473,9 +478,10 @@ local function setVis(p, show)
   if p.want == show then return end
   if p.want == nil then   -- first time: start from where it should be, no motion
     p.want, p.curA = show, show and 1 or 0
-    p.anchor:SetAlpha((show and 1 or 0) * (db and db.alpha or 100) / 100); return
+    p.anchor:SetAlpha((show and 1 or 0) * (db and db.alpha or 100) / 100); p.anchor:SetShown(show); return
   end
   p.fromA = p.curA or (p.want and 1 or 0); p.want = show; p.fadeAt = GetTime()
+  if show then p.anchor:Show() end
   fading[p] = true; fader:Show()
 end
 ns.ringsSetVis = setVis
@@ -492,7 +498,7 @@ visible = function()
   end
   if framePair then
     local show = (where == 'frame' or where == 'both' or where == 'split') and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
-    framePair.anchor:Show(); setVis(framePair, show)
+    setVis(framePair, show)
   end
 end
 ns.ringsVisible = visible
@@ -507,7 +513,7 @@ local function makeFramePair()
   look(p); visible()
 end
 
-local function attachAll() for i = 1, 40 do local u = 'nameplate' .. i; if UnitExists(u) then attach(u) end end end
+attachAll = function() for i = 1, 40 do local u = 'nameplate' .. i; if UnitExists(u) then attach(u) end end end
 local function releaseAll() local us = {}; for u in pairs(active) do us[#us + 1] = u end; for _, u in ipairs(us) do release(u) end end
 
 local filtersDirty = false
@@ -746,8 +752,11 @@ local function squaresNow()
   local mode = db.squares or 'notmine'
   local onPlayer = UnitExists('target') and UnitIsPlayer('target')
   local ok, err = pcall(function()
-    au:SetMaxDebuffs((mode == 'hide' or (mode == 'notmine' and not onPlayer)) and 0 or (MAX_TARGET_DEBUFFS or 16))
-    au:SetMaxBuffs(mode == 'hide' and 0 or (MAX_TARGET_BUFFS or 32))
+    -- review #3: only touch Blizzard's container when the value really changes (fewer chances to taint it)
+    local md = (mode == 'hide' or (mode == 'notmine' and not onPlayer)) and 0 or (MAX_TARGET_DEBUFFS or 16)
+    local mb = mode == 'hide' and 0 or (MAX_TARGET_BUFFS or 32)
+    if au:GetMaxDebuffs() ~= md then au:SetMaxDebuffs(md) end
+    if au:GetMaxBuffs() ~= mb then au:SetMaxBuffs(mb) end
   end)
   if not ok then ns.err('squares: ' .. tostring(err)) end
 end

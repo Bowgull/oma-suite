@@ -257,6 +257,7 @@ local function colorOf(name) return COLOR[name] or OTHER end
 -- then settling (340 ms); it lights 9 px of its neighbours. The green never moves. Its ring breathes the same instant.
 P.bites = {}                         -- DoT name -> { amt, at }
 local biteNow                        -- defined below; P.onHealth needs it (it was a nil global before)
+local cur                            -- the latest dots, maxv, hp (from update), drawn every frame (review #1: P.onHealth read a nil global)
 -- the animation clock: like GetTime, but a stall of the game (0.15-0.2 s seen in town) only moves it one frame, so a
 -- slide carries on from where it was instead of skipping ahead
 local function aclock() return P.clock or GetTime() end
@@ -265,6 +266,8 @@ local BEAT = { ['Corruption'] = 3, ['Curse of Agony'] = 2, ['Bane of Agony'] = 2
 -- the health just changed: if a DoT is due to tick right now (its beat, within 0.25 s), start its bite this frame
 function P.onHealth()
   if not cur or test then return end
+  -- review #2: any hit near a DoT's beat looked like its tick. In a group others hit all the time, so only predict solo.
+  if IsInGroup and IsInGroup() then return end
   local now = GetTime()
   local note = trace and { string.format('HEALTH %.3f', now - trace.t0) }
   for _, d in ipairs(cur.dots) do
@@ -273,6 +276,7 @@ function P.onHealth()
       local kk = beat and math.floor((now - d.appliedAt) / beat + .5)
       note[#note + 1] = d.name:sub(1, 3) .. (beat and string.format(' k%d off%.3f pk%d', kk, now - (d.appliedAt + kk * beat), P.predK[d.name] or 0) or ' noApplied') .. (d.provisional and ' P' or '')
     end
+    if beat and P.predApplied[d.name] ~= d.appliedAt then P.predApplied[d.name] = d.appliedAt; P.predK[d.name] = nil end   -- review #13: a recast starts the count again
     if beat and not d.provisional then
       local k = math.floor((now - d.appliedAt) / beat + .5)
       if k >= 1 and math.abs(now - (d.appliedAt + k * beat)) < .25 and (P.predK[d.name] or 0) < k then
@@ -290,6 +294,7 @@ function P.onHealth()
   if note then trace.rows[#trace.rows + 1] = table.concat(note, ' | ') end
 end
 P.predK = {}
+P.predApplied = {}
 P.landAt = {}
 P.landLook = {}
 P.shownBy = {}               -- DoT name -> its piece's size on screen
@@ -320,7 +325,6 @@ biteNow = function(name, now)    -- what is still left of a bite (0 when done), 
   return left, flare
 end
 
-local cur                            -- the latest dots, maxv, hp (from update), drawn every frame
 function ns.startTrace() trace = { t0 = GetTime(), untilT = GetTime() + 150, rows = {} }; OmaDoomedDB.trace = trace.rows; ns.say('tracing 150 s (saved as it goes)') end
 local traceRow
 local function traceFrame(now) if trace then local ok, e = pcall(traceRow, now); if not ok then OmaDoomedDB.traceErr = tostring(e); trace = nil end end end
@@ -420,6 +424,7 @@ local function render()
         s.lift:SetVertexColor(c[1] * .7 * k, c[2] * .7 * k, c[3] * .7 * k)
       end
       local tl = ns.db.tick or 'ember'
+      if P.bites[d.name] and P.bites[d.name].quiet then tl = 'plain' end   -- removed early: no light
       s.biteK = 1
       for k = 1, 5 do s.parts[k]:Hide() end
       if bl > 0 then
@@ -490,7 +495,7 @@ local function render()
   local far = order[#order] or segs[1]
   shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
   -- the skull: hidden when the mob already carries a real raid mark (that one wins)
-  local total = 0; for _, d in ipairs(dots) do total = total + d.damage end
+  local total = 0; for _, d in ipairs(dots) do if not d.provisional and not d.landed then total = total + d.damage end end   -- review #4: only confirmed DoTs make the skull
   if GetRaidTargetIndex('target') or ns.db.skull == false then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(total) end
 end
 
@@ -506,8 +511,12 @@ local function draw(dots, maxv, hp)
       local pr = P.pred[name]
       local remaining = (last[name] or 0) - (pr and pr.est or 0)
       if remaining > .5 then
+        -- review #5: only a DoT that was about to end really ticked its last; one removed early just slides out quietly
+        local endsIn = P.exp and P.exp[name] and (P.exp[name] - now) or 0
+        local natural = endsIn < (BEAT[name] or 3) * 1.2
         local b = P.bites[name]
-        if b then b.amt = b.amt + remaining else P.bites[name] = { amt = remaining, at = aclock() }; if ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', name) end end
+        if b then b.amt = b.amt + remaining; if not natural then b.quiet = true end
+        else P.bites[name] = { amt = remaining, at = aclock(), quiet = not natural }; if natural and ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', name) end end
       end
       P.pred[name] = nil; last[name] = 0
       if P.bites[name] and biteNow(name, aclock()) > 0 then
@@ -538,11 +547,10 @@ local function draw(dots, maxv, hp)
   end
   for name, pr in pairs(P.pred) do if now - pr.at >= 1 then P.pred[name] = nil end end   -- not a tick after all
   cur = { dots = dots, maxv = maxv, hp = hp }
-  render()
 end
 
 local function update()
-  if not ns.db or not ns.db.doomed then cur = nil; return hide() end
+  if not ns.db or not ns.db.doomed or P.off then cur = nil; return hide() end
   if test then
     if not UnitExists('target') then cur = nil; return hide() end
     local now = GetTime()
@@ -571,7 +579,8 @@ local function update()
     return draw(dots, m, hp)
   end
   if not UnitExists('target') or UnitIsDead('target') or not (DoesItDie and DoesItDie.GetDoTs) then cur = nil; return hide() end
-  local list = DoesItDie.GetDoTs('target')
+  local raw, list, seenName = DoesItDie.GetDoTs('target'), {}, {}
+  for _, e in ipairs(raw) do if e.name and not seenName[e.name] then seenName[e.name] = true; list[#list + 1] = e end end   -- a copy (don't sort DoesItDie's own table); one piece per name
   table.sort(list, function(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end)   -- runs out first = nearest the green
   local dots = {}
   local cName, _, _, cStart, cEnd = UnitCastingInfo('player')
@@ -583,7 +592,10 @@ local function update()
   end end
   -- DoesItDie leaves a fresh DoT out until its first tick, so a first cast showed nothing (Joshua: "i didnt see precast").
   -- While you cast a DoT it doesn't list, show it at the size it last had when fresh.
-  if cName and COLOR[cName] and cStart and cEnd and P.fullBy[cName] then
+  -- review #4: a cast belongs to the mob you were targeting when it started (nameplate frames are never secret)
+  local here = C_NamePlate.GetNamePlateForUnit('target', false) or false
+  local sameMob = P.castPlate == nil or P.castPlate == here
+  if cName and COLOR[cName] and cStart and cEnd and P.fullBy[cName] and sameMob then
     local listed = false; for _, d in ipairs(dots) do if d.name == cName then listed = true end end
     if not listed then dots[#dots + 1] = { name = cName, damage = P.fullBy[cName], expires = cEnd / 1000 + 30, provisional = true, castStart = cStart / 1000, castEnd = cEnd / 1000 } end
   end
@@ -592,10 +604,10 @@ local function update()
   if ld and not cName then
     local listed = false; for _, d in ipairs(dots) do if d.name == ld.name then listed = true end end
     if listed or GetTime() - ld.at > 4.5 then P.landed = nil
-    else dots[#dots + 1] = { name = ld.name, damage = ld.dmg, expires = ld.at + 30 } end
+    elseif ld.plate == nil or ld.plate == here then dots[#dots + 1] = { name = ld.name, damage = ld.dmg, expires = ld.at + 30, landed = true } end
   end
   local ok, err = pcall(draw, dots, UnitHealthMax('target'), UnitHealth('target'))
-  if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide() end
+  if not ok then ns.err('draw: ' .. tostring(err)); P.off = true; hide() end   -- review #12: off for this session only
 end
 
 -- DoesItDie's own box and icon stay off while Doomed is on, and come back when it's off
@@ -614,20 +626,27 @@ function P.start()
   if not (DoesItDie and DoesItDie.GetDoTs) then ns.say('Doomed needs DoesItDie for now (its maths).'); return end
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
-  ev:RegisterUnitEvent('UNIT_SPELLCAST_SUCCEEDED', 'player')
+  ev:RegisterUnitEvent('UNIT_SPELLCAST_SUCCEEDED', 'player'); ev:RegisterUnitEvent('UNIT_SPELLCAST_START', 'player')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
   local onEv
   ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEv, ...); if not ok then ns.err('bar event: ' .. tostring(err)) end end)
   onEv = (function(_, e, unit, _, spellID)
     if e == 'UNIT_SPELLCAST_SUCCEEDED' then
       local n = spellID and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
-      if n and COLOR[n] and P.fullBy[n] then P.landed = { name = n, at = GetTime(), dmg = P.fullBy[n] } end
+      if n and COLOR[n] and P.fullBy[n] then P.landed = { name = n, at = GetTime(), dmg = P.fullBy[n], plate = P.castPlate } end
       return
     end
-    if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); wipe(P.shownBy); wipe(P.wasPre); wipe(P.slotOf); P.landed = nil; for _, s in ipairs(segs) do s.owner = nil end; P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
+    if e == 'UNIT_SPELLCAST_START' then P.castPlate = C_NamePlate.GetNamePlateForUnit('target', false) or false; return end
+    if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); wipe(P.shownBy); wipe(P.wasPre); wipe(P.slotOf); P.landed = nil; for _, s in ipairs(segs) do s.owner = nil end; P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end; P.dirty = true; update(); return end; P.dirty = true end)
   local acc = 0
-  ev:SetScript('OnUpdate', function(_, dt) P.dt = math.min(dt, .05); P.clock = aclock() + math.min(dt, .05); local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
-  if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
+  ev:SetScript('OnUpdate', function(_, dt)
+    P.dt = math.min(dt, .05); P.clock = aclock() + math.min(dt, .05)
+    acc = acc + dt
+    if P.dirty or acc >= .1 then acc = 0; P.dirty = false; update() end   -- review #6: once a frame at most, however busy
+    local ok, err = pcall(render)
+    if not ok then ns.err('render: ' .. tostring(err)); P.off = true; hide(); cur = nil end
+  end)
+  if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() P.dirty = true end) end
 end
 
 -- /omadoomed            on/off
