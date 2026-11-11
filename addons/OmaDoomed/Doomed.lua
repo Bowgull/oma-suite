@@ -103,6 +103,12 @@ local function build()
   P.newMark = newMark
   P.E = { [0] = newMark() }   -- E[0]: the far end of the pieces (the health's end plus any bite still closing)
   local art = CreateFrame('Frame', nil, clip); art:SetAllPoints(clip); art:SetFrameLevel(clip:GetFrameLevel() + 2)
+  -- the health bar's own shape, as a mask: anything striped stays inside it (2026-11-11: the stripes ran onto the
+  -- name banner and the mana bar)
+  if art.CreateMaskTexture then
+    P.barMask = art:CreateMaskTexture(); P.barMask:SetAllPoints(hb)
+    if atlasOK(FILL) then P.barMask:SetAtlas(FILL) else P.barMask:SetTexture('Interface\\TargetingFrame\\UI-StatusBar', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE') end
+  end
   P.lost = art:CreateTexture(nil, 'ARTWORK', nil, 0); barTex(P.lost); P.lost:SetVertexColor(.14, .09, .05); P.lost:Hide()
   P.lost:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); P.lost:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')   -- test only: the empty bar
   for i = 1, MAX do
@@ -126,6 +132,11 @@ local function build()
     -- the new edge glows bright in the DoT's colour, holds 120 ms, then drains over 380 ms.
     s.gmark = newMark(); s.gedge = s.gmark.f
     s.ghost = art:CreateTexture(nil, 'ARTWORK', nil, 5); barTex(s.ghost); s.ghost:Hide()   -- the bite: solid, its own colour
+    -- while you cast it (DoesItDie marks it provisional): Blizzard's own shield stripes and shield edge glow, tinted
+    s.pre = art:CreateTexture(nil, 'ARTWORK', nil, 4); s.pre:SetTexture('Interface/RaidFrame/Shield-Overlay', 'REPEAT', 'REPEAT')
+    s.pre:SetHorizTile(true); s.pre:SetVertTile(true); s.pre:SetDesaturated(true); s.pre:Hide()   -- the art is shield-blue: grey it, then tint
+    s.preGlow = art:CreateTexture(nil, 'OVERLAY', nil, 3); s.preGlow:SetTexture('Interface/RaidFrame/Shield-Overshield'); s.preGlow:SetBlendMode('ADD'); s.preGlow:SetDesaturated(true); s.preGlow:Hide()
+    if P.barMask then s.pre:AddMaskTexture(P.barMask); s.preGlow:AddMaskTexture(P.barMask) end
     -- the light it casts: 9 screen px onto each neighbour, fading out (left fade, core, right fade), the bar's own shape
     s.spillL = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillL); s.spillL:SetBlendMode('ADD'); s.spillL:Hide()
     s.spillC = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillC); s.spillC:SetBlendMode('ADD'); s.spillC:Hide()
@@ -134,9 +145,10 @@ local function build()
   end
   for i, s in ipairs(segs) do
     local right, rp = (i == 1) and P.E[0].f or segs[i - 1].edge, 'BOTTOMLEFT'
-    for _, t in ipairs({ s.base, s.lift, s.flash }) do
+    for _, t in ipairs({ s.base, s.lift, s.flash, s.pre }) do
       t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, rp)
     end
+    s.preGlow:SetPoint('TOPLEFT', s.edge, 'TOPLEFT', -px(3, hb), 0); s.preGlow:SetPoint('BOTTOMLEFT', s.edge, 'BOTTOMLEFT', -px(3, hb), 0); s.preGlow:SetWidth(px(8, hb))
     -- the bite sits at this piece's end nearest the bar's end: from the bite bar's edge to the previous piece's edge
     s.ghost:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); s.ghost:SetPoint('BOTTOMRIGHT', right, rp)
     local sp = px(9, hb)
@@ -224,6 +236,7 @@ function P.onHealth()
   end
 end
 P.predK = {}
+P.landAt = {}
 local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
 local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
@@ -276,8 +289,20 @@ local function render()
       local lowNow = left and left > 0 and left <= LOW
       local c = colorOf(d.name)
       if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
-      s.base:SetVertexColor(c[1] * 1.15, c[2] * 1.15, c[3] * 1.15)
-      s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
+      local tn = RINGTONE[d.name] or c
+      if d.provisional and (test or ns.db.doomedPrecast) then   -- still being cast (test only until Joshua picks a look): dark underneath, Blizzard's stripes and edge glow in its ring colour
+        s.base:SetVertexColor(c[1] * .6, c[2] * .6, c[3] * .6); s.lift:SetVertexColor(0, 0, 0)
+        s.pre:SetVertexColor(tn[1], tn[2], tn[3], 1); s.pre:Show()
+        s.preGlow:SetVertexColor(tn[1], tn[2], tn[3], .9); s.preGlow:Show()
+        s.wasPre = d.name
+      else
+        if s.wasPre == d.name then P.landAt[d.name] = now end; s.wasPre = nil
+        s.pre:Hide(); s.preGlow:Hide()
+        local la = P.landAt[d.name] and (now - P.landAt[d.name]) or 9   -- it landed: the stripes fill in with one soft light
+        local lf = la < .5 and math.exp(-la / .14) or 0
+        s.base:SetVertexColor(math.min(1, c[1] * 1.15 + tn[1] * .5 * lf), math.min(1, c[2] * 1.15 + tn[2] * .5 * lf), math.min(1, c[3] * 1.15 + tn[3] * .5 * lf))
+        s.lift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7)
+      end
       if bl > 0 then
         local tone = lowNow and RINGGOLD or (RINGTONE[d.name] or c)
         local hot = mix(colorOf(d.name), { math.min(1, tone[1] * 1.1), math.min(1, tone[2] * 1.1), math.min(1, tone[3] * 1.1) }, .6)
@@ -295,7 +320,7 @@ local function render()
         s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
       end
     else
-      s.shown = run; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
+      s.shown = run; s.pre:Hide(); s.preGlow:Hide(); s.wasPre = nil; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
     end
     local on = d and true or false
     local mode = ns.db.doomedJoin or 'crease'
@@ -326,6 +351,25 @@ end
 local function draw(dots, maxv, hp)
   if not build() then return end
   local now = GetTime()
+  -- 2026-11-11 'when a DoT ends there's still a snap': the last tick made it vanish from the list, so its piece and
+  -- the slide went with it. Now it stays in its old place, empty, while that last bite glides shut.
+  local here = {}; for _, d in ipairs(dots) do here[d.name] = true end
+  for idx, name in ipairs(P.order or {}) do
+    if not here[name] then
+      local pr = P.pred[name]
+      local remaining = (last[name] or 0) - (pr and pr.est or 0)
+      if remaining > .5 then
+        local b = P.bites[name]
+        if b then b.amt = b.amt + remaining else P.bites[name] = { amt = remaining, at = now }; if ns.ringsPulse then pcall(ns.ringsPulse, 'target', name) end end
+      end
+      P.pred[name] = nil; last[name] = 0
+      if P.bites[name] and biteNow(name, now) > 0 then
+        table.insert(dots, math.min(idx, #dots + 1), { name = name, damage = 0, expires = P.exp and P.exp[name], ending = true })
+      else last[name] = nil end
+    end
+  end
+  P.order, P.exp = {}, {}
+  for i, d in ipairs(dots) do P.order[i] = d.name; P.exp[d.name] = d.expires end
   local drop = false
   for _, d in ipairs(dots) do if last[d.name] and d.damage < last[d.name] - .5 then drop = true end end
   for _, d in ipairs(dots) do
@@ -354,21 +398,25 @@ local function update()
   if test then
     if not UnitExists('target') then cur = nil; return hide() end
     local now = GetTime()
-    if not test.t0 or now - test.t0 > 27 then   -- sheet 30's numbers, from DoesItDie's log: 198-health mob at 140
+    if not test.t0 or now - test.t0 > 28 then   -- sheet 30's numbers, from DoesItDie's log: 198-health mob at 140
       test.t0 = now
       local ag = {}; for k = 1, 12 do ag[k] = 6.1 * (k <= 4 and .5 or (k <= 8 and 1 or 1.5)) end
-      test.dots = { { n = 'Corruption', ticks = { 10.25, 10.25, 10.25, 10.25 }, every = 3, first = 3, dur = 12 },
-        { n = 'Immolate', ticks = { 3, 3, 3, 3, 3 }, every = 3, first = 3, dur = 15 },
-        { n = 'Curse of Agony', ticks = ag, every = 2, first = 2, dur = 24 } }
+      -- sheet 35: Corruption cast 0-2 s, Bane of Agony at 2.4 s, Immolate cast 2.4-4.4 s
+      test.dots = { { n = 'Corruption', ticks = { 10.25, 10.25, 10.25, 10.25 }, every = 3, cast = { 0, 2 }, dur = 12 },
+        { n = 'Immolate', ticks = { 3, 3, 3, 3, 3 }, every = 3, cast = { 2.4, 4.4 }, dur = 15 },
+        { n = 'Curse of Agony', ticks = ag, every = 2, cast = { 2.4, 2.4 }, dur = 24 } }
     end
     local t = now - test.t0
     local m, hp = 198, 140
     local dots = {}
     for _, d in ipairs(test.dots) do
-      local done, left = 0, 0
-      for k, v in ipairs(d.ticks) do if t >= d.first + (k - 1) * d.every then done = done + v else left = left + v end end
-      hp = hp - done
-      if left > 0 then dots[#dots + 1] = { name = d.n, damage = left, expires = test.t0 + d.dur } end
+      if t >= d.cast[1] then
+        local land = d.cast[2]; local first = land + d.every
+        local done, left = 0, 0
+        for k, v in ipairs(d.ticks) do if t >= first + (k - 1) * d.every then done = done + v else left = left + v end end
+        hp = hp - done
+        if left > 0 then dots[#dots + 1] = { name = d.n, damage = left, expires = test.t0 + land + d.dur, provisional = t < land } end
+      end
     end
     table.sort(dots, function(a, b) return a.expires < b.expires end)
     if build() then P.lost:Show(); P.hangOn(P.baseEdge) end   -- the empty bar past the fake health (P.base carries its end)
@@ -400,7 +448,7 @@ function P.start()
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
-  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
+  ev:SetScript('OnEvent', function(_, e) if e == 'UNIT_HEALTH' then pcall(P.onHealth) end; if e == 'PLAYER_TARGET_CHANGED' then wipe(last); wipe(P.bites); cur = nil; wipe(P.pred); wipe(P.predK); P.order = nil; for _, s in ipairs(segs) do s.shown = 0 end end; update() end)
   local acc = 0
   ev:SetScript('OnUpdate', function(_, dt) P.dt = dt; local ok, err = pcall(render); if not ok then ns.say('Doomed stopped: ' .. tostring(err)); ns.db.doomed = false; hide(); cur = nil end; acc = acc + dt; if acc >= .1 then acc = 0; update() end end)
   if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() update() end) end
