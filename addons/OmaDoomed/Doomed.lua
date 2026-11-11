@@ -32,6 +32,7 @@ local segs = {}
 local win, longBar, mark
 local last = {}                      -- damage per DoT name last time (a drop = a tick: flash)
 local test
+local trace                          -- /omadoomed trace: 30 s of numbers, health changes and tick drops (saved on /reload)
 local JOIN = { crease = 4, fade = 6, thin = 2, none = 0 }   -- sheet 25: 'crease' = hard join + soft dark crease (Blizzard's way)
 
 local function atlasOK(n) return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(n) ~= nil end
@@ -136,11 +137,14 @@ local function build()
     s.pre = art:CreateTexture(nil, 'ARTWORK', nil, 4); s.pre:SetTexture('Interface/RaidFrame/Shield-Overlay', 'REPEAT', 'REPEAT')
     s.pre:SetHorizTile(true); s.pre:SetVertTile(true); s.pre:SetDesaturated(true); s.pre:SetBlendMode('ADD'); s.pre:Hide()   -- the art is shield-blue: grey it, then tint
     s.preGlow = art:CreateTexture(nil, 'OVERLAY', nil, 3); s.preGlow:SetTexture('Interface/RaidFrame/Shield-Overshield'); s.preGlow:SetBlendMode('ADD'); s.preGlow:SetDesaturated(true); s.preGlow:Hide()
-    if P.barMask then s.pre:AddMaskTexture(P.barMask); s.preGlow:AddMaskTexture(P.barMask) end
     -- the light it casts: 9 screen px onto each neighbour, fading out (left fade, core, right fade), the bar's own shape
     s.spillL = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillL); s.spillL:SetBlendMode('ADD'); s.spillL:Hide()
     s.spillC = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillC); s.spillC:SetBlendMode('ADD'); s.spillC:Hide()
     s.spillR = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillR); s.spillR:SetBlendMode('ADD'); s.spillR:Hide()
+    -- every texture of a piece keeps to the health bar's own shape (2026-11-11: Joshua saw colour outside the bar once)
+    if P.barMask then
+      for _, t in ipairs({ s.base, s.lift, s.flash, s.join, s.joinLift, s.creaseL, s.creaseR, s.ghost, s.spillL, s.spillC, s.spillR, s.pre, s.preGlow }) do t:AddMaskTexture(P.barMask) end
+    end
     segs[i] = s
   end
   for i, s in ipairs(segs) do
@@ -168,8 +172,11 @@ local function build()
     end
   end
   function P.reanchor(s, right)
-    for _, t in ipairs({ s.base, s.lift, s.flash, s.pre }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT') end
-    for _, t in ipairs({ s.ghost, s.spillC }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT') end
+    -- the piece touching the health's end runs 1 screen px past it: Blizzard's green snaps to whole pixels and ours
+    -- don't, so a 1 px sliver of green showed beside it (Joshua, 2026-11-11: 'a tiny bit of green peeking out')
+    local dx = (right == P.E[0].f) and px(1, hb) or 0
+    for _, t in ipairs({ s.base, s.lift, s.flash, s.pre }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
+    for _, t in ipairs({ s.ghost, s.spillC }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
     s.spillR:ClearAllPoints(); s.spillR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, 'BOTTOMLEFT'); s.spillR:SetWidth(px(9, hb))
     for _, t in ipairs({ s.join, s.joinLift }) do t:ClearAllPoints(); t:SetPoint('TOP', right, 'TOPLEFT'); t:SetPoint('BOTTOM', right, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
     s.creaseL:ClearAllPoints(); s.creaseL:SetPoint('TOPRIGHT', right, 'TOPLEFT'); s.creaseL:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT'); s.creaseL:SetWidth(px(2, hb))
@@ -239,8 +246,13 @@ local BEAT = { ['Corruption'] = 3, ['Curse of Agony'] = 2, ['Bane of Agony'] = 2
 function P.onHealth()
   if not cur or test then return end
   local now = GetTime()
+  local note = trace and { string.format('HEALTH %.3f', now - trace.t0) }
   for _, d in ipairs(cur.dots) do
     local beat = d.appliedAt and (BEAT[d.name] or 3)
+    if note then
+      local kk = beat and math.floor((now - d.appliedAt) / beat + .5)
+      note[#note + 1] = d.name:sub(1, 3) .. (beat and string.format(' k%d off%.3f pk%d', kk, now - (d.appliedAt + kk * beat), P.predK[d.name] or 0) or ' noApplied') .. (d.provisional and ' P' or '')
+    end
     if beat and not d.provisional then
       local k = math.floor((now - d.appliedAt) / beat + .5)
       if k >= 1 and math.abs(now - (d.appliedAt + k * beat)) < .25 and (P.predK[d.name] or 0) < k then
@@ -251,9 +263,11 @@ function P.onHealth()
         P.bites[d.name] = { amt = was + est, at = aclock() }
         P.pred[d.name] = { est = est, at = now }
         if ns.ringsPulse then pcall(ns.ringsPulse, 'target', d.name) end
+        if note then note[#note + 1] = 'PREDICTED ' .. d.name:sub(1, 3) .. string.format(' est%.1f', est) end
       end
     end
   end
+  if note then trace.rows[#trace.rows + 1] = table.concat(note, ' | ') end
 end
 P.predK = {}
 P.landAt = {}
@@ -282,8 +296,7 @@ biteNow = function(name, now)    -- what is still left of a bite (0 when done), 
 end
 
 local cur                            -- the latest dots, maxv, hp (from update), drawn every frame
-local trace                          -- /omadoomed trace: per-frame positions for 4 s (saved on /reload)
-function ns.startTrace() trace = { t0 = GetTime(), untilT = GetTime() + 30, rows = {} }; ns.say('tracing 30 s') end
+function ns.startTrace() trace = { t0 = GetTime(), untilT = GetTime() + 150, rows = {} }; OmaDoomedDB.trace = trace.rows; ns.say('tracing 150 s (saved as it goes)') end
 local traceRow
 local function traceFrame(now) if trace then local ok, e = pcall(traceRow, now); if not ok then OmaDoomedDB.traceErr = tostring(e); trace = nil end end end
 traceRow = function(now)
@@ -340,7 +353,7 @@ local function render()
       local c = colorOf(d.name)
       if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
       local tn = RINGTONE[d.name] or c
-      if d.provisional and (test or ns.db.doomedPrecast) then   -- still being cast (test only until Joshua picks a look): dark underneath, Blizzard's stripes and edge glow in its ring colour
+      if d.provisional and ns.db.doomedPrecast ~= false then   -- still being cast (test only until Joshua picks a look): dark underneath, Blizzard's stripes and edge glow in its ring colour
         s.base:SetVertexColor(c[1] * .6, c[2] * .6, c[3] * .6); s.lift:SetVertexColor(0, 0, 0)
         s.pre:SetVertexColor(tn[1], tn[2], tn[3], 1); s.pre:Show()
         s.preGlow:SetVertexColor(tn[1], tn[2], tn[3], .6); s.preGlow:Show()
@@ -431,6 +444,7 @@ local function draw(dots, maxv, hp)
     if last[d.name] and d.damage < last[d.name] - .5 then
       local real = last[d.name] - d.damage
       local pr = P.pred[d.name]
+      if trace then trace.rows[#trace.rows + 1] = string.format('DROP %.3f %s real%.1f %s', now - trace.t0, d.name:sub(1, 3), real, pr and string.format('pred est%.1f %.3fs ago', pr.est, now - pr.at) or 'unpredicted') end
       if pr and now - pr.at < 1 then
         -- already showing: this tick was predicted on its beat. Only the size is corrected (a small change).
         local b = P.bites[d.name]; if b then b.amt = math.max(0, b.amt + real - pr.est) end
