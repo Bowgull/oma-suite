@@ -1,4 +1,4 @@
--- Omashu Pad: Bujuju's warlock controller layout (WoW Forever gamepad UI), Affliction levelling.
+-- OmaPad: Bujuju's warlock controller layout (WoW Forever gamepad UI), Affliction levelling.
 --
 -- The gamepad bars have 3 sets (LB+RB + D-pad left/right), 28 slots each, read from the game 2026-11-09:
 --   set 1 = 181-208, set 2 = 209-236, set 3 = 237-264. In each set: no trigger 4 (D-pad), then LT, RT and
@@ -108,7 +108,7 @@ local LAYOUT = {
   -- SET 3 otherwise free for talents and anything later.
 }
 
-OmashuPadDB = OmashuPadDB or {}
+OmaPadDB = OmaPadDB or {}
 local function say(m) print('|cffe8c860Omashu:|r ' .. m) end
 local spellName = function(id) return (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)) or (GetSpellInfo and GetSpellInfo(id)) end
 local function knownId(name)
@@ -127,7 +127,7 @@ local function inList(list, v) if type(list) ~= 'table' then return list == v en
 -- Smart food and water (Joshua, 2026-11-09). Scan the bags for anything that is Food & Drink, read what it restores
 -- from its tooltip, and pick: food = cooked Well Fed food first (+5% kill XP on Forever), then the most health;
 -- drink = Well Fed smoothies first, then the most mana. Only things usable at your level. If no tooltip can be read,
--- the fixed vendor lists above still work. Every scan is written to OmashuPadDB.foodScan for checking.
+-- the fixed vendor lists above still work. Every scan is written to OmaPadDB.foodScan for checking.
 local FOOD_CLASS, FOOD_SUB = 0, 5                                        -- Consumable, Food & Drink
 local scan, scanAt = nil, 0
 local function tipLines(bag, slot)
@@ -163,9 +163,9 @@ local function scanBags()
     end
   end
   scan, scanAt = found, GetTime()
-  OmashuPadDB.foodScan = {}
+  OmaPadDB.foodScan = {}
   for _, f in ipairs(found) do
-    OmashuPadDB.foodScan[#OmashuPadDB.foodScan + 1] = ('%s (%d): health %d, mana %d%s, level %d%s%s'):format(f.name, f.id, f.hp, f.mana,
+    OmaPadDB.foodScan[#OmaPadDB.foodScan + 1] = ('%s (%d): health %d, mana %d%s, level %d%s%s'):format(f.name, f.id, f.hp, f.mana,
       f.fed and ', Well Fed' or '', f.minLevel, f.usable and '' or ' TOO HIGH', f.tip and '' or ', no tooltip')
   end
   return found
@@ -296,7 +296,7 @@ end
 local function apply()
   if InCombatLockdown() then return end
   makeMacros()
-  local db = OmashuPadDB
+  local db = OmaPadDB
   db.mine = db.mine or {}; db.his = db.his or {}
   -- One-time: older versions stored names, and everything on 181-208 was the add-on's. Adopt it.
   if (db.rulesV or 0) < 1 then
@@ -326,7 +326,7 @@ local function apply()
 end
 
 -- /ompad sim: replays levelling from 7 to 41 on a COPY of the bars (nothing on screen changes) and checks each step:
--- no duplicates, every known demon reachable once, Joshua's own buttons untouched. Results in OmashuPadDB.sim.
+-- no duplicates, every known demon reachable once, Joshua's own buttons untouched. Results in OmaPadDB.sim.
 local SIM_STEPS = {
   { 7,  { 'Shadow Bolt', 'Immolate', 'Corruption', 'Life Tap', 'Summon Imp', 'Demon Skin', 'Shoot', 'Will of the Forsaken', 'Cannibalize', 'Tailoring', 'Find Minerals' } },
   { 10, { 'Bane of Agony', 'Fear', 'Curse of Weakness', 'Drain Soul', 'Summon Voidwalker', 'Create Healthstone' } },
@@ -338,10 +338,10 @@ local SIM_STEPS = {
 local function simulate()
   local bars, st = {}, { mine = {}, his = {} }
   for s = PAD_FIRST, PAD_LAST do bars[s] = sigOf(s) end
-  for s, v in pairs(OmashuPadDB.mine or {}) do st.mine[s] = v end
-  for s, v in pairs(OmashuPadDB.his or {}) do st.his[s] = v end
+  for s, v in pairs(OmaPadDB.mine or {}) do st.mine[s] = v end
+  for s, v in pairs(OmaPadDB.his or {}) do st.his[s] = v end
   local board = { get = function(s) return bars[s] end, put = function(s, sig) bars[s] = sig; return true end, clear = function(s) bars[s] = nil end }
-  if (OmashuPadDB.layoutV or 0) ~= V then for s in pairs(st.mine) do bars[s] = nil; st.mine[s] = nil end end
+  if (OmaPadDB.layoutV or 0) ~= V then for s in pairs(st.mine) do bars[s] = nil; st.mine[s] = nil end end
   local known, report, ok = {}, {}, true
   local DEMONS = { 'Summon Imp', 'Summon Voidwalker', 'Summon Sayaad', 'Summon Felhunter' }
   for _, step in ipairs(SIM_STEPS) do
@@ -366,7 +366,7 @@ local function simulate()
       tostring(bars[slotOf(1, 'RT', U)]), tostring(bars[slotOf(2, 'RT', U)]), table.concat(demons, ' '), #dups == 0 and 'none' or table.concat(dups, '; '),
       hisOk and 'kept' or 'TOUCHED')
   end
-  OmashuPadDB.sim = { at = date('%Y-%m-%d %H:%M:%S'), pass = ok, steps = report }
+  OmaPadDB.sim = { at = date('%Y-%m-%d %H:%M:%S'), pass = ok, steps = report }
   say('simulation ' .. (ok and '|cff60ff60passed|r' or '|cffff6060FAILED|r') .. ' (' .. #report .. ' steps, details saved)')
 end
 
@@ -383,7 +383,7 @@ end
 -- Quests stay tracked (Joshua wants them, 2026-11-09); only the side panel is kept off the screen.
 -- The quest log (LB+RB, D-pad up) still shows them. Undoes the earlier "tracking off" (settings v1-v2).
 local function settings()
-  local db = OmashuPadDB
+  local db = OmaPadDB
   if (db.settingsV or 0) < 4 then
     C_CVar.SetCVar('autoQuestWatch', '1')
     local n, ok, notes = C_QuestLog.GetNumQuestLogEntries(), 0, {}
@@ -400,7 +400,7 @@ local function settings()
   end
 end
 local function hideTracker()
-  if C_QuestLog and C_QuestLog.GetNumQuestWatches then OmashuPadDB.tracked = C_QuestLog.GetNumQuestWatches() end   -- for checking
+  if C_QuestLog and C_QuestLog.GetNumQuestWatches then OmaPadDB.tracked = C_QuestLog.GetNumQuestWatches() end   -- for checking
   local f = ObjectiveTrackerFrame or WatchFrame; if not f then return end
   f:SetAlpha(0)
   if not f.omashuHooked then f.omashuHooked = true; f:HookScript('OnShow', function(s) s:SetAlpha(0) end) end
@@ -454,13 +454,13 @@ local function memory()
     local n = C_AddOns.GetAddOnInfo(i)
     if C_AddOns.IsAddOnLoaded(i) then local kb = GetAddOnMemoryUsage(i); m[n] = math.floor(kb); total = total + kb end
   end
-  m.TOTAL = math.floor(total); OmashuPadDB.memory = m
+  m.TOTAL = math.floor(total); OmaPadDB.memory = m
 end
 
 
 -- one-off probe of RestedXP's window (its own frames only)
 local function rxpProbe()
-  local f = _G.RXPFrame; if not f then OmashuPadDB.rxpProbe = 'no frame'; return end
+  local f = _G.RXPFrame; if not f then OmaPadDB.rxpProbe = 'no frame'; return end
   local out, H = {}, UIParent:GetHeight()
   local function px(top, s) return math.floor(1080 - top * s * 1080 / 768 + .5) end
   local function row(name, fr)
@@ -477,7 +477,7 @@ local function rxpProbe()
     end
   end
   walk(f, 1, 'RXPFrame')
-  OmashuPadDB.rxpProbe = out
+  OmaPadDB.rxpProbe = out
 end
 -- RestedXP auto-fit (Joshua, 2026-11-09): its bottom bar is pinned and the steps stack upward, so a long step group
 -- can climb into the shard gems. Twice a second: if the topmost step is above LIMIT px from the screen top, shrink the
@@ -508,7 +508,7 @@ local function rxpFit()
   local u = UIParent:GetEffectiveScale(); local e = f:GetEffectiveScale()
   local l, b = f:GetLeft() * e / u, f:GetBottom() * e / u
   f:SetScale(want); f:ClearAllPoints(); f:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', l / want, b / want)
-  OmashuPadDB.rxpFit = ('%s top %dpx -> scale %.2f (base %.2f)'):format(date('%H:%M:%S'), top, want, fit.base)
+  OmaPadDB.rxpFit = ('%s top %dpx -> scale %.2f (base %.2f)'):format(date('%H:%M:%S'), top, want, fit.base)
 end
 local fitTicker = CreateFrame('Frame'); local acc = 0
 fitTicker:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc < .5 then return end; acc = 0; pcall(rxpFit) end)
@@ -549,10 +549,10 @@ SlashCmdList.OMASHUPAD = function(m)
     for _, md in ipairs(mods) do for _, n in ipairs(names) do local a = GetBindingAction(md .. n); if a and a ~= '' then out[md .. n] = a end end end
     local cv = {}
     for _, c in ipairs({ 'GamePadEmulateShift', 'GamePadEmulateCtrl', 'GamePadEmulateAlt', 'GamePadEnable' }) do cv[c] = C_CVar.GetCVar(c) end
-    OmashuPadDB.keys, OmashuPadDB.keyCVars = out, cv
+    OmaPadDB.keys, OmaPadDB.keyCVars = out, cv
     say('pad keys saved; /reload to write them to the file (an add-on can\'t reload by itself).'); return
   end
-  if m == 'mine' then OmashuPadDB.his = {}; OmashuPadDB.rulesV = 0 end
+  if m == 'mine' then OmaPadDB.his = {}; OmaPadDB.rulesV = 0 end
   apply()
 end
 
@@ -576,20 +576,20 @@ end)
 
 -- ---------- Selling junk and repairing: Leatrix does both (Joshua 2026-11-10: "Yes for everything else") ----------
 -- One seller only: Leatrix's "sell junk" on, RestedXP's off, so nothing sells twice; Leatrix "repair" on.
--- Done once (OmashuPadDB.vendorV); RestedXP reads its setting at each vendor visit, Leatrix after the next reload.
+-- Done once (OmaPadDB.vendorV); RestedXP reads its setting at each vendor visit, Leatrix after the next reload.
 -- After this the switches are his: changing them in Leatrix or RestedXP is never undone.
 local VENDOR_V = 1
 local vendorEv = CreateFrame('Frame'); vendorEv:RegisterEvent('PLAYER_LOGIN')
 vendorEv:SetScript('OnEvent', function()
-  OmashuPadDB = OmashuPadDB or {}
-  if (OmashuPadDB.vendorV or 0) >= VENDOR_V then return end
+  OmaPadDB = OmaPadDB or {}
+  if (OmaPadDB.vendorV or 0) >= VENDOR_V then return end
   local done = {}
   if type(LeaPlusDB) == 'table' then LeaPlusDB.AutoSellJunk = 'On'; LeaPlusDB.AutoRepairGear = 'On'; done[#done + 1] = 'Leatrix sells junk and repairs' end
   if type(RXPSettings) == 'table' and type(RXPSettings.profiles) == 'table' then
     for _, prof in pairs(RXPSettings.profiles) do if type(prof) == 'table' then prof.autoSellJunk = false end end
     done[#done + 1] = "RestedXP's junk selling off"
   end
-  OmashuPadDB.vendorV = VENDOR_V
+  OmaPadDB.vendorV = VENDOR_V
   if #done > 0 then say(table.concat(done, '; ') .. ' (Leatrix needs one /reload)') end
 end)
 

@@ -1,4 +1,4 @@
--- Omashu chat for the phone remote: new chat goes out as a thin strip of coloured blocks along the bottom-left
+-- OmaChat: chat for the phone remote: new chat goes out as a thin strip of coloured blocks along the bottom-left
 -- edge of the screen, and Couch Mode reads it back letter for letter. WoW's own chat log can't be used: WoW writes
 -- it only when the game closes (tested 2026-11-09).
 --

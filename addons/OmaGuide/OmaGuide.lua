@@ -1,4 +1,4 @@
--- Omashu Guide (2026-11-10, Joshua: "yes"): WoW Forever's controller navigation (SmartNavigation) only knows Blizzard's
+-- OmaGuide (2026-11-10, Joshua: "yes"): WoW Forever's controller navigation (SmartNavigation) only knows Blizzard's
 -- own windows, so View said "No interface frame to focus" at the RestedXP box. This registers that box with Blizzard's
 -- FrameControlsManager the way KroGamepadBags registers its bag window (the one proven pattern on Forever), so:
 --   View cycles to the box, D-pad moves the highlight between the step lines, A ticks a line (A again unticks).
