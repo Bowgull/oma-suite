@@ -547,6 +547,7 @@ local function draw(dots, maxv, hp)
   end
   for name, pr in pairs(P.pred) do if now - pr.at >= 1 then P.pred[name] = nil end end   -- not a tick after all
   cur = { dots = dots, maxv = maxv, hp = hp }
+  if ns.recordRow and not test then local nb = 0; for _ in pairs(P.bites) do nb = nb + 1 end; pcall(ns.recordRow, cur, nb > 0 and ('bites' .. nb) or nil) end   -- the 15 s bug-report record
 end
 
 local function update()

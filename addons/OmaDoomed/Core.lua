@@ -22,6 +22,8 @@ SlashCmdList.OMADOOMED = function(m)
   m = (m or ''):lower()
   local rest = m:match('^rings%s*(.*)$'); if rest then return ns.ringsSlash and ns.ringsSlash(rest) end
   if m == 'trace' then return ns.startTrace and ns.startTrace() end
+  if m == 'report' then return ns.saveReport and ns.saveReport('command') end
+  if m == 'report show' then return ns.showReport and ns.showReport() end
   if m == 'errors' then for i = math.min(8, #(OmaDoomedDB.errs or {})), 1, -1 do print(OmaDoomedDB.errs[i]) end; return end
   if m == 'options' or m == 'settings' then return ns.openSettings and ns.openSettings() end
   m = 'doomed ' .. m

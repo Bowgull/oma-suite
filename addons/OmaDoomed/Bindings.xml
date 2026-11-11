@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="OMADOOMED_REPORT" header="OMADOOMED" category="ADDONS">
+    OmaDoomed_SaveReport()
+  </Binding>
+</Bindings>

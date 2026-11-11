@@ -10,3 +10,4 @@ Doomed.lua
 Rings.lua
 Preview.lua
 Settings.lua
+Report.lua
