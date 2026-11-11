@@ -404,6 +404,7 @@ end
 local function release(unit)
   local p = active[unit]; if not p then return end
   active[unit] = nil
+  if ns.ringsUnfade then ns.ringsUnfade(p) end
   p.anchor:Hide(); p.anchor:ClearAllPoints(); p.anchor:SetParent(holder)
   free[#free + 1] = p
 end
@@ -421,15 +422,65 @@ local function attach(unit)
   p.anchor:SetFrameLevel(plate:GetFrameLevel() + 20)
   place(p.anchor, plate)
   p.ring:SetUnit(unit); p.main:SetUnit(unit)   -- while hidden: no event churn; Show re-reads every aura
-  p.anchor:Show(); look(p); visible()
+  p.want = nil; p.anchor:SetAlpha(0); p.anchor:Show(); look(p); p.want = false; p.curA = 0; visible()
 end
 
 -- ---------- settings: size, opacity, where, which ----------
 local framePair                      -- the row above the target frame ('Where the rings show': frame / both)
 look = function(p)
-  p.anchor:SetScale((db.size or 40) / 40); p.anchor:SetAlpha((db.alpha or 100) / 100)
+  p.anchor:SetScale((db.size or 40) / 40); if p.curA then p.anchor:SetAlpha(p.curA * (db.alpha or 100) / 100) end
 end
-local function isTarget(u) local ok, v = pcall(UnitIsUnit, u, 'target'); return ok and not secret(v) and v == true end
+-- which plate is your target: compare nameplate FRAMES, not units. Frames are never secret, so this keeps working in
+-- combat, where Forever can hide unit comparisons (Haunt would otherwise show your target's rings in both places)
+local function isTarget(u)
+  local ok, tp = pcall(C_NamePlate.GetNamePlateForUnit, 'target', false)
+  local ok2, up = pcall(C_NamePlate.GetNamePlateForUnit, u, false)
+  if ok and ok2 and tp and up then return tp == up end
+  local ok3, v = pcall(UnitIsUnit, u, 'target'); return ok3 and not secret(v) and v == true
+end
+-- sheet 38 'Fade' (Joshua 2026-11-11: "i want fade ... rich and smooth for both"): leave quick, arrive soft.
+-- Leaving: lifts 6 px and fades out over 0.2 s (ease-in). Arriving: starts 0.06 s later, rises 8 px into place and
+-- fades in over 0.25 s (ease-out). Driven per frame from GetTime, so it's the same at any frame rate.
+local LEAVE, ARRIVE, ARRIVE_DELAY, LIFT, RISE = .2, .25, .06, 6, 8
+local fading = {}
+local fader = CreateFrame('Frame')
+local function easeIn(x) return x * x end
+local function easeOut(x) return 1 - (1 - x) ^ 3 end
+local function fadeStep(p, now)
+  local a = now - p.fadeAt
+  local base = (db and db.alpha or 100) / 100
+  local alpha, dy, done
+  if p.want then
+    local k = math.max(0, math.min(1, (a - ARRIVE_DELAY) / ARRIVE)); local e = easeOut(k)
+    alpha = p.fromA + (1 - p.fromA) * e; dy = -RISE * (1 - e); done = k >= 1
+  else
+    local k = math.max(0, math.min(1, a / LEAVE))
+    alpha = p.fromA * (1 - easeIn(k)); dy = LIFT * easeOut(k); done = k >= 1
+  end
+  p.curA = alpha
+  p.anchor:SetAlpha(alpha * base)
+  p.ring:ClearAllPoints(); p.ring:SetPoint('BOTTOM', p.anchor, 'BOTTOM', 0, dy)
+  return done
+end
+fader:SetScript('OnUpdate', function()
+  local now, any = GetTime(), false
+  for p in pairs(fading) do if fadeStep(p, now) then fading[p] = nil else any = true end end
+  if not any then fader:Hide() end
+end)
+fader:Hide()
+local function setVis(p, show)
+  show = show and true or false
+  if p.want == show then return end
+  if p.want == nil then   -- first time: start from where it should be, no motion
+    p.want, p.curA = show, show and 1 or 0
+    p.anchor:SetAlpha((show and 1 or 0) * (db and db.alpha or 100) / 100); return
+  end
+  p.fromA = p.curA or (p.want and 1 or 0); p.want = show; p.fadeAt = GetTime()
+  fading[p] = true; fader:Show()
+end
+ns.ringsSetVis = setVis
+function ns.ringsUnfade(p) fading[p] = nil; p.want = nil; p.curA = nil; p.ring:ClearAllPoints(); p.ring:SetPoint('BOTTOM', p.anchor, 'BOTTOM') end
+
 visible = function()
   if not db then return end
   local where, which = db.where or 'enemy', db.which or 'all'
@@ -437,11 +488,11 @@ visible = function()
   for u, p in pairs(active) do
     local show = where ~= 'frame' and (which == 'all' or (which == 'target' and isTarget(u)) or (which == 'combat' and fight))
     if where == 'split' and isTarget(u) then show = false end   -- 'Target on its frame, others overhead'
-    p.anchor:SetAlpha(show and (db.alpha or 100) / 100 or 0)
+    setVis(p, show)
   end
   if framePair then
     local show = (where == 'frame' or where == 'both' or where == 'split') and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
-    framePair.anchor:SetShown(show and true or false)
+    framePair.anchor:Show(); setVis(framePair, show)
   end
 end
 ns.ringsVisible = visible
