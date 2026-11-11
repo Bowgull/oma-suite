@@ -554,9 +554,9 @@ local function update()
     if build() then P.lost:Show(); P.hangOn(P.baseEdge) end   -- the empty bar past the fake health (P.base carries its end)
     return draw(dots, m, hp)
   end
-  if not UnitExists('target') or UnitIsDead('target') or not (DoesItDie and DoesItDie.GetDoTs) then cur = nil; return hide() end
-  local raw, list, seenName = DoesItDie.GetDoTs('target'), {}, {}
-  for _, e in ipairs(raw) do if e.name and not seenName[e.name] then seenName[e.name] = true; list[#list + 1] = e end end   -- a copy (don't sort DoesItDie's own table); one piece per name
+  if not UnitExists('target') or UnitIsDead('target') then cur = nil; return hide() end
+  local raw, list, seenName = P.source('target'), {}, {}
+  for _, e in ipairs(raw) do if e.name and not seenName[e.name] then seenName[e.name] = true; list[#list + 1] = e end end   -- a copy (never sort the source's own table); one piece per name
   table.sort(list, function(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end)   -- runs out first = nearest the green
   local dots = {}
   local cName, _, _, cStart, cEnd = UnitCastingInfo('player')
@@ -597,9 +597,41 @@ local function quiet(on)
   end
 end
 
+-- Where the numbers come from (2026-11-11, Joshua: "make it standalone first", "compare first"). OmaDoomed has its
+-- own DoT tracking (Track/). While DoesItDie is also installed, the bar keeps showing DoesItDie's numbers and
+-- OmaDoomed's own run silently beside them; every disagreement that lasts goes into OmaDoomedDB.compare (and into
+-- bug reports). Once those logs are clean the default becomes 'own'. ns.db.engine: 'auto' (that), 'own', 'did'.
+local function didHere() return DoesItDie and DoesItDie.GetDoTs and true or false end
+function P.source(unit)
+  local mode = ns.db.engine or 'auto'
+  if mode ~= 'own' and didHere() then return DoesItDie.GetDoTs(unit) end
+  return ns.dotsFor(unit)
+end
+local function fmtDots(list)
+  local seen, p = {}, {}
+  for _, e in ipairs(list) do if e.name and not seen[e.name] and (e.damage or 0) > 0 then seen[e.name] = true; p[#p + 1] = e.name:sub(1, 4) .. '=' .. string.format('%.0f', e.damage) .. (e.provisional and 'P' or '') end end
+  table.sort(p); return table.concat(p, ' ')
+end
+local cmpLast
+local function compareNow()
+  if not didHere() or not UnitExists('target') then cmpLast = nil; return end
+  local okA, a = pcall(function() return fmtDots(ns.dotsFor('target')) end)
+  local okB, b = pcall(function() return fmtDots(DoesItDie.GetDoTs('target')) end)
+  if not (okA and okB) then return end
+  local c = ns.db.compare or { checks = 0, differ = 0, log = {} }; ns.db.compare = c
+  c.checks = c.checks + 1
+  if a == b then cmpLast = nil; return end
+  local sig = a .. '|' .. b
+  if cmpLast == sig then   -- the same disagreement half a second later: real, not a refresh landing between the two
+    c.differ = c.differ + 1
+    table.insert(c.log, 1, ('%s own[%s] did[%s]%s'):format(date('%H:%M:%S'), a, b, InCombatLockdown() and ' combat' or ''))
+    while #c.log > 100 do table.remove(c.log) end
+  end
+  cmpLast = sig
+end
+
 function P.start()
   if select(2, UnitClass('player')) ~= 'WARLOCK' then return end
-  if not (DoesItDie and DoesItDie.GetDoTs) then ns.say('Doomed needs DoesItDie for now (its maths).'); return end
   quiet(ns.db.doomed)
   local ev = CreateFrame('Frame')
   ev:RegisterUnitEvent('UNIT_SPELLCAST_SUCCEEDED', 'player'); ev:RegisterUnitEvent('UNIT_SPELLCAST_START', 'player')
@@ -622,7 +654,9 @@ function P.start()
     local ok, err = pcall(render)
     if not ok then ns.err('render: ' .. tostring(err)); P.off = true; hide(); cur = nil end
   end)
-  if DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() P.dirty = true end) end
+  ns.onTrackChanged = function() P.dirty = true end
+  if didHere() and DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() P.dirty = true end) end
+  if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(0.5, function() local ok, err = pcall(compareNow); if not ok then ns.err('compare: ' .. tostring(err)) end end) end
 end
 
 -- /omadoomed on | off    the kill bar part on or off

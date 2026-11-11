@@ -51,6 +51,7 @@ function ns.saveReport(how)
     doesItDie = (DoesItDie and DoesItDie.GetDoTs) and 'yes' or 'no',
     bar = copySettings(db), rings = copySettings(db.rings),
     errors = {}, rows = lastRows(),
+    compare = db.compare and { checks = db.compare.checks, differ = db.compare.differ, log = { unpack(db.compare.log, 1, math.min(20, #db.compare.log)) } } or nil,
   }
   for i = 1, math.min(10, #(db.errs or {})) do r.errors[i] = db.errs[i] end
   db.reports = db.reports or {}
@@ -68,6 +69,10 @@ local function asText(r)
   local function kv(t) local ks = {}; for k in pairs(t) do ks[#ks + 1] = k end; table.sort(ks); for _, k in ipairs(ks) do L[#L + 1] = '  ' .. k .. ' = ' .. tostring(t[k]) end end
   kv(r.bar); L[#L + 1] = 'ring settings:'; kv(r.rings)
   L[#L + 1] = ''; L[#L + 1] = 'recent errors:'; for _, e in ipairs(r.errors) do L[#L + 1] = '  ' .. e end
+  if r.compare then
+    L[#L + 1] = ''; L[#L + 1] = ('own tracking vs DoesItDie: %d checks, %d disagreements'):format(r.compare.checks or 0, r.compare.differ or 0)
+    for _, line in ipairs(r.compare.log or {}) do L[#L + 1] = '  ' .. line end
+  end
   L[#L + 1] = ''; L[#L + 1] = 'last ' .. KEEP .. ' seconds (time, DoT=damage left, P casting, L landed, E ending, fps):'
   for _, row in ipairs(r.rows) do L[#L + 1] = '  ' .. row end
   return table.concat(L, '\n')
