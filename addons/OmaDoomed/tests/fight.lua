@@ -28,10 +28,12 @@ F.SPELLS = {
 }
 
 local castN = 0
-function F.start(opts)
+-- The world a fight needs (clock, spells, CVars, the player), without loading anything. opts.spells: another
+-- spell list (a German client); opts.at: the clock.
+function F.world(opts)
   opts = opts or {}
   W.now = opts.at or 1000
-  L.spells(F.SPELLS)
+  L.spells(opts.spells or F.SPELLS)
   C_CVar = { GetCVarBool = function(n) return n == 'enableMouseoverCast' and F.mouseoverCast or false end }
   F.mouseoverCast = false
   GetCVarBool = C_CVar.GetCVarBool
@@ -45,6 +47,13 @@ function F.start(opts)
   GetComboPoints = function() return 0 end
   CopyTable = function(t) local o = {}; for k, v in pairs(t) do o[k] = v end; return o end
   W.units.player = { guid = 'Player-1', name = 'Me' }
+  F.diffs = {}
+end
+
+-- The world plus OmaDoomed's tracking alone (and DoesItDie beside it unless opts.compare == false).
+function F.start(opts)
+  opts = opts or {}
+  F.world(opts)
   F.oma = L.oma()
   if opts.compare ~= false then F.did = L.did() end
   F.diffs = {}

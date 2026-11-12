@@ -30,32 +30,49 @@ function issecretvalue(v) return getmetatable(v) == SECRET end
 function W.reveal(v) if issecretvalue(v) then return rawget(v, 'v') end return v end
 
 -- ---------- frames and events ----------
-local frames = {}
+-- Every frame is kept in creation order. Events and OnUpdates only walk the frames that ever asked for them (kept in
+-- creation order too), so thousands of quiet frames (aura buttons, cooldowns) cost nothing per event.
+local frames, listening, updating = {}, {}, {}
+W.frames = frames
+local function enlist(list, f, flag)
+  if rawget(f, flag) then return end   -- rawget: UI fakes answer any unknown key
+  rawset(f, flag, true)
+  local i = #list
+  while i > 0 and rawget(list[i], 'idx') > rawget(f, 'idx') do i = i - 1 end
+  table.insert(list, i + 1, f)
+end
 local Frame = {}
 Frame.__index = Frame
-function Frame:RegisterEvent(e) self.events[e] = true end
+W.Frame = Frame
+function Frame:RegisterEvent(e) self.events[e] = true; enlist(listening, self, '_listens') end
 function Frame:UnregisterEvent(e) self.events[e] = nil end
-function Frame:RegisterUnitEvent(e, ...) self.events[e] = { ... } end
+function Frame:RegisterUnitEvent(e, ...) self.events[e] = { ... }; enlist(listening, self, '_listens') end
 function Frame:UnregisterAllEvents() self.events = {} end
 function Frame:IsEventRegistered(e) return self.events[e] ~= nil end
-function Frame:SetScript(k, f) self.scripts[k] = f end
+function Frame:SetScript(k, f) self.scripts[k] = f; if k == 'OnUpdate' and f then enlist(updating, self, '_updates') end end
 function Frame:GetScript(k) return self.scripts[k] end
-function Frame:HookScript(k, f) local old = self.scripts[k]; self.scripts[k] = function(...) if old then old(...) end; f(...) end end
+function Frame:HookScript(k, f) local old = self.scripts[k]; self:SetScript(k, function(...) if old then old(...) end; f(...) end) end
 function Frame:Show() self.shown = true end
 function Frame:Hide() self.shown = false end
 function Frame:IsShown() return self.shown end
 function Frame:SetShown(v) self.shown = v and true or false end
 function Frame:GetName() return self.name end
 function CreateFrame(kind, name, parent)
-  local f = setmetatable({ kind = kind, name = name, parent = parent, events = {}, scripts = {}, shown = true }, Frame)
+  local f = setmetatable({ kind = kind, name = name, parent = parent, events = {}, scripts = {}, shown = true, idx = #frames + 1 }, Frame)
   frames[#frames + 1] = f
   if name then _G[name] = f end
   return f
 end
+-- A stamp per call keeps a frame from being called twice if an older frame joins the list mid-call.
+local stamp = 0
 function W.fire(event, ...)
-  for _, f in ipairs(frames) do
+  stamp = stamp + 1
+  local my, i = stamp, 1
+  while listening[i] do
+    local f = listening[i]; i = i + 1
     local reg = f.events[event]
-    if reg and f.scripts.OnEvent then
+    if reg and f.scripts.OnEvent and rawget(f, '_fired') ~= my then
+      rawset(f, '_fired', my)
       local ok = true
       if type(reg) == 'table' and #reg > 0 then
         ok = false; local unit = ...
@@ -66,7 +83,11 @@ function W.fire(event, ...)
   end
 end
 function W.runUpdates(dt)
-  for _, f in ipairs(frames) do if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, dt) end end
+  local i = 1
+  while updating[i] do
+    local f = updating[i]; i = i + 1
+    if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, dt) end
+  end
 end
 C_Timer = {
   After = function(s, fn) W.timers[#W.timers + 1] = { at = W.now + s, fn = fn } end,
