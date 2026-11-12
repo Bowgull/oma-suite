@@ -31,11 +31,14 @@ local function setup(W)
   F.mob('nameplate1', 'Creature-1', 'Darkhound', 300); F.mob('nameplate2', 'Creature-2', 'Darkhound', 200)
   local plates = {}
   for i = 1, 2 do
+    local plate = UI.obj('NamePlate'); plate:SetParent(WorldFrame)
     local hb = UI.obj('healthBar'); hb.GetWidth = function() return 120 end
-    local uf = UI.obj('UnitFrame'); uf.HealthBarsContainer = { healthBar = hb }
-    plates['nameplate' .. i] = { UnitFrame = uf }
+    local uf = UI.obj('UnitFrame'); uf:SetParent(plate); hb:SetParent(uf); uf.HealthBarsContainer = { healthBar = hb }
+    plate.UnitFrame = uf
+    plates['nameplate' .. i] = plate
   end
   C_NamePlate.GetNamePlateForUnit = function(u) return plates[u] end
+  W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate2')
   local DOTS = {
     nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 9 }, { name = 'Corruption', damage = 30, expiresAt = 5 } },
     nameplate2 = {},

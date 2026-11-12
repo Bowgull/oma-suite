@@ -45,6 +45,7 @@ local DARK_BRASS = { 0x8a / 255, 0x6a / 255, 0x2a / 255 }
 -- braces: at login we also add whatever ID the game returns for each name, and we learn the exact ID every time you
 -- cast one (UNIT_SPELLCAST_SUCCEEDED).
 local Spells, Anim, Secret = ns.spells, ns.core.Anim, ns.core.Secret
+local PM = ns.plates                -- PlateManager.lua: the live plates and which bar each one uses
 local SPELLS = Spells.list
 
 local OWN = 'HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY'        -- PLAYER = you, your pet or vehicle (AuraUtil.lua)
@@ -53,7 +54,8 @@ local SORT = (AuraContainerSortMethod and AuraContainerSortMethod.AuraInstanceID
 local UP = (Enum.NumericRuleFormatRounding and Enum.NumericRuleFormatRounding.Up) or 1
 local REMAINING = (Enum.DurationTextBindingProperty and Enum.DurationTextBindingProperty.RemainingDuration) or 0
 
-local POOL_START, POOL_MIN_FREE, POOL_MAX = 24, 4, 40   -- review #7: 12 ran out in big pulls
+-- review #7: 12 ran out in big pulls. 42 = one pair for each of the 40 plates, plus the target frame and channel rows.
+local POOL_START, POOL_MIN_FREE, POOL_MAX = 24, 4, 42
 
 local db
 local BC                            -- BlizzardControls.lua: Blizzard's nameplate debuffs and target-frame squares
@@ -338,7 +340,8 @@ local function setupContainer(c, kind, gap)   -- gap: space between rings (the t
   end
 end
 
-local function newPair(gap)
+-- spare: a pool spare (on the free list). Otherwise the caller owns it at once (a plate, the target rows).
+local function newPair(gap, spare)
   if InCombatLockdown() or #pairsAll >= POOL_MAX then return nil end
   local ok, p = pcall(function()
     local anchor = CreateFrame('Frame', nil, holder); anchor:SetSize(1, 1); anchor:Hide()
@@ -353,7 +356,7 @@ local function newPair(gap)
     return { anchor = anchor, ring = ring, main = main }
   end)
   if not ok then log('new pair failed: ' .. tostring(p)); return nil end
-  pairsAll[#pairsAll + 1] = p; free[#free + 1] = p
+  pairsAll[#pairsAll + 1] = p; if spare then free[#free + 1] = p end
   return p
 end
 
@@ -362,7 +365,7 @@ local function wanted() local n = 0; for _ in pairs(active) do n = n + 1 end; re
 local function fill()
   -- one pair per frame, out of combat, so login never hitches
   filler:SetScript('OnUpdate', function(self)
-    if InCombatLockdown() or #pairsAll >= wanted() or not newPair() then self:SetScript('OnUpdate', nil) end
+    if InCombatLockdown() or #pairsAll >= wanted() or not newPair(nil, true) then self:SetScript('OnUpdate', nil) end
   end)
 end
 
@@ -373,14 +376,40 @@ local function nameInsideBar()
   return e and style ~= nil and (style == e.Modern or style == e.Block) or false
 end
 
-local function place(anchor, plate)
+-- the bar PlateManager found for this plate, when it is another add-on's (Plater, Threat Plates...)
+local function addonBar(plate, unit)
+  unit = unit or PM.unitOf[plate]
+  local found = unit and PM.barOf(unit)
+  if found and found.addon and found.bar then return found end
+end
+-- our row's parent and layer: Blizzard's plate as always; on another add-on's bar, its host frame and its layer
+local function hostOn(anchor, plate, unit)
+  local found = addonBar(plate, unit)
+  if found then
+    anchor:SetParent(found.host or plate)
+    local strata, level = PM.layerOf(found.bar)
+    if strata then anchor:SetFrameStrata(strata); anchor.strataSet = true end
+    anchor:SetFrameLevel((level or 200) + 20)
+  else
+    anchor:SetParent(plate)
+    if anchor.strataSet then local st = PM.layerOf(plate); if st then anchor:SetFrameStrata(st) end; anchor.strataSet = nil end
+    anchor:SetFrameLevel(plate:GetFrameLevel() + 20)
+  end
+end
+
+local function place(anchor, plate, unit)
   -- Like Blizzard's debuff row: bottom on the name's top (or the bar's top when the name sits inside the bar), plus
   -- nameplateDebuffPadding. Centred over the health bar, as the mockup draws it. We only anchor OUR frame to theirs.
   anchor:ClearAllPoints()
   local uf = plate.UnitFrame
   local bar = uf and uf.HealthBarsContainer
   local pad = tonumber(C_CVar.GetCVar('nameplateDebuffPadding') or '') or 0
-  if bar then
+  local other = addonBar(plate, unit)
+  if other then   -- another add-on's bar: just above it (its name's place is its own; checked in game)
+    anchor:SetPoint('BOTTOM', other.bar, 'TOP', 0, pad + GAP)
+    anchor:SetPoint('LEFT', other.bar, 'LEFT'); anchor:SetPoint('RIGHT', other.bar, 'RIGHT')
+    anchor:SetHeight(1)
+  elseif bar then
     -- 2026-11-10: reading the name's top came back secret/empty in a real fight, so the row sat on the bar and covered
     -- the name (a screenshot). Blizzard anchors its debuff row TO the name frame, which needs no numbers: do the same.
     local above = bar
@@ -411,15 +440,14 @@ end
 local look, visible                 -- settings helpers, defined below (attach needs them)
 local function attach(unit)
   if not db or not db.enabled or active[unit] then return end
-  if not unit or not unit:match('^nameplate%d+$') or not isEnemy(unit) then return end
-  local plate = C_NamePlate.GetNamePlateForUnit(unit, false)
+  if not unit or not PM.enemy[unit] then return end   -- PlateManager keeps the live plates and who is an enemy
+  local plate = PM.live[unit]
   if not plate then return end
   local p = table.remove(free) or newPair()
   if not p then log('no free container for ' .. unit .. (InCombatLockdown() and ' (in combat; filled after)' or '')); return end
   active[unit] = p
-  p.anchor:SetParent(plate)
-  p.anchor:SetFrameLevel(plate:GetFrameLevel() + 20)
-  place(p.anchor, plate)
+  hostOn(p.anchor, plate, unit)
+  place(p.anchor, plate, unit)
   p.ring:SetUnit(unit); p.main:SetUnit(unit)   -- while hidden: no event churn; Show re-reads every aura
   p.want = nil; p.anchor:SetAlpha(0); p.anchor:Hide(); look(p); p.want = false; p.curA = 0; visible()
 end
@@ -506,7 +534,6 @@ end
 local function makeFramePair()
   if framePair or InCombatLockdown() or not TargetFrame then return end
   local p = newPair(FRAME_SPACE); if not p then return end
-  for i, q in ipairs(free) do if q == p then table.remove(free, i) break end end
   framePair = p
   p.anchor:SetParent(TargetFrame); p.anchor:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
   -- sheet 42 B ("B"): a row UNDER the bars, where WoW itself puts your debuffs on a target, 40 px
@@ -533,7 +560,6 @@ end
 local function makeChanPair()
   if chanPair or InCombatLockdown() then return end
   local p = newPair(); if not p then return end
-  for i, q in ipairs(free) do if q == p then table.remove(free, i) break end end
   chanPair = p
   for _, g in ipairs(GROUPS) do if g.key ~= 'channel' then pcall(p.ring.SetAuraGroupEnabled, p.ring, g.key, false); pcall(p.main.SetAuraGroupEnabled, p.main, g.key, false) end end
   p.ring:SetUnit('target'); p.main:SetUnit('target')
@@ -543,12 +569,13 @@ local function placeChanPair()
   if not chanPair then return false end
   local plate = UnitExists('target') and C_NamePlate.GetNamePlateForUnit('target', false)
   if not plate then return false end
-  chanPair.anchor:SetParent(plate); chanPair.anchor:SetFrameLevel(plate:GetFrameLevel() + 20); place(chanPair.anchor, plate)
+  local unit = PM.unitOf[plate]
+  hostOn(chanPair.anchor, plate, unit); place(chanPair.anchor, plate, unit)
   return true
 end
 ns.makeChanPair, ns.placeChanPair = makeChanPair, placeChanPair
 
-attachAll = function() for i = 1, 40 do local u = 'nameplate' .. i; if UnitExists(u) then attach(u) end end end
+attachAll = function() for u in pairs(PM.live) do attach(u) end end
 local function releaseAll() local us = {}; for u in pairs(active) do us[#us + 1] = u end; for _, u in ipairs(us) do release(u) end end
 
 local filtersDirty = false
@@ -707,12 +734,19 @@ local function start()
   filler = CreateFrame('Frame')
   fader = CreateFrame('Frame'); fader:SetScript('OnUpdate', fadeAll); fader:Hide()
   ev = CreateFrame('Frame')
-  for _, e in ipairs({ 'NAME_PLATE_UNIT_ADDED', 'NAME_PLATE_UNIT_REMOVED', 'PLAYER_REGEN_ENABLED',
-    'PLAYER_REGEN_DISABLED', 'PLAYER_TARGET_CHANGED', 'SPELLS_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
+  for _, e in ipairs({ 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'PLAYER_TARGET_CHANGED', 'SPELLS_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
   pcall(ev.RegisterUnitEvent, ev, 'UNIT_SPELLCAST_SUCCEEDED', 'player')
   ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEvent, ...); if not ok then ns.error('rings event: ' .. tostring(err)) end end)
   ns.bus:On('TICK', function(unit, name, key) if ns.db.tick ~= 'plain' then ns.ringsPulse(unit, name, key) end end)
   ns.bus:On('SETTING', function(key, store) if store == 'rings' then ns.ringsApply(key) end end)
+  -- plates come and go through PlateManager (the one owner of the nameplate events)
+  ns.bus:On('PLATE_ADDED', function(u, plate, enemy) if db and enemy then attach(u) end end)
+  ns.bus:On('PLATE_REMOVED', function(u) if db then release(u) end end)
+  ns.bus:On('PLATE_CHANGED', function(u, plate, enemy, why)
+    if not db then return end
+    if why == 'hostility' then if enemy then attach(u) else release(u) end   -- a duel starts, a mob is charmed
+    else local p = active[u]; if p then hostOn(p.anchor, plate, u); place(p.anchor, plate, u) end end   -- another bar
+  end)
   probe(); buildGroups()
   if db.enabled then BC.blizzardRow(false) end
   fill(); attachAll()
@@ -722,9 +756,7 @@ end
 ns.starts[#ns.starts + 1] = start
 onEvent = (function(_, e, a1, _, a3)
   if not db then return end
-  if e == 'NAME_PLATE_UNIT_ADDED' then attach(a1)
-  elseif e == 'NAME_PLATE_UNIT_REMOVED' then release(a1)
-  elseif e == 'PLAYER_TARGET_CHANGED' then
+  if e == 'PLAYER_TARGET_CHANGED' then
     visible(); BC.squaresApply()
     -- 2026-11-12 ("in haunt mode switching between targets rapidly shows the wrong or missing dots under frame
     -- and over head"): framePair and chanPair follow the unit 'target', and a container re-reads its auras only when
@@ -734,7 +766,7 @@ onEvent = (function(_, e, a1, _, a3)
       if p and p.ring then pcall(p.ring.Hide, p.ring); pcall(p.ring.Show, p.ring) end
     end
     -- the name can appear or move when the target changes; keep each row on top of its name
-    for u, p in pairs(active) do local plate = C_NamePlate.GetNamePlateForUnit(u, false); if plate then place(p.anchor, plate) end end
+    for u, p in pairs(active) do local plate = PM.live[u]; if plate then place(p.anchor, plate, u) end end
   elseif e == 'PLAYER_REGEN_DISABLED' then stopTest(); visible()
   elseif e == 'PLAYER_REGEN_ENABLED' then
     if filtersDirty then refreshFilters() end

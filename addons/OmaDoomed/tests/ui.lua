@@ -105,7 +105,26 @@ function M.SetFrameLevel(self, l) rawset(self, '_level', l) end
 function M.GetFrameLevel(self) return rawget(self, '_level') or 0 end
 function M.SetFrameStrata(self, s) rawset(self, '_strata', s) end
 function M.GetFrameStrata(self) return rawget(self, '_strata') or 'MEDIUM' end
-function M.SetPoint(self, _, rel) rawset(self, '_anchor', rel) end
+function M.SetPoint(self, _, rel) rawset(self, '_anchor', rel); rawset(self, '_points', (rawget(self, '_points') or 0) + 1) end
+function M.SetAllPoints(self, rel) rawset(self, '_anchor', rel); rawset(self, '_points', 2) end
+function M.ClearAllPoints(self) rawset(self, '_points', 0) end
+function M.GetNumPoints(self) return rawget(self, '_points') or 0 end
+-- alpha multiplies down the parents, like the game
+function M.GetEffectiveAlpha(self)
+  local a, o = 1, self
+  for _ = 1, 64 do if type(o) ~= 'table' then break end; a = a * (rawget(o, '_alpha') or 1); o = rawget(o, '_parent') end
+  return a
+end
+-- the widget type: 'StatusBar' for status bars (made with CreateFrame or a fake health bar), else 'Frame'
+function M.GetObjectType(self)
+  local t = rawget(self, '_type'); if t then return t end
+  local k = tostring(rawget(self, 'kind') or '')
+  if k == 'StatusBar' or k:lower():find('healthbar', 1, true) or k == 'ManaBar' then return 'StatusBar' end
+  if k == 'Texture' or k == 'FontString' then return k end
+  return 'Frame'
+end
+function M.GetReverseFill(self) return rawget(self, '_reverse') or false end
+function M.SetReverseFill(self, v) rawset(self, '_reverse', v and true or false) end
 function M.SetText(self, t) rawset(self, '_text', t) end
 function M.GetText(self) return rawget(self, '_text') end
 function M.SetTexture(self, t) rawset(self, '_texture', t) end
@@ -168,13 +187,14 @@ function UI.install()
   end
   UIParent = obj('UIParent'); WorldFrame = obj('WorldFrame')
   -- the target frame, as far as the add-on reaches into it (Blizzard_UnitFrame, Mainline TargetFrame)
-  TargetFrame = obj('TargetFrame')
+  TargetFrame = obj('TargetFrame'); link(TargetFrame, UIParent)
   local content, main = obj('TargetFrameContent'), obj('TargetFrameContentMain')
   local hbc, hb = obj('HealthBarsContainer'), obj('HealthBar')
   local ctx, container, portrait = obj('TargetFrameContentContextual'), obj('TargetFrameContainer'), obj('Portrait')
   link(content, TargetFrame); link(main, content); link(hbc, main); link(hb, hbc); link(ctx, content)
   link(container, TargetFrame); link(portrait, container)
   hb._w, hb._h = 124, 19
+  portrait._w, portrait._h = 58, 58   -- Blizzard's target portrait
   TargetFrame.TargetFrameContent = content; content.TargetFrameContentMain = main; main.HealthBarsContainer = hbc
   hbc.HealthBar = hb; main.ManaBar = obj('ManaBar'); link(main.ManaBar, main)
   content.TargetFrameContentContextual = ctx; ctx.Auras = obj('TargetFrameAuras'); link(ctx.Auras, ctx)
@@ -205,7 +225,7 @@ function UI.plates()
   local function plateFor(token)
     local p = UI.plate[token]
     if p then return p end
-    p = obj('NamePlate'); p.namePlateUnitToken = token
+    p = obj('NamePlate'); p.namePlateUnitToken = token; link(p, WorldFrame)
     local uf, hbc, hb, name = obj('UnitFrame'), obj('HealthBarsContainer'), obj('HealthBar'), obj('FontString')
     link(uf, p); link(hbc, uf); link(hb, hbc); link(name, uf)
     hb._w, hb._h = 120, 10

@@ -39,6 +39,9 @@ local function slash()
     ns.say('trace log ' .. (t.omaTrace and 'on' or 'off') .. '.')
   end)
   s:Exact('settings', function() return ns.openSettings and ns.openSettings() end)
+  -- which bar each plate and the target frame use (for bug reports), and the target frame's bar: pick | clear | <name>
+  s:Exact('plates', function() if ns.barLines then for _, l in ipairs(ns.barLines()) do ns.say(l) end end end)
+  s:Word('frame', function(rest) return ns.frameSlash and ns.frameSlash(rest) end, true)
 end
 
 local f = CreateFrame('Frame')

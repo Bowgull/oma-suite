@@ -29,8 +29,8 @@ return {
     T.eq(cat.name, 'OmaDoomed'); T.eq(cat.parent.name, 'Oma')
     T.eq(UI.S.addOnCategories[1], cat.parent, 'the Oma parent registered at login')
     local kinds = {}; for _, i in ipairs(cat.layout.inits) do kinds[#kinds + 1] = i.kind == 'header' and ('header:' .. i.text) or i.kind end
-    T.eq(table.concat(kinds, ','), 'element,header:Kill bar,checkbox,checkbox,dropdown,dropdown,slider,dropdown,header:Rings,dropdown,dropdown,dropdown,slider,slider,slider,header:Help,button,button',
-      'preview, headers, controls and the two report buttons')
+    T.eq(table.concat(kinds, ','), 'element,header:Kill bar,checkbox,checkbox,dropdown,dropdown,slider,dropdown,button,header:Rings,dropdown,dropdown,dropdown,slider,slider,slider,header:Help,button,button',
+      'preview, headers, controls, the Pick button and the two report buttons')
   end,
   ['saved values are kept, not reset to defaults'] = function(W, T)
     local ns, F, UI = setup(W, { before = function() OmaDoomedDB = { cast = 'motes', rings = { size = 52 } } end })

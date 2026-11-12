@@ -8,7 +8,7 @@ local function loadCopy(W, minor, mark)
   local ns = {}
   for _, f in ipairs(LIBS) do
     local src = io.open(f):read('*a')
-    if f:find('OmaCore.lua', 1, true) then src = src:gsub("'OmaCore%-1%.0', 1", "'OmaCore-1.0', " .. minor) end
+    if f:find('OmaCore.lua', 1, true) then src = src:gsub("'OmaCore%-1%.0', %d+", "'OmaCore-1.0', " .. minor) end
     if f:find('Bus.lua', 1, true) then src = src:gsub('function Core%.NewBus%(onError%)', 'Core.mark = "' .. mark .. '"\nfunction Core.NewBus(onError)') end
     assert(loadstring(src, f))('Other', ns)
   end
@@ -102,6 +102,10 @@ return {
     for _, m in ipairs({ 'Report', 'report show', 'rings Others ON', 'rings', 'TEST off', '', 'bad' }) do SlashCmdList.OMATEST(m) end
     T.eq(table.concat(got, '|'), 'report|show|rings:others on|rings:|fallback:test off|fallback:')
     T.eq(errs[1], 'oops')
+    -- a word can keep the case of what follows (a frame name)
+    s:Word('frame', function(rest) got[#got + 1] = 'frame:' .. rest end, true)
+    got = {}; SlashCmdList.OMATEST('Frame  MyFrame.Health'); SlashCmdList.OMATEST('frame')
+    T.eq(table.concat(got, '|'), 'frame:MyFrame.Health|frame:')
   end,
 
   ['Settings schema: defaults, fill keeps saved values, numbered migrations, dump'] = function(W, T)

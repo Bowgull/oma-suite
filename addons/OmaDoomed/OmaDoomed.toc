@@ -30,6 +30,8 @@ Track\Engine.lua
 Track\Wrack.lua
 Track\Forever.lua
 DotModel.lua
+PlateManager.lua
+TargetFinder.lua
 Doomed.lua
 KillPlates.lua
 BlizzardControls.lua

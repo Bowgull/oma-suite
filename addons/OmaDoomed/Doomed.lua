@@ -6,6 +6,7 @@
 -- green, scaled by max health, let WoW place every piece. The skull rides the end of a very long bar inside a small
 -- clipped window, so it shows only when the DoTs' damage reaches the mob's health. Because of
 -- that it can't "pop" (no event says the moment it becomes true); it appears at once.
+-- The bar: Blizzard's target frame, or another add-on's (TargetFinder.lua); Blizzard's always looks exactly as approved.
 local ADDON, ns = ...
 local P = {}; ns.parts.doomed = P
 
@@ -22,6 +23,9 @@ local FILL = 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health'
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
 local MARK = 'Interface\\AddOns\\OmaDoomed\\Art\\doomed-mark'
 local MARK_W, MARK_H = 78, 54          -- screen pixels at 1080p (sheet 23: the skull's own size)
+-- Blizzard's target portrait at 1080p, UI scale 1 (58 units): the skull steps up in whole multiples when the
+-- portrait is about twice that or more on screen (4K, a big UI scale), so the pixel art stays crisp
+local PORTRAIT_REF = 58 * 1080 / 768
 local MAX = 6
 
 local hb, fill, portrait, built
@@ -50,21 +54,49 @@ local function px(n, frame)           -- screen pixels -> UI units of that frame
   local _, h = GetPhysicalScreenSize(); return n * 768 / h / (frame or UIParent):GetEffectiveScale()
 end
 
+-- the bar we draw on (TargetFinder.lua): Blizzard's, EllesmereUI's or a saved frame path. P.blizz: Blizzard's own.
+local want                             -- { bar, portrait, blizz } chosen by update()
 local function find()
-  local tf = TargetFrame
-  local main = tf and tf.TargetFrameContent and tf.TargetFrameContent.TargetFrameContentMain
-  hb = main and main.HealthBarsContainer and main.HealthBarsContainer.HealthBar
-  portrait = tf and tf.TargetFrameContainer and tf.TargetFrameContainer.Portrait
+  if not want then return nil end
+  hb, portrait, P.blizz = want.bar, want.portrait, want.blizz
   fill = hb and hb:GetStatusBarTexture()
-  return hb and fill and portrait
+  return hb and fill
 end
+
+-- the skull's whole-number step: 1 at 1080p on Blizzard's frame (today's size), 2 when the portrait is twice that on screen
+local function skullStep()
+  if not (portrait and win) then return 1 end
+  local okW, w = pcall(portrait.GetWidth, portrait)
+  local okS, sc = pcall(win.GetEffectiveScale, win)
+  local _, h = GetPhysicalScreenSize()
+  if not (okW and okS) or ns.core.Secret.is(w) or ns.core.Secret.is(sc) or type(w) ~= 'number' or type(sc) ~= 'number' or type(h) ~= 'number' then return 1 end
+  return math.max(1, math.floor(w * sc * h / 768 / PORTRAIT_REF + .5))
+end
+local function sizeSkull()
+  if not (win and longBar and mark) then return end
+  local k = skullStep()
+  local W, H = px(MARK_W, win), px(MARK_H, win)
+  if k ~= 1 then W, H = W * k, H * k end
+  -- sheet 23 v5: centred over the ring (measured on the sheet: 0.5 px off; a -6 px offset put it 6.8 px left in game)
+  -- and 65.5 px above the ring's centre, on its top edge
+  win:SetSize(W, H); win:ClearAllPoints(); win:SetPoint('CENTER', portrait, 'CENTER', px(.8, win) * k, px(65.5, win) * k)
+  longBar:SetSize(W * 400, H); mark:SetSize(W, H)
+end
+P.sizeSkull = function() pcall(sizeSkull) end
 
 local function build()
   if built then return true end
   if not find() then return false end
-  -- clipped to the bar, minus the see-through margin Blizzard's texture has at its left end (measured: 5 screen px)
-  clip = CreateFrame('Frame', nil, hb); clip:SetPoint('TOPLEFT', hb, 'TOPLEFT', px(5, hb), 0); clip:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')
-  clip:SetClipsChildren(true); clip:SetFrameLevel(hb:GetFrameLevel() + 1)
+  -- clipped to the bar, minus the see-through margin Blizzard's texture has at its left end (measured: 5 screen px);
+  -- another add-on's bar has its own margin: none
+  clip = CreateFrame('Frame', nil, hb); clip:SetPoint('TOPLEFT', hb, 'TOPLEFT', P.blizz and px(5, hb) or 0, 0); clip:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')
+  if P.blizz then clip:SetFrameLevel(hb:GetFrameLevel() + 1)
+  else   -- its own layer (strata first: a strata change resets the level)
+    local strata, level = ns.plates.layerOf(hb)
+    if strata then clip:SetFrameStrata(strata) end
+    clip:SetFrameLevel((level or 200) + 1)
+  end
+  clip:SetClipsChildren(true)
   -- sheet 30: while a bite closes, everything nearer the bar's end sits a little to the right and slides back. A 0..max
   -- bar starting at the health's end carries that offset (a plain number, the bite left), so no size is ever read.
   -- our own copy of the health's end (2026-11-11, 'really jumpy'): pinning to Blizzard's fill mixed two clocks, so on a
@@ -104,7 +136,8 @@ local function build()
   -- name banner and the mana bar)
   if art.CreateMaskTexture then
     P.barMask = art:CreateMaskTexture(); P.barMask:SetAllPoints(hb)
-    if atlasOK(FILL) then P.barMask:SetAtlas(FILL) else P.barMask:SetTexture('Interface\\TargetingFrame\\UI-StatusBar', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE') end
+    if not P.blizz then P.barMask:SetTexture(WHITE, 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE')   -- not Blizzard's shape: the bar's box
+    elseif atlasOK(FILL) then P.barMask:SetAtlas(FILL) else P.barMask:SetTexture('Interface\\TargetingFrame\\UI-StatusBar', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE') end
   end
   P.lost = art:CreateTexture(nil, 'ARTWORK', nil, 0); barTex(P.lost); P.lost:SetVertexColor(.14, .09, .05); P.lost:Hide()
   P.lost:SetPoint('TOPLEFT', baseEdge, 'TOPRIGHT'); P.lost:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')   -- test only: the empty bar
@@ -207,16 +240,22 @@ local function build()
   shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMRIGHT', P.E[0].f, 'BOTTOMLEFT')
   if CreateColor then shine:SetGradient('VERTICAL', CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, .30)) end
 
-  -- the skull and bones, on the ring's top edge like a raid mark (sheet 23 v5)
-  win = CreateFrame('Frame', nil, portrait:GetParent() or UIParent); win:SetClipsChildren(true); win:SetFrameStrata('HIGH')
-  local W, H = px(MARK_W, win), px(MARK_H, win)
-  -- sheet 23 v5: centred over the ring (measured on the sheet: 0.5 px off; a -6 px offset put it 6.8 px left in game)
-  -- and 65.5 px above the ring's centre, on its top edge
-  win:SetSize(W, H); win:SetPoint('CENTER', portrait, 'CENTER', px(.8, win), px(65.5, win))
-  longBar = CreateFrame('StatusBar', nil, win); longBar:SetSize(W * 400, H); longBar:SetPoint('RIGHT', win, 'RIGHT')
-  longBar:SetStatusBarTexture(WHITE); longBar:SetStatusBarColor(0, 0, 0, 0); longBar:SetMinMaxValues(0, 1); longBar:SetValue(0)
-  mark = longBar:CreateTexture(nil, 'OVERLAY'); mark:SetTexture(MARK); mark:SetTexCoord(0, MARK_W / 128, 0, MARK_H / 64)
-  mark:SetSize(W, H); mark:SetPoint('RIGHT', longBar:GetStatusBarTexture(), 'RIGHT')
+  -- the skull and bones, on the ring's top edge like a raid mark (sheet 23 v5); none when the frame has no portrait
+  win, longBar, mark = nil, nil, nil
+  if portrait then
+    win = CreateFrame('Frame', nil, portrait:GetParent() or UIParent); win:SetClipsChildren(true); win:SetFrameStrata('HIGH')
+    local k = skullStep()
+    local W, H = px(MARK_W, win), px(MARK_H, win)
+    if k ~= 1 then W, H = W * k, H * k end
+    -- sheet 23 v5: centred over the ring (measured on the sheet: 0.5 px off; a -6 px offset put it 6.8 px left in game)
+    -- and 65.5 px above the ring's centre, on its top edge
+    win:SetSize(W, H); win:SetPoint('CENTER', portrait, 'CENTER', px(.8, win) * k, px(65.5, win) * k)
+    longBar = CreateFrame('StatusBar', nil, win); longBar:SetSize(W * 400, H); longBar:SetPoint('RIGHT', win, 'RIGHT')
+    longBar:SetStatusBarTexture(WHITE); longBar:SetStatusBarColor(0, 0, 0, 0); longBar:SetMinMaxValues(0, 1); longBar:SetValue(0)
+    mark = longBar:CreateTexture(nil, 'OVERLAY'); mark:SetTexture(MARK); mark:SetTexCoord(0, MARK_W / 128, 0, MARK_H / 64)
+    mark:SetSize(W, H); mark:SetPoint('RIGHT', longBar:GetStatusBarTexture(), 'RIGHT')
+  end
+  P.builtOn = hb
   built = true
   return true
 end
@@ -224,7 +263,7 @@ end
 local function hide()
   if not built then return end
   P.hpLate = nil
-  clip:Hide(); win:Hide()
+  clip:Hide(); if win then win:Hide() end
   for _, r in pairs(M.snap().per) do r.slot = nil end
   for _, s in ipairs(segs) do s.owner = nil; s.shown = 0; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide() end
   M.dropBites()
@@ -410,7 +449,8 @@ local function render()
   shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
   -- the skull: hidden when the mob already carries a real raid mark (that one wins)
   local total = 0; for _, d in ipairs(dots) do if not d.provisional and not d.landed then total = total + d.damage end end   -- review #4: only confirmed DoTs make the skull
-  if GetRaidTargetIndex('target') or ns.db.skull == false then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(total) end
+  if not win then -- no portrait on this frame: no skull
+  elseif GetRaidTargetIndex('target') or ns.db.skull == false then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(total) end
 end
 
 -- new numbers (10 times a second and on events): the model notices ticks and keeps them for render
@@ -419,10 +459,54 @@ local function draw(dots, maxv, hp)
   M.feed(dots, maxv, hp)
 end
 
+-- Which bar to draw on, every update. A different bar (another add-on's target frame showed up, or one was picked)
+-- builds the pieces again on it. Rule: a bar that isn't on screen while you have a target gets nothing drawn on it,
+-- and chat says so once. Blizzard's own frame gets half a second first (it can show a moment after the target
+-- changes; our pieces sit inside it, so nothing floats meanwhile): its look never changes.
+local told, hiddenSince, rebuilds = {}, nil, 0
+local chosenAt, chosen = -1, false   -- the last answer, kept 0.15 s (update can run every frame in a fight)
+local function once(key, msg) if not told[key] then told[key] = true; ns.say(msg) end end
+local function unbuild()
+  if not built then return end
+  hide(); clip:Hide(); if win then win:Hide() end
+  segs = {}; built = false
+end
+local choose1
+local function choose()
+  local now = GetTime()
+  if now - chosenAt < .15 then return chosen end
+  chosenAt = now; chosen = choose1()
+  return chosen
+end
+choose1 = function()
+  local bar, pf, source, blizz, hidden = ns.targetBar()
+  P.source = source
+  if not bar then return false end
+  if hidden then
+    local now = GetTime(); hiddenSince = hiddenSince or now
+    if not blizz or now - hiddenSince >= .5 then
+      if now - hiddenSince >= .5 then once('hidden', "your target's health bar is hidden, so the kill bar shows nothing. Another add-on's target frame? /omadoomed frame pick") end
+      return false
+    end
+  else hiddenSince = nil end
+  if not blizz and ns.plates.reversed(bar) then
+    once('reversed', "your target's health bar fills from the right; the kill bar can't draw on that one yet.")
+    return false
+  end
+  if not want or want.bar ~= bar or want.portrait ~= pf then
+    if built and (P.builtOn ~= bar or portrait ~= pf) then
+      if rebuilds >= 20 then ns.err('kill bar: target bar keeps changing; staying on the last one'); return false end
+      rebuilds = rebuilds + 1; unbuild()
+    end
+    want = { bar = bar, portrait = pf, blizz = blizz }
+  end
+  return true
+end
+
 local function update()
   if not ns.db or not ns.db.doomed or P.off then M.clearCur(); return hide() end
   if test then
-    if not UnitExists('target') then M.clearCur(); return hide() end
+    if not UnitExists('target') or not choose() then M.clearCur(); return hide() end
     local now = GetTime()
     if not test.t0 or now - test.t0 > 28 then   -- sheet 30's numbers, from DoesItDie's log: 198-health mob at 140
       test.t0 = now
@@ -448,7 +532,7 @@ local function update()
     if build() then P.lost:Show(); P.hangOn(P.baseEdge) end   -- the empty bar past the fake health (P.base carries its end)
     return draw(dots, m, hp)
   end
-  if not UnitExists('target') or UnitIsDead('target') then M.clearCur(); return hide() end
+  if not UnitExists('target') or UnitIsDead('target') or not choose() then M.clearCur(); return hide() end
   local dots = M.targetDots()
   local ok, err = pcall(draw, dots, UnitHealthMax('target'), UnitHealth('target'))
   if not ok then ns.fail('draw: ' .. tostring(err), 'the kill bar'); P.off = true; hide() end   -- review #12: off for this session only
@@ -470,7 +554,11 @@ function P.start()
   end
   ns.bus:On('TARGET', newTarget)
   ns.bus:On('DOTS', function() P.dirty = true end)
+  ns.bus:On('TARGET_BAR', function() told.hidden = nil; chosenAt = -1; P.dirty = true end)   -- a frame path was set or cleared
   local ev = CreateFrame('Frame')
+  -- the skull's whole-number step follows the screen and the UI scale
+  for _, e in ipairs({ 'UI_SCALE_CHANGED', 'DISPLAY_SIZE_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
+  ev:SetScript('OnEvent', function() P.sizeSkull() end)
   local acc = 0
   ev:SetScript('OnUpdate', function(_, dt)
     M.step(dt)
@@ -496,7 +584,7 @@ function P.slash(m)
   if m == 'on' or m == 'off' then
     ns.db.doomed = (m == 'on'); ns.say('kill bar ' .. (ns.db.doomed and 'on.' or 'off.')); return update()
   end
-  ns.say('/omadoomed on|off, options, report, report show, errors · /omadoomed rings on|off, others on|off')
+  ns.say('/omadoomed on|off, options, report, report show, errors, plates, frame · /omadoomed rings on|off, others on|off')
 end
 
 -- a setting changed on the Options page (Settings.lua): show it at once; every other kill bar setting is read each frame

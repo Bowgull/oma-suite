@@ -32,6 +32,9 @@ ns.settings = Core.NewSettings({
       choices = { { 'breathe', 'Breathing gold' }, { 'steady', 'Steady gold' } },
       tip = "How the gold looks in a DoT's last seconds: breathing on the rings' beat, or steady." },
     { key = 'platebar', default = true },   -- the kill bar over every dotted mob (/omadoomed only for now)
+    { key = 'targetPath', default = '' },   -- another add-on's target health bar, by frame name (/omadoomed frame)
+    { button = 'Pick', name = 'Target health bar', click = function() if ns.startPick then ns.startPick() end end,
+      tip = "Only if another add-on replaced your target frame: click Pick, close Options, then click its health bar (out of combat, with a mouse). Or type /omadoomed frame and the bar's name." },
 
     { header = 'Rings' },
     { key = 'where', store = R, default = 'enemy', control = 'dropdown', label = 'Where the rings show',

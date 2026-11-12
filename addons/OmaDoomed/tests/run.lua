@@ -7,9 +7,6 @@ local pattern = arg[1]
 -- to fail until the plan phase named here fixes it: a failure prints KNOWN FAIL and doesn't fail the run. One that
 -- passes prints FIXED and does fail the run, so this list is kept honest: take it off when its phase lands.
 local KNOWN = {
-  ['a duel: a plate that turns hostile gets its row'] = 4,
-  ['a mob that turns friendly loses its row'] = 4,
-  ['pool: every plate past the spares keeps its own pair'] = 4,
 }
 
 local files = {}

@@ -6,9 +6,12 @@
 -- the end of Blizzard's own fill, scaled 0..max health (a hidden number may be handed to a status bar), and the
 -- pieces are stacked: piece k shows the damage of DoTs 1..k, the one ending first nearest the green. Clipped to the
 -- health bar so nothing runs past its left end.
+-- Which plates and which bar: PlateManager.lua (live enemy plates; Blizzard's bar or another add-on's, e.g. Plater).
+-- Each plate is drawn in its own error guard: one odd plate never switches the others off.
 local ADDON, ns = ...
 local K = {}; ns.parts.platebar = K
 local Spells, Anim, Secret = ns.spells, ns.core.Anim, ns.core.Secret
+local PM = ns.plates
 local OTHER = { .55, .45, .65 }
 
 local MAX = 5
@@ -19,24 +22,35 @@ local shown = {}                                   -- health bar -> true while i
 local foundLogged
 local charging = {}                                -- precast fills, moved every frame so they glide with the cast bar
 
-local function healthBarOf(plate)
-  local uf = plate and plate.UnitFrame; if not uf then return nil end
-  local c = uf.HealthBarsContainer
-  local hb = (c and (c.healthBar or c.HealthBar)) or uf.healthBar
-  if hb and hb.GetStatusBarTexture then return hb end
+-- another add-on's bar (Plater, Threat Plates...) draws in a layer of its own: our pieces take the same strata, just
+-- above its level, and follow it when it moves (Plater lifts your target's plate). Blizzard's bars keep today's levels.
+local function levelOf(hb) local _, l = PM.layerOf(hb); return l or 200 end
+local function layer(set, hb)
+  local strata, l = PM.layerOf(hb)
+  set.layerKey = tostring(strata) .. ':' .. tostring(l)
+  if strata then set.clip:SetFrameStrata(strata) end
+  set.clip:SetFrameLevel((l or 200) + 2)
+  for i = 1, MAX do
+    local lv = set.clip:GetFrameLevel() + 2 * (MAX - i)
+    for _, f in ipairs({ set[i], set.charge[i], set.ov[i] }) do if strata then f:SetFrameStrata(strata) end end
+    set[i]:SetFrameLevel(lv); set.charge[i]:SetFrameLevel(lv + 1); set.ov[i]:SetFrameLevel(lv + 1)
+  end
 end
 
-local function piecesFor(hb)
+-- addon: another add-on's bar (no Blizzard atlas to cut by, its own layer). reversed: its health drains to the right,
+-- so every piece is mirrored: they grow rightward from the health's end (the fill's left edge).
+local function piecesFor(hb, addon, reversed)
   local set = made[hb]; if set then return set end
   local fill = hb:GetStatusBarTexture(); if not fill then return nil end
-  set = { clip = CreateFrame('Frame', nil, hb), fill = fill }
-  set.clip:SetAllPoints(hb); set.clip:SetClipsChildren(true); set.clip:SetFrameLevel(hb:GetFrameLevel() + 2)
+  set = { clip = CreateFrame('Frame', nil, hb), fill = fill, addon = addon, reversed = reversed }
+  if addon then local strata = PM.layerOf(hb); if strata then set.clip:SetFrameStrata(strata) end end
+  set.clip:SetAllPoints(hb); set.clip:SetClipsChildren(true); set.clip:SetFrameLevel((addon and levelOf(hb) or hb:GetFrameLevel()) + 2)
   -- 2026-11-11 ("spilling over just a little"; measured, OmaDoomedDB.plateGeo): Blizzard's fill is the atlas
   -- UI-HUD-CoolDownManager-Bar (ARTWORK 0 of the health bar), whose own shape is inset with soft ends; our pieces were
   -- a plain square texture filling the whole bar box, so they showed past that shape onto the border's inner edge.
   -- The fix is the fill's own shape as a stencil (below).
   local okA, atlas = false, nil
-  if type(fill) == 'table' and fill.GetAtlas then okA, atlas = pcall(fill.GetAtlas, fill) end
+  if not addon and type(fill) == 'table' and fill.GetAtlas then okA, atlas = pcall(fill.GetAtlas, fill) end
   if not okA or type(atlas) ~= 'string' or atlas == '' then atlas = nil end
   set.atlas = atlas
   -- 2026-11-11 (2): drawing each piece WITH the atlas stretched the whole bar, round ends and all, over every piece
@@ -50,7 +64,10 @@ local function piecesFor(hb)
       local m = b:CreateMaskTexture(); m:SetAllPoints(hb)
       if pcall(m.SetAtlas, m, atlas) then t:AddMaskTexture(m) end
     end
-    if from then   -- fills rightward from a piece's far edge
+    if reversed then   -- mirrored
+      if from then b:SetReverseFill(true); b:SetPoint('TOPRIGHT', from, 'TOPRIGHT'); b:SetPoint('BOTTOMRIGHT', from, 'BOTTOMRIGHT')
+      else b:SetPoint('TOPLEFT', fill, 'TOPLEFT'); b:SetPoint('BOTTOMLEFT', fill, 'BOTTOMLEFT') end
+    elseif from then   -- fills rightward from a piece's far edge
       b:SetPoint('TOPLEFT', from, 'TOPLEFT'); b:SetPoint('BOTTOMLEFT', from, 'BOTTOMLEFT')
     else           -- fills leftward from the health's end
       b:SetReverseFill(true); b:SetPoint('TOPRIGHT', fill, 'TOPRIGHT'); b:SetPoint('BOTTOMRIGHT', fill, 'BOTTOMRIGHT')
@@ -85,9 +102,11 @@ local function piecesFor(hb)
     local m, here = set.ov[i].mask, set[i]:GetStatusBarTexture()
     local near = i == 1 and fill or set[i - 1]:GetStatusBarTexture()
     if type(here) == 'table' and type(near) == 'table' then
-      m:SetPoint('TOPLEFT', here, 'TOPLEFT'); m:SetPoint('BOTTOMRIGHT', near, i == 1 and 'BOTTOMRIGHT' or 'BOTTOMLEFT')
+      if reversed then m:SetPoint('TOPRIGHT', here, 'TOPRIGHT'); m:SetPoint('BOTTOMLEFT', near, i == 1 and 'BOTTOMLEFT' or 'BOTTOMRIGHT')
+      else m:SetPoint('TOPLEFT', here, 'TOPLEFT'); m:SetPoint('BOTTOMRIGHT', near, i == 1 and 'BOTTOMRIGHT' or 'BOTTOMLEFT') end
     end
   end
+  if addon then layer(set, hb) end
   made[hb] = set
   return set
 end
@@ -98,26 +117,30 @@ end
 local function clear(hb) local set = made[hb]; if set then for i = 1, MAX do set[i]:Hide(); quietSlot(set, i) end end; shown[hb] = nil end
 -- every frame: what moves with your cast bar ('While you cast', the same setting as the target frame), and the
 -- 0.3 s ease to full colour as a cast lands (no snap)
+local function chargeOne(b, c, now)
+  local col = c.col
+  if c.landAt then
+    local v = math.min(1, (now - c.landAt) / .3); local k = .45 + .55 * Anim.smoothstep(v)
+    b:SetStatusBarColor(col[1] * k, col[2] * k, col[3] * k, 1)
+    if v >= 1 then charging[b] = nil end
+  else
+    local pr = math.max(0, math.min(1, (now - c.s) / (c.e - c.s)))
+    if c.look == 'charging' then c.ch:SetValue(c.dmg * pr)
+    elseif c.look == 'smoulder' then local k = .3 + .7 * pr ^ 1.6; b:SetStatusBarColor(col[1] * k, col[2] * k, col[3] * k, 1)
+    elseif c.look == 'stripes' then
+      local bw, bh = c.hb:GetWidth(), c.hb:GetHeight(); local o = (now * .35) % 1
+      c.ov.pre:SetTexCoord(o, o + bw / 24, 0, math.max(.01, bh / 24))
+    elseif c.look == 'motes' then
+      local bw = c.hb:GetWidth(); local o = (now * .08) % 1
+      c.ov.motes:SetTexCoord(o, o + bw / 128 * 2, 0, 1)
+    end
+  end
+end
 local function chargeStep()
   local now = GetTime()
   for b, c in pairs(charging) do
-    local col = c.col
-    if c.landAt then
-      local v = math.min(1, (now - c.landAt) / .3); local k = .45 + .55 * Anim.smoothstep(v)
-      b:SetStatusBarColor(col[1] * k, col[2] * k, col[3] * k, 1)
-      if v >= 1 then charging[b] = nil end
-    else
-      local pr = math.max(0, math.min(1, (now - c.s) / (c.e - c.s)))
-      if c.look == 'charging' then c.ch:SetValue(c.dmg * pr)
-      elseif c.look == 'smoulder' then local k = .3 + .7 * pr ^ 1.6; b:SetStatusBarColor(col[1] * k, col[2] * k, col[3] * k, 1)
-      elseif c.look == 'stripes' then
-        local bw, bh = c.hb:GetWidth(), c.hb:GetHeight(); local o = (now * .35) % 1
-        c.ov.pre:SetTexCoord(o, o + bw / 24, 0, math.max(.01, bh / 24))
-      elseif c.look == 'motes' then
-        local bw = c.hb:GetWidth(); local o = (now * .08) % 1
-        c.ov.motes:SetTexCoord(o, o + bw / 128 * 2, 0, 1)
-      end
-    end
+    local ok, err = pcall(chargeOne, b, c, now)
+    if not ok then charging[b] = nil; ns.error('platebar charge: ' .. tostring(err)) end   -- that piece only
   end
 end
 
@@ -129,14 +152,16 @@ local function dotsOn(unit)
 end
 
 local function paint(unit, plate)
-  local hb = healthBarOf(plate)
-  if not hb then
-    if not foundLogged then foundLogged = true; ns.err('platebar: no health bar on the nameplate') end
+  local found = PM.barOf(unit)
+  local hb = found and found.bar
+  if not hb or found.hidden then   -- no bar on screen: nothing to draw on (Blizzard's only if it really shows)
+    if not hb and not foundLogged then foundLogged = true; ns.err('platebar: no health bar on the nameplate') end
     return nil
   end
   local list = dotsOn(unit)
   if #list == 0 then if shown[hb] then clear(hb) end; return hb end
-  local set = piecesFor(hb); if not set then return hb end
+  local set = piecesFor(hb, found.addon, found.addon and PM.reversed(hb)); if not set then return hb end
+  if set.addon then local s, l = PM.layerOf(hb); if tostring(s) .. ':' .. tostring(l) ~= set.layerKey then layer(set, hb) end end
   local w = hb:GetWidth()
   local maxv = UnitHealthMax(unit)
   -- precast ("I don't see the precast" on these bars; "whatever look I chose from settings"):
@@ -188,16 +213,15 @@ local function refresh()
     for hb in pairs(shown) do clear(hb) end; return
   end
   local seen = {}
-  for i = 1, 40 do
-    local u = 'nameplate' .. i
-    if UnitExists(u) then
-      local plate = C_NamePlate.GetNamePlateForUnit(u, false)
-      if plate and Secret.isTrue(Secret.call(UnitCanAttack, 'player', u)) and not UnitIsDead(u) then
-        local hb = paint(u, plate); if hb then seen[hb] = true end
-      end
+  -- the live enemy plates (PlateManager); each in its own guard, so one odd plate never stops the others
+  for u, plate in pairs(PM.live) do
+    if PM.enemy[u] and not UnitIsDead(u) then
+      local ok, hb = pcall(paint, u, plate)
+      if ok then if hb then seen[hb] = true end
+      else ns.error('platebar: ' .. u .. ': ' .. tostring(hb)) end
     end
   end
-  for hb in pairs(shown) do if not seen[hb] then clear(hb) end end   -- plates that left, died or changed mob
+  for hb in pairs(shown) do if not seen[hb] then pcall(clear, hb) end end   -- plates that left, died or changed mob
 end
 
 function K.start()

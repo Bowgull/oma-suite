@@ -119,7 +119,9 @@ function ns.saveReport(how)
     doesItDie = (ns.doesItDieOn and ns.doesItDieOn()) and 'yes' or 'no',
     bar = nil, rings = nil,
     errors = {}, rows = lastRows(), perf = ns.perf(),
+    bars = ns.barLines and select(2, pcall(ns.barLines)) or nil,
   }
+  if type(r.bars) ~= 'table' then r.bars = nil end
   local dump = ns.settings and ns.settings:Dump(db) or { main = {}, rings = {} }
   r.bar, r.rings = dump.main, dump.rings or {}
   for i = 1, math.min(10, #(db.errs or {})) do r.errors[i] = db.errs[i] end
@@ -139,6 +141,7 @@ local function asText(r)
   kv(r.bar); L[#L + 1] = 'ring settings:'; kv(r.rings)
   L[#L + 1] = ''; L[#L + 1] = 'recent errors:'; for _, e in ipairs(r.errors) do L[#L + 1] = '  ' .. e end
   if r.perf then L[#L + 1] = ''; for _, line in ipairs(ns.perfLines(r.perf)) do L[#L + 1] = line end end
+  if r.bars then L[#L + 1] = ''; L[#L + 1] = 'bars drawn on (/omadoomed plates):'; for _, line in ipairs(r.bars) do L[#L + 1] = '  ' .. line end end
   L[#L + 1] = ''; L[#L + 1] = 'last ' .. KEEP .. ' seconds (time, DoT=damage left, P casting, L landed, E ending, fps; a row that repeats says how long):'
   for _, row in ipairs(r.rows) do L[#L + 1] = '  ' .. row end
   return table.concat(L, '\n')

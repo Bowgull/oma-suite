@@ -4,7 +4,7 @@
 -- Pieces: Bus, Anim, Log, Secret, Settings (schema + page + migrations), Slash.
 -- OmaCore holds code only; each add-on keeps its own saved data.
 local _, ns = ...
-local MAJOR, MINOR = 'OmaCore-1.0', 1
+local MAJOR, MINOR = 'OmaCore-1.0', 2   -- 2: Slash words can keep the case of what follows
 local Core = LibStub:NewLibrary(MAJOR, MINOR)
 ns.omaCoreBuild = Core   -- nil when an equal or newer copy is already loaded
 if not Core then return end
