@@ -12,7 +12,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local V = 8                                    -- layout version: bump when LAYOUT changes
+local V = 9                                    -- layout version: bump when LAYOUT changes
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
 local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
@@ -44,10 +44,10 @@ local LAYOUT = {
   -- trigger + face buttons (bare face buttons are Blizzard's: jump, back, interact, inspect). A whole pull = hold RT, X Y B A.
   -- v7 (Joshua 2026-11-10): "my right trigger is the main pull, the left trigger the other stuff": LT and RT swapped in every set.
   -- RT + face: the pull
-  { 1, 'RT', X, 'macro', 'PetFight' },                                   -- demon: defensive + attack my target
+  { 1, 'RT', X, 'spell', 'Shoot' },                                      -- wand (v9, Joshua 2026-11-12: swapped with the demon)
   { 1, 'RT', Y, 'spell', 'Corruption' },
   { 1, 'RT', B, 'spell', 'Bane of Agony' },
-  { 1, 'RT', A, 'spell', 'Shoot' },                                      -- wand
+  { 1, 'RT', A, 'macro', 'PetFight' },                                   -- demon: defensive + attack my target (v9: was X)
   -- LT + face: keeping it going
   { 1, 'LT', X, 'spell', 'Life Tap' },
   { 1, 'LT', Y, 'spell', 'Drain Life' },
