@@ -481,8 +481,10 @@ local function rxpProbe()
 end
 -- RestedXP auto-fit (Joshua, 2026-11-09): its bottom bar is pinned and the steps stack upward, so a long step group
 -- can climb into the shard gems. Twice a second: if the topmost step is above LIMIT px from the screen top, shrink the
--- whole window just enough (keeping the bottom bar where it is); grow back when there is room again. Never below 85%.
-local LIMIT, ROOM, MINF = 300, 60, .85
+-- whole window just enough (keeping the bottom bar where it is); grow back when there is room again. Never below 62%
+-- (2026-11-11, Joshua: "Let's go with one": at 85% a three-quest list still reached the pet frame; the saved log said
+-- "top 176px -> scale 1.02 (base 1.20)", and getting that top under 300 px needs about two-thirds).
+local LIMIT, ROOM, MINF = 300, 60, .62
 local fit = { base = nil, last = 0 }
 local function pxTop(fr) local tp = fr:GetTop(); if not tp then return nil end; return 1080 - tp * fr:GetEffectiveScale() * 1080 / 768 end
 local function rxpTopPx(f)
