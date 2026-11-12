@@ -109,11 +109,10 @@ countText:SetPoint('LEFT', root, 'RIGHT', 10 * PX, -2 * PX); countText:SetTextCo
 local testNoPet = false   -- /omademon shards nopet: show the no-pet spot for 15 s
 local function place()
   -- our own plain frame: fine to move in combat too (a pet summoned mid-fight)
-  local s = UIParent:GetEffectiveScale()
-  -- Scale the row so 1 unit = 1 TV pixel, measured NOW (at file load the UI scale isn't applied yet: that put the row
-  -- 25 px high on 2026-11-09). Physical px = units * effective scale * (screen height / 768).
-  local _, ph = GetPhysicalScreenSize(); ph = (ph and ph > 0) and ph or 1080
-  root:SetScale((768 / ph) / UIParent:GetEffectiveScale())
+  -- The art is drawn in pixels of a 1080p screen at WoW's default UI scale. The row now scales with the UI like
+  -- Blizzard's own frames (it used to be pinned to physical pixels, so on a smaller UI scale the gems dwarfed the
+  -- pet frame). Same size as before at 1080p and the default UI scale.
+  root:SetScale(768 / 1080)
   -- 2026-11-10 (Joshua: follow the pet frame; no pet = slide up under you). Measured with /omademon shards probe: the row's
   -- old spot (232,237 TV px) is the pet portrait's bottom-left (235,237) less 3 px. So: pinned to PetPortrait while
   -- the pet is out (it moves when the pet frame moves); with no pet, up where the pet frame's top is (157 px), just
