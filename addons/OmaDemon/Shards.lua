@@ -120,7 +120,18 @@ local function place()
   local pet, holder = _G.PetPortrait, _G.PlayerBottomManagedFrameContainer or _G.PlayerFrame
   root:ClearAllPoints()
   if pet and pet:IsVisible() and not testNoPet then
-    root:SetPoint('TOPLEFT', pet, 'BOTTOMLEFT', -3, 0); if db then db.placed = 'under pet' end
+    -- 2026-11-12 Joshua: "Centered under whole pet frame". Top stays on the portrait's bottom; the row's middle lines
+    -- up with the middle of the whole pet frame (picture + bars). Worked out in screen pixels so any frame scale
+    -- (BetterBlizzFrames on the Shadow, the couch UI on the laptop) lands the same. Falls back to the old spot.
+    local pf = _G.PetFrame
+    local fx, px = pf and pf:GetCenter(), pet:GetCenter()
+    local rs = root:GetEffectiveScale()
+    if fx and px and rs and rs > 0 then
+      local dx = (fx * pf:GetEffectiveScale() - px * pet:GetEffectiveScale()) / rs
+      root:SetPoint('TOP', pet, 'BOTTOM', dx, 0); if db then db.placed = 'centred under pet frame' end
+    else
+      root:SetPoint('TOPLEFT', pet, 'BOTTOMLEFT', -3, 0); if db then db.placed = 'under pet' end
+    end
   elseif holder and holder == _G.PlayerBottomManagedFrameContainer then
     root:SetPoint('TOPLEFT', holder, 'TOPLEFT', 59, 0); if db then db.placed = 'under you' end
   else
@@ -236,7 +247,7 @@ ns.shardsSlash = function(msg)
       local a = f.GetEffectiveAlpha and f:GetEffectiveAlpha() or (f.GetAlpha and f:GetAlpha()) or 1
       print(('%s x=%.0f y=%.0f w=%.0f h=%.0f alpha=%.2f shown=%s'):format(name, l * k, sh - (b + h) * k, w * k, h * k, a, tostring(f:IsVisible())))
     end
-    where('gems', root); where('PetPortrait', _G.PetPortrait); where('PetFrame', _G.PetFrame)
+    where('gems', root); where('glow', _G.OmaDemonGlow); where('PetPortrait', _G.PetPortrait); where('PetFrame', _G.PetFrame)
     where('PetFrameTexture', _G.PetFrameTexture); where('PetName', _G.PetName); where('PetHealth', _G.PetFrameHealthBar)
     local frames = {}
     for _, a in ipairs({ 'BetterBlizzFrames', 'ClassicFrames', 'EasyFrames', 'ElvUI', 'ShadowedUnitFrames', 'Pitbull4', 'UnhaltedUnitFrames' }) do
