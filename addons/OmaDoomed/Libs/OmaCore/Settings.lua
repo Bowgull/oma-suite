@@ -10,7 +10,8 @@
 --   { button = 'Text', name = '', click = fn, tip = '' }    a button
 --   { key = 'k', default = v, store = 'sub' }               a setting with no control (default only)
 --   { key = 'k', default = v, control = 'check'|'slider'|'dropdown', label = '', tip = '', parent = 'otherKey',
---     store = 'sub', min =, max =, step =, format = fn, choices = { { value, 'Label' }, ... } }
+--     store = 'sub', min =, max =, step =, format = fn, choices = { { value, 'Label' }, ... },
+--     frame = fn(rowFrame) }   frame: called each time Blizzard sets up the row, to add our own bits beside it
 -- store: the sub-table of the saved table the value lives in (nil = the saved table itself).
 -- Sliders get a small gold notch at their default. It is added with hooksecurefunc after Blizzard's own setup and
 -- kept in OmaCore's own table, never written onto Blizzard's frame.
@@ -163,6 +164,12 @@ function S:Build(db, name, parent)
       end
       local p = it.parent and made[it.parent]
       if p and init.SetParentInitializer then init:SetParentInitializer(p.init, function() return p.setting:GetValue() end) end
+      if it.frame and init.InitFrame then   -- it.frame(frame): add something to this row (kept on our side, never on Blizzard's frame)
+        local fn, onError = it.frame, self.def.onError
+        hooksecurefunc(init, 'InitFrame', function(_, frame)
+          local ok, err = pcall(fn, frame); if not ok and onError then onError('row ' .. key .. ': ' .. tostring(err)) end
+        end)
+      end
       made[key] = { init = init, setting = setting }
     end
   end

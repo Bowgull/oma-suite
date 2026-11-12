@@ -1,8 +1,16 @@
 ## Interface: 16001
 ## Title: OmaDemon
-## Notes: Your demon, readable from across the room: its portrait and the screen edge glow soul purple below 30% health, and your soul shards sit under it as five cut gems.
+## Notes: Your demon, readable from across the room: its portrait and the screen edge glow soul purple when it's low, and your soul shards sit under it as five gems. Settings: /omademon
 ## SavedVariables: OmaDemonDB
 
+Libs\LibStub\LibStub.lua
+Libs\OmaCore\OmaCore.lua
+Libs\OmaCore\Bus.lua
+Libs\OmaCore\Anim.lua
+Libs\OmaCore\Secret.lua
+Libs\OmaCore\Log.lua
+Libs\OmaCore\Settings.lua
+Libs\OmaCore\Slash.lua
 Settings.lua
 Glow.lua
 Shards.lua

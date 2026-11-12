@@ -2,7 +2,10 @@
 -- Spec and QA list: reports/Soul shard displays in WoW.md. On Forever shards are bag items (6265), no bar, no cap.
 local _, ns = ...
 local ITEM, N = 6265, 5
-local SHEET = 'Interface\\AddOns\\OmaDemon\\shards\\art\\OmashuShards.tga'    -- 512x256, drawn at 2x
+local ARTDIR = 'Interface\\AddOns\\OmaDemon\\shards\\art\\'
+local SHEETS = { default = 'OmashuShards', crystal = 'OmashuShards-crystal', pixel = 'OmashuShards-pixel' }   -- 512x256, drawn at 2x, same cells
+local function sheet() local d = ns.shardsDB(); return ARTDIR .. (SHEETS[d.gemLook or 'default'] or SHEETS.default) .. '.tga' end
+local allTex = {}
 local CHIME = 'Interface\\AddOns\\OmaDemon\\shards\\snd\\five.ogg'
 local PX = 1                                                              -- the row frame is scaled so that 1 unit = 1 TV pixel (see place)
 local W, H, STEP = 40 * PX, 48 * PX, 48 * PX                              -- one cell drawn at 1x (gem 36x44 inside a 40x48 cell)
@@ -14,7 +17,7 @@ local function coords(t, c) t:SetTexCoord(c[1] / 512, c[2] / 512, c[3] / 256, c[
 local db
 local function say(m) ns.say(m) end
 local function log(m) if not db then return end; db.log = db.log or {}; table.insert(db.log, 1, date('%H:%M:%S ') .. m); while #db.log > 40 do table.remove(db.log) end end
-local function reduced() return db.reduced end
+local function reduced() return ns.reduced() end
 
 -- ---------- count (guarded: a "secret" value in combat keeps the last known count) ----------
 local last = nil
@@ -40,7 +43,7 @@ local root = CreateFrame('Frame', 'OmaDemonShards', UIParent)
 root:SetSize(STEP * (N - 1) + W, H); root:SetFrameStrata('MEDIUM'); root:SetFrameLevel(5)
 local gems, countText = {}, nil
 local function tex(parent, cell, layer, blend, w, h)
-  local t = parent:CreateTexture(nil, layer or 'ARTWORK'); t:SetTexture(SHEET); coords(t, cell)
+  local t = parent:CreateTexture(nil, layer or 'ARTWORK'); t:SetTexture(sheet()); coords(t, cell); allTex[#allTex + 1] = t
   t:SetSize(w or W, h or H); t:SetPoint('CENTER'); if blend then t:SetBlendMode(blend) end
   pcall(t.SetSnapToPixelGrid, t, true); pcall(t.SetTexelSnappingBias, t, 0)
   return t
@@ -112,14 +115,18 @@ local function place()
   -- The art is drawn in pixels of a 1080p screen at WoW's default UI scale. The row now scales with the UI like
   -- Blizzard's own frames (it used to be pinned to physical pixels, so on a smaller UI scale the gems dwarfed the
   -- pet frame). Same size as before at 1080p and the default UI scale.
-  root:SetScale(768 / 1080)
+  root:SetScale(768 / 1080 * ((db and db.size) or 100) / 100)
   -- 2026-11-10 (Joshua: follow the pet frame; no pet = slide up under you). Measured with /omademon shards probe: the row's
   -- old spot (232,237 TV px) is the pet portrait's bottom-left (235,237) less 3 px. So: pinned to PetPortrait while
   -- the pet is out (it moves when the pet frame moves); with no pet, up where the pet frame's top is (157 px), just
   -- under your own bars, pinned to the frame that holds the pet frame. Only OUR frame is anchored; theirs untouched.
   local pet, holder = _G.PetPortrait, _G.PlayerBottomManagedFrameContainer or _G.PlayerFrame
   root:ClearAllPoints()
-  if pet and pet:IsVisible() and not testNoPet then
+  if db and db.pin == false and db.pos then
+    -- placed by hand (Move gems): the row's centre, in UIParent units from the bottom left
+    local k = root:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    root:SetPoint('CENTER', UIParent, 'BOTTOMLEFT', db.pos.x / k, db.pos.y / k); db.placed = 'where you put it'
+  elseif pet and pet:IsVisible() and not testNoPet then
     -- 2026-11-12 Joshua: "Centered under whole pet frame". Top stays on the portrait's bottom; the row's middle lines
     -- up with the middle of the whole pet frame (picture + bars). Worked out in screen pixels so any frame scale
     -- (BetterBlizzFrames on the Shadow, the couch UI on the laptop) lands the same. Falls back to the old spot.
@@ -163,7 +170,7 @@ end
 local inCombat = false
 local function refreshFull(count)
   for i = 1, N do local g = gems[i]
-    if count >= N and inCombat and not reduced() then if not g.full:IsPlaying() then g.full:Play() end
+    if count >= N and inCombat and not reduced() and db.breathe ~= false then if not g.full:IsPlaying() then g.full:Play() end
     else if g.full:IsPlaying() then g.full:Stop() end; g.glow:SetAlpha(.45) end
   end
 end
@@ -193,6 +200,8 @@ local function update(why)
       if k == 1 then playGain(g) else C_Timer.After(.08 * (k - 1), function() playGain(g) end) end
     end
     if old < N and n >= N and db.sound ~= false then pcall(PlaySoundFile, CHIME, 'SFX') end
+    local keep = db.keep or 6
+    if db.chat ~= false and n > keep and old <= keep then say(('%d soul shards, over your %d. Clear some bag space when you can.'):format(n, keep)) end
     log(('gain %d -> %d (%s)'):format(old, n, why))
   elseif n < old then
     local k = 0
@@ -212,11 +221,11 @@ ev:SetScript('OnEvent', function(_, e)
   if e == 'PLAYER_LOGIN' then
     db = ns.shardsDB()
     if select(2, UnitClass('player')) ~= 'WARLOCK' then root:Hide(); ev:UnregisterAllEvents(); return end
-    checkDrainSoul(); place(); root:Show()
+    checkDrainSoul(); place(); ns.shardsVis()
   elseif e == 'PLAYER_ENTERING_WORLD' then checkDrainSoul(); place(); C_Timer.After(1, function() update('enter') end)
   elseif e == 'BAG_UPDATE_DELAYED' then update('bags')
-  elseif e == 'PLAYER_REGEN_DISABLED' then inCombat = true; if last then refreshFull(last) end
-  elseif e == 'PLAYER_REGEN_ENABLED' then inCombat = false; place(); if last then refreshFull(last) end
+  elseif e == 'PLAYER_REGEN_DISABLED' then inCombat = true; if ns.endMove then ns.endMove() end; ns.shardsVis(); if last then refreshFull(last) end
+  elseif e == 'PLAYER_REGEN_ENABLED' then inCombat = false; place(); ns.shardsVis(); if last then refreshFull(last) end
   elseif e == 'SPELLS_CHANGED' then checkDrainSoul(); if last then refreshZero(last) end
   else place(); C_Timer.After(0.3, place) end   -- pet in or out: the pet frame settles a moment later
 end)
@@ -275,3 +284,107 @@ ns.shardsSlash = function(msg)
   elseif cmd == 'log' then for i = math.min(10, #(db.log or {})), 1, -1 do print(db.log[i]) end
   else say('/omademon shards test ... | motion on|off | sound on|off | hint on|off | place | log') end
 end
+
+-- ---------- settings: look, size, showing, moving (sheet 31 v3, approved 2026-11-12) ----------
+local previewUntil, moving = 0, false
+function ns.shardsVis()
+  local d = ns.shardsDB()
+  local show = d.gems ~= false and (not d.hideOOC or inCombat or moving or GetTime() < previewUntil)
+  if select(2, UnitClass('player')) ~= 'WARLOCK' then show = false end
+  root:SetShown(show)
+end
+function ns.shardsPreview(sec)
+  previewUntil = GetTime() + (sec or 6); ns.shardsVis()
+  C_Timer.After((sec or 6) + .05, ns.shardsVis)
+end
+local function setLook() local path = sheet(); for _, t in ipairs(allTex) do t:SetTexture(path) end end
+
+-- five small gems beside the Size slider, in the chosen look and size (kept in our own table, never on Blizzard's frame)
+local minis = setmetatable({}, { __mode = 'k' })
+local function paintMini(m)
+  local d = ns.shardsDB(); local h = math.floor(24 * (d.size or 100) / 100 + .5)
+  for i, t in ipairs(m.gems) do
+    t:SetTexture(sheet()); coords(t, i <= 2 and CELL.lit or CELL.empty); t:SetSize(h * 40 / 48, h)
+    t:ClearAllPoints(); t:SetPoint('LEFT', m, 'LEFT', (i - 1) * (h * 40 / 48 + 2), 0)
+  end
+end
+function ns.sizeRow(frame)
+  local sl = frame.SliderWithSteppers
+  if not sl then return end
+  local m = minis[frame]
+  if not m then
+    m = CreateFrame('Frame', nil, frame); m:SetSize(120, 40); m.gems = {}
+    for i = 1, N do m.gems[i] = m:CreateTexture(nil, 'ARTWORK') end
+    minis[frame] = m
+  end
+  m:ClearAllPoints(); m:SetPoint('LEFT', sl, 'RIGHT', 44, 0); m:Show(); m.isSize = true; paintMini(m)
+end
+if SettingsSliderControlMixin and SettingsSliderControlMixin.Init then
+  -- a recycled slider row may be another setting now: hide our gems; the Size row shows them again after
+  hooksecurefunc(SettingsSliderControlMixin, 'Init', function(frame) local m = minis[frame]; if m then m:Hide() end end)
+end
+
+-- Move gems: like Blizzard's Edit Mode. Options step aside, the row gets a blue box you drag (mouse) or nudge
+-- (D-pad / arrow keys), A or Enter puts the Options back. Out of combat only; a fight ends it and keeps the spot.
+local mover = CreateFrame('Frame', 'OmaDemonGemMover', UIParent); mover:Hide(); mover:SetFrameStrata('DIALOG')
+mover:SetPoint('TOPLEFT', root, 'TOPLEFT', -8, 6); mover:SetPoint('BOTTOMRIGHT', root, 'BOTTOMRIGHT', 8, -6)
+local fill = mover:CreateTexture(nil, 'BACKGROUND'); fill:SetAllPoints(); fill:SetColorTexture(.24, .55, 1, .28)
+for _, e in ipairs({ { 'TOPLEFT', 'TOPRIGHT', 0, 2 }, { 'BOTTOMLEFT', 'BOTTOMRIGHT', 0, 2 }, { 'TOPLEFT', 'BOTTOMLEFT', 2, 0 }, { 'TOPRIGHT', 'BOTTOMRIGHT', 2, 0 } }) do
+  local t = mover:CreateTexture(nil, 'BORDER'); t:SetColorTexture(.47, .75, 1, .95)
+  t:SetPoint(e[1]); t:SetPoint(e[2]); if e[3] > 0 then t:SetWidth(e[3]) else t:SetHeight(e[4]) end
+end
+local label = mover:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight'); label:SetPoint('TOPLEFT', mover, 'BOTTOMLEFT', 0, -6)
+label:SetText('Soul shard gems: drag, or D-pad to nudge. A or Enter when done.')
+local function savePos()
+  local x, y = root:GetCenter(); if not (x and y) then return end
+  local k = root:GetEffectiveScale() / UIParent:GetEffectiveScale()
+  db.pos = { x = x * k, y = y * k }; db.pin = false; place()
+end
+mover:EnableMouse(true); mover:RegisterForDrag('LeftButton')
+mover:SetScript('OnDragStart', function() if InCombatLockdown() then return end; root:SetMovable(true); root:StartMoving() end)
+mover:SetScript('OnDragStop', function() root:StopMovingOrSizing(); savePos() end)
+local function nudge(dx, dy)
+  local p = db.pos or {}; local x, y = root:GetCenter(); if not (x and y) then return end
+  local k = root:GetEffectiveScale() / UIParent:GetEffectiveScale()
+  db.pos = { x = (p.x or x * k) + dx, y = (p.y or y * k) + dy }; db.pin = false; place()
+end
+local keys = { { 'Up', 0, 4, { 'PADDUP', 'UP' } }, { 'Down', 0, -4, { 'PADDDOWN', 'DOWN' } }, { 'Left', -4, 0, { 'PADDLEFT', 'LEFT' } }, { 'Right', 4, 0, { 'PADDRIGHT', 'RIGHT' } } }
+for _, k in ipairs(keys) do
+  local bt = CreateFrame('Button', 'OmaDemonNudge' .. k[1], mover); bt:SetScript('OnClick', function() nudge(k[2], k[3]) end)
+end
+local done = CreateFrame('Button', 'OmaDemonGemMoverDone', mover, 'UIPanelButtonTemplate'); done:SetSize(90, 24); done:SetText(DONE or 'Done')
+done:SetPoint('TOPRIGHT', mover, 'BOTTOMRIGHT', 0, -4)
+function ns.endMove()
+  if not moving then return end
+  moving = false; mover:Hide(); ClearOverrideBindings(mover); ns.shardsVis()
+  if not InCombatLockdown() and ns.settings then ns.settings:Open() end
+end
+done:SetScript('OnClick', ns.endMove)
+function ns.moveGems()
+  if InCombatLockdown() then say('not in combat'); return end
+  if db.pin ~= false then say('turn off Pin to pet first, then Move.'); return end
+  moving = true; ns.shardsVis(); place()
+  if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+  mover:Show()
+  for _, k in ipairs(keys) do for _, key in ipairs(k[4]) do SetOverrideBindingClick(mover, true, key, 'OmaDemonNudge' .. k[1]) end end
+  for _, key in ipairs({ 'PAD1', 'ENTER', 'ESCAPE', 'PAD2' }) do SetOverrideBindingClick(mover, true, key, 'OmaDemonGemMoverDone') end
+end
+
+table.insert(ns.onSetting, function(key, store)
+  if store ~= 'shards' or not db then return end
+  if key == 'gemLook' then setLook() end
+  if key == 'gemLook' or key == 'size' then for _, m in pairs(minis) do if m.isSize and m:IsShown() then paintMini(m) end end end
+  if key == 'size' or key == 'pin' then
+    if key == 'pin' and db.pin == false and not db.pos then
+      local x, y = root:GetCenter(); local k = root:GetEffectiveScale() / UIParent:GetEffectiveScale()
+      if x and y then db.pos = { x = x * k, y = y * k } end
+    end
+    place()
+  end
+  if key == 'gems' or key == 'hideOOC' then ns.shardsVis() end
+  if key == 'breathe' and last then refreshFull(last) end
+  if key == 'zeroHint' and last then refreshZero(last) end
+  if key == 'gemLook' or key == 'size' or key == 'hideOOC' then ns.shardsPreview(4) end
+end)
+local lookEv = CreateFrame('Frame'); lookEv:RegisterEvent('PLAYER_LOGIN')
+lookEv:SetScript('OnEvent', function() setLook() end)
