@@ -27,16 +27,19 @@ ns.settings = Core.NewSettings({
       tip = "Ember: the bitten part glows in its own colour and settles. Cinders: the same glow, and small embers lift off it. Essence: a soft curl of shadow haze rises from it. Plain: it just slides shut." },
     { key = 'low', default = 3, control = 'slider', label = 'Ending soon', parent = BAR, min = 2, max = 5, step = 1,
       format = function(v) return ('%d s'):format(v) end,
-      tip = "A DoT's piece and its ring turn gold for its last seconds." },
+      tip = "In a DoT's last seconds its piece on your target's kill bar, and its ring, turn gold." },
     { key = 'lowlook', default = 'breathe', control = 'dropdown', label = 'Ending soon look', parent = BAR,
       choices = { { 'breathe', 'Breathing gold' }, { 'steady', 'Steady gold' } },
       tip = "How the gold looks in a DoT's last seconds: breathing on the rings' beat, or steady." },
-    { key = 'platebar', default = true },   -- the kill bar over every dotted mob (/omadoomed only for now)
+    { key = 'platebar', default = true, control = 'check', label = 'Over enemies', parent = BAR,
+      tip = "The same kill bar inside the health bar over every enemy you DoT." },
     { key = 'targetPath', default = '' },   -- another add-on's target health bar, by frame name (/omadoomed frame)
     { button = 'Pick', name = 'Target health bar', click = function() if ns.startPick then ns.startPick() end end,
       tip = "Only if another add-on replaced your target frame: click Pick, close Options, then click its health bar (out of combat, with a mouse). Or type /omadoomed frame and the bar's name." },
 
     { header = 'Rings' },
+    { key = 'enabled', store = R, default = true, control = 'check', label = 'Rings',
+      tip = "Your DoTs as rings over enemies. Off: Blizzard's own debuff icons come back on nameplates, and on the target frame unless Blizzard's squares is set to Hide." },
     { key = 'where', store = R, default = 'enemy', control = 'dropdown', label = 'Where the rings show',
       choices = { { 'enemy', 'Above enemies' }, { 'frame', 'Target frame' }, { 'split', 'Haunt' } },
       tip = "Above enemies: rings over every enemy's head. Target frame: only on your target's frame. Haunt: over every enemy you're not targeting; the one you target shows its rings on its frame." },
@@ -53,7 +56,6 @@ ns.settings = Core.NewSettings({
     { key = 'othersAlpha', store = R, default = 55, control = 'slider', label = "Other players' DoTs", min = 0, max = 100, step = 5,
       format = function(v) return v == 0 and 'Hidden' or ('%d%%'):format(v) end,
       tip = "How solid other warlocks' DoT rings are (theirs only, not every debuff). 0 hides them; another strength shows after a /reload." },
-    { key = 'enabled', store = R, default = true },   -- /omadoomed rings on|off
     { key = 'others', store = R, default = true },    -- /omadoomed rings others on|off
 
     { header = 'Help' },
@@ -63,6 +65,17 @@ ns.settings = Core.NewSettings({
       tip = 'Opens your last bug report, selected, ready to copy with Ctrl+C.' },
   },
 })
+
+-- Chat lines that aren't settings, kept here beside the settings text so a translation has one place to look.
+ns.text = {
+  plates = "using %s's nameplates: the kill bar and rings go on its health bars.",
+  frame = "your target frame comes from %s: the kill bar goes on its health bar. /omadoomed frame if it looks wrong.",
+  doesItDie = "Does It Die is also on: you'll see both markers. OmaDoomed doesn't need it.",
+}
+ns.hello = {
+  new = "rings over every enemy you DoT, and on your target's health bar, what your DoTs will still take. Settings: /omadoomed options.",
+  upgrade = "1.0: works on its own (no Does It Die), on Plater and other nameplate add-ons, in every game language. Settings: /omadoomed options.",
+}
 
 ns.MIGRATIONS = {
   -- 1: the first numbered version. Earlier saves need no change (defaults fill whatever is missing).

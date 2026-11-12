@@ -191,11 +191,11 @@ visible = function()
     R.setVis(p, show)
   end
   if framePair then
-    local show = (where == 'frame' or where == 'both' or where == 'split') and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
+    local show = db.enabled ~= false and (where == 'frame' or where == 'both' or where == 'split') and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
     R.setVis(framePair, show)
   end
   if chanPair then
-    local show = where == 'split' and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
+    local show = db.enabled ~= false and where == 'split' and UnitExists('target') and isEnemy('target') and (which ~= 'combat' or fight)
     if show and not placeChanPair() then show = false end
     R.setVis(chanPair, show)
   end
@@ -369,9 +369,16 @@ onEvent = (function(_, e, a1, _, a3)
 end)
 
 local toldReload = false
+-- the rings on or off (Options or /omadoomed rings on|off); Blizzard's own row comes back while they're off
+local function setEnabled(on)
+  db.enabled = on
+  if on then BC.blizzardRow(false); BC.squaresApply(); fill(); attachAll(); visible()
+  else releaseAll(); BC.blizzardRow(true); BC.squaresApply(); visible() end
+end
 function ns.ringsApply(key)
   if not db then return end
-  if key == 'size' or key == 'alpha' then for _, p in ipairs(pairsAll) do look(p) end; visible()
+  if key == 'enabled' then setEnabled(db.enabled ~= false)
+  elseif key == 'size' or key == 'alpha' then for _, p in ipairs(pairsAll) do look(p) end; visible()
   elseif key == 'othersAlpha' then
     R.OTHERS_ALPHA = (db.othersAlpha or 55) / 100
     setOthers((db.othersAlpha or 55) > 0)
@@ -392,10 +399,10 @@ function ns.ringsSlash(msg)
   if not db then return end
   local cmd, arg = (msg or ''):match('^(%S*)%s*(.-)$'); cmd = cmd:lower(); arg = arg:lower()
   if cmd == 'off' then
-    db.enabled = false; releaseAll(); BC.blizzardRow(true); BC.squaresApply()
+    setEnabled(false)
     say('off: Blizzard\'s debuff row is back' .. (BC.pending() and ' after this fight.' or '.'))
   elseif cmd == 'on' then
-    db.enabled = true; BC.blizzardRow(false); BC.squaresApply(); fill(); attachAll()
+    setEnabled(true)
     say('on' .. (BC.pending() and ' (Blizzard\'s row goes off after this fight).' or '.'))
   elseif cmd == 'others' and (arg == 'on' or arg == 'off') then
     setOthers(arg == 'on'); say('other players\' DoTs ' .. ((db.others and R.othersOK) and 'on' or 'off') .. '.')

@@ -497,6 +497,7 @@ end
 choose1 = function()
   local bar, pf, source, blizz, hidden = ns.targetBar()
   P.source = source
+  if bar and not blizz and ns.text and not tostring(source):find('^path ') then ns.tellOnce('frame:' .. tostring(source), ns.text.frame:format(tostring(source))) end
   if not bar then return false end
   if hidden then
     local now = GetTime(); hiddenSince = hiddenSince or now
@@ -558,7 +559,7 @@ end
 function ns.doesItDieOn()
   return (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded('DoesItDie')) and true or DoesItDie ~= nil
 end
-local function otherMarkers() if ns.doesItDieOn() then ns.say("Does It Die is also on: you'll see both markers.") end end
+local function otherMarkers() if ns.doesItDieOn() then ns.tellOnce('doesitdie', ns.text.doesItDie) end end
 
 function P.start()
   if select(2, UnitClass('player')) ~= 'WARLOCK' then return end
