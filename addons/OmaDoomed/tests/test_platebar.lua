@@ -8,6 +8,9 @@ local function tocFiles()
   return files
 end
 
+-- a piece's colour: its texture's (the status bar only measures)
+local function col(p) return rawget(rawget(p, 'omArt'), '_r') end
+
 local function setup(W)
   local F = require('fight'); F.start({ compare = false })
   local UI = require('ui'); UI.install()
@@ -63,7 +66,8 @@ return {
     T.eq(made[1].rec.value, 30, 'piece 1: Corruption (ends first)')
     T.eq(made[2].rec.value, 70, 'piece 2: Corruption + Immolate')
     T.eq(made[1].rec.max, 300, 'scaled to max health')
-    T.near(made[1].rec.color[1], 78 / 255, 1e-6, "Corruption's kill bar colour")
+    -- phase 5: the plate pieces take the target bar's landed strength (x1.15, KillBarStyle), the one approved change
+    T.near(col(made[1]), 78 / 255 * 1.15, 1e-6, "Corruption's kill bar colour, as on the target bar")
   end,
   ['in combat the max health is handed over hidden, never read'] = function(W, T)
     local ns, F, DOTS, made = setup(W)
@@ -96,13 +100,13 @@ return {
     W.advance(1.0)
     T.ok(fills[2].rec.shown, 'Immolate fill shown while casting')
     T.near(fills[2].rec.value, 40 * .5, 2, 'halfway through the cast: half of its own piece, filled from its far edge toward the green')
-    T.near(made[2].rec.color[1], 160 / 255 * .45, 1e-6, 'the piece itself sits dim')
+    T.near(col(made[2]), 160 / 255 * .45, 1e-6, 'the piece itself sits dim')
     T.ok(not fills[1].rec.shown, 'Corruption (not being cast) has no fill')
     UnitCastingInfo = function() return nil end
     DOTS.nameplate1[2].provisional = false
     W.advance(.2)
     T.ok(not fills[2].rec.shown, 'landed: fill gone')
-    T.near(made[2].rec.color[1], 160 / 255, 1e-6, 'and the piece is its full colour at once (the fill was already whole)')
+    T.near(col(made[2]), 160 / 255 * 1.15, 1e-6, 'and the piece is its full colour at once (the fill was already whole)')
   end,
   ['precast Smoulder: the piece rises out of the dark, no fill; eases to full as it lands'] = function(W, T)
     local ns, F, DOTS, made, fills = setup(W)
@@ -111,14 +115,14 @@ return {
     UnitCastingInfo = function() return 'Immolate', nil, nil, t0 * 1000, (t0 + 2) * 1000 end
     DOTS.nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 99, provisional = true } }
     W.advance(.3)
-    local early = made[1].rec.color[1]
+    local early = col(made[1])
     W.advance(1.4)
-    T.ok(made[1].rec.color[1] > early, 'brighter as the cast goes on')
+    T.ok(col(made[1]) > early, 'brighter as the cast goes on')
     T.ok(not fills[1].rec.shown, 'no Charging fill')
     UnitCastingInfo = function() return nil end
     DOTS.nameplate1[1].provisional = false
     W.advance(.5)
-    T.near(made[1].rec.color[1], 160 / 255, 1e-6, 'full colour after the ease')
+    T.near(col(made[1]), 160 / 255 * 1.15, 1e-6, 'full colour after the ease')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
   end,
   ['precast Drifting stripes: piece dim, no Charging fill, no errors'] = function(W, T)
@@ -128,7 +132,7 @@ return {
     UnitCastingInfo = function() return 'Immolate', nil, nil, t0 * 1000, (t0 + 2) * 1000 end
     DOTS.nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 99, provisional = true } }
     W.advance(1)
-    T.near(made[1].rec.color[1], 160 / 255 * .45, 1e-6, 'piece dim while casting')
+    T.near(col(made[1]), 160 / 255 * .45, 1e-6, 'piece dim while casting')
     T.ok(not fills[1].rec.shown, 'no Charging fill')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
   end,
@@ -139,7 +143,7 @@ return {
     UnitCastingInfo = function() return 'Immolate', nil, nil, t0 * 1000, (t0 + 2) * 1000 end
     DOTS.nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 99, provisional = true } }
     W.advance(1)
-    T.near(made[1].rec.color[1], 160 / 255 * .45, 1e-6, 'piece dim while casting')
+    T.near(col(made[1]), 160 / 255 * .45, 1e-6, 'piece dim while casting')
     T.ok(not fills[1].rec.shown, 'no Charging fill')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
   end,
@@ -150,8 +154,34 @@ return {
     UnitCastingInfo = function() return 'Immolate', nil, nil, t0 * 1000, (t0 + 2) * 1000 end
     DOTS.nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 99, provisional = true } }
     W.advance(1)
-    T.near(made[1].rec.color[1], 160 / 255 * .45, 1e-6, 'piece dim while casting')
+    T.near(col(made[1]), 160 / 255 * .45, 1e-6, 'piece dim while casting')
     T.ok(not fills[1].rec.shown, 'no Charging fill')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
+  end,
+  ['built like Blizzard\'s segments: the fill\'s own art inside the bar, top and bottom from the fill texture'] = function(W, T)
+    local ns, F, DOTS, made, fills = setup(W)
+    local hb = C_NamePlate.GetNamePlateForUnit('nameplate1').UnitFrame.HealthBarsContainer.healthBar
+    local fill = hb:GetStatusBarTexture()
+    rawset(fill, 'GetAtlas', function() return 'UI-HUD-CoolDownManager-Bar' end)
+    rawset(fill, 'GetDrawLayer', function() return 'ARTWORK', 0 end)
+    W.combat = true   -- max health hidden: the build must not need it
+    W.advance(.3)
+    T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
+    local set = ns.parts.platebar.setOf(hb)
+    T.ok(set, 'pieces made for the bar')
+    for i = 1, 5 do
+      for _, art in ipairs({ set[i].omArt, set.charge[i].omArt, set.ov[i].pre, set.ov[i].motes }) do
+        local pts = rawget(art, '_pts')
+        T.ok(pts.TOP[1] == fill and pts.BOTTOM[1] == fill, 'piece ' .. i .. ': top and bottom are the fill texture\'s')
+        T.ok(pts.LEFT[1] == hb and pts.RIGHT[1] == hb, 'piece ' .. i .. ': the sides are the bar\'s (the mask cuts it)')
+        T.ok(rawget(art, '_parent') == hb, 'piece ' .. i .. ': inside the health bar')
+        T.eq(#rawget(art, '_masks'), 1, 'piece ' .. i .. ': one square mask, no bar-wide stencil')
+      end
+      T.eq(rawget(set[i].omArt, '_atlas'), 'UI-HUD-CoolDownManager-Bar', 'piece ' .. i .. ': the fill\'s own atlas')
+      -- the mask hangs on measuring bars that ride the fill: their top and bottom are the fill's too
+      local rp = rawget(set[1], '_pts')
+      T.ok(rp.TOPRIGHT[1] == fill and rp.BOTTOMRIGHT[1] == fill, 'piece 1 measures from the fill\'s end')
+    end
+    T.ok(issecretvalue(made[1].rec.max), 'max health handed over hidden, never used in sums')
   end,
 }

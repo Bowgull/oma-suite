@@ -105,9 +105,12 @@ function M.SetFrameLevel(self, l) rawset(self, '_level', l) end
 function M.GetFrameLevel(self) return rawget(self, '_level') or 0 end
 function M.SetFrameStrata(self, s) rawset(self, '_strata', s) end
 function M.GetFrameStrata(self) return rawget(self, '_strata') or 'MEDIUM' end
-function M.SetPoint(self, _, rel) rawset(self, '_anchor', rel); rawset(self, '_points', (rawget(self, '_points') or 0) + 1) end
+function M.SetPoint(self, point, rel, relPoint)
+  rawset(self, '_anchor', rel); rawset(self, '_points', (rawget(self, '_points') or 0) + 1)
+  local pts = rawget(self, '_pts') or {}; rawset(self, '_pts', pts); pts[point] = { rel, relPoint or point }   -- every point, by name
+end
 function M.SetAllPoints(self, rel) rawset(self, '_anchor', rel); rawset(self, '_points', 2) end
-function M.ClearAllPoints(self) rawset(self, '_points', 0) end
+function M.ClearAllPoints(self) rawset(self, '_points', 0); rawset(self, '_pts', nil) end
 function M.GetNumPoints(self) return rawget(self, '_points') or 0 end
 -- alpha multiplies down the parents, like the game
 function M.GetEffectiveAlpha(self)
@@ -128,6 +131,8 @@ function M.SetReverseFill(self, v) rawset(self, '_reverse', v and true or false)
 function M.SetText(self, t) rawset(self, '_text', t) end
 function M.GetText(self) return rawget(self, '_text') end
 function M.SetTexture(self, t) rawset(self, '_texture', t) end
+function M.SetAtlas(self, a) rawset(self, '_atlas', a) end
+function M.AddMaskTexture(self, m) local ms = rawget(self, '_masks') or {}; rawset(self, '_masks', ms); ms[#ms + 1] = m end
 function M.SetFont(self, f) rawset(self, '_font', f); return true end   -- the game answers true when the font loads
 function M.GetStatusBarTexture(self)
   local t = rawget(self, '_tex'); if not t then t = obj('Texture'); link(t, self); rawset(self, '_tex', t) end
@@ -165,7 +170,8 @@ obj = function(kind) return setmetatable({ kind = kind, events = {}, scripts = {
 UI.obj = obj
 
 -- A colour, as CreateColor gives one (a ColorMixin table)
-local function color(r, g, b, a) return { r = r, g = g, b = b, a = a or 1, GetRGBA = function(c) return c.r, c.g, c.b, c.a end, GetRGB = function(c) return c.r, c.g, c.b end } end
+local function color(r, g, b, a) return { r = r, g = g, b = b, a = a or 1, GetRGBA = function(c) return c.r, c.g, c.b, c.a end, GetRGB = function(c) return c.r, c.g, c.b end,
+  SetRGBA = function(c, r2, g2, b2, a2) c.r, c.g, c.b, c.a = r2, g2, b2, a2 or 1 end } end
 
 function UI.install()
   local realCreate = CreateFrame

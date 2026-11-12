@@ -1,9 +1,9 @@
 -- The Options page (Settings.lua) on the strict fake Settings API: every control is built from Blizzard's own
 -- controls with its default, and a change reaches the add-on at once.
-local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'where', 'squares', 'which', 'size', 'alpha', 'othersAlpha' }
-local KINDS = { doomed = 'checkbox', skull = 'checkbox', cast = 'dropdown', tick = 'dropdown', low = 'slider', lowlook = 'dropdown',
+local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'platebar', 'enabled', 'where', 'squares', 'which', 'size', 'alpha', 'othersAlpha' }
+local KINDS = { doomed = 'checkbox', skull = 'checkbox', cast = 'dropdown', tick = 'dropdown', low = 'slider', lowlook = 'dropdown', platebar = 'checkbox', enabled = 'checkbox',
   where = 'dropdown', squares = 'dropdown', which = 'dropdown', size = 'slider', alpha = 'slider', othersAlpha = 'slider' }
-local UNDER_BAR = { skull = true, cast = true, tick = true, low = true, lowlook = true }
+local UNDER_BAR = { skull = true, cast = true, tick = true, low = true, lowlook = true, platebar = true }
 
 local function setup(W, opts)
   local ns, F, UI = require('load').addon(opts)
@@ -29,7 +29,7 @@ return {
     T.eq(cat.name, 'OmaDoomed'); T.eq(cat.parent.name, 'Oma')
     T.eq(UI.S.addOnCategories[1], cat.parent, 'the Oma parent registered at login')
     local kinds = {}; for _, i in ipairs(cat.layout.inits) do kinds[#kinds + 1] = i.kind == 'header' and ('header:' .. i.text) or i.kind end
-    T.eq(table.concat(kinds, ','), 'element,header:Kill bar,checkbox,checkbox,dropdown,dropdown,slider,dropdown,button,header:Rings,dropdown,dropdown,dropdown,slider,slider,slider,header:Help,button,button',
+    T.eq(table.concat(kinds, ','), 'element,header:Kill bar,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Rings,checkbox,dropdown,dropdown,dropdown,slider,slider,slider,header:Help,button,button',
       'preview, headers, controls, the Pick button and the two report buttons')
   end,
   ['saved values are kept, not reset to defaults'] = function(W, T)
@@ -58,5 +58,22 @@ return {
     T.eq(rawget(frame, 'omaNotch'), nil, "nothing written onto Blizzard's frame")
     SlashCmdList.OMADOOMED('options')
     T.eq(UI.S.opened[1], ns.settingsCategory:GetID())
+  end,
+  ['phase 6: the plate bar and the rings switch off from Options'] = function(W, T)
+    local ns, F, UI = setup(W, { rings = true })
+    W.advance(3)
+    local c = byKey(UI)
+    c.platebar.setting:SetValue(false); T.eq(ns.db.platebar, false, 'plate bar off')
+    c.enabled.setting:SetValue(false); W.advance(.1)
+    T.eq(ns.db.rings.enabled, false, 'rings off')
+    T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
+    c.enabled.setting:SetValue(true); W.advance(.1)
+    T.eq(ns.db.rings.enabled, true, 'and back on')
+  end,
+  ['phase 6: one hello per account, never twice'] = function(W, T)
+    local ns = setup(W)
+    local n = 0; for _, p in ipairs(W.printed) do if p:find('/omadoomed options', 1, true) then n = n + 1 end end
+    T.eq(n, 1, 'the hello said once')
+    T.ok(OmaDoomedDB.told and OmaDoomedDB.told.hello1, 'remembered for the account')
   end,
 }

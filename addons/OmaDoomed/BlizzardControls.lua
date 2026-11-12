@@ -52,8 +52,10 @@ end
 -- They live in TargetFrame...TargetFrameContentContextual.Auras, a TargetFrameAuraContainer (Forever source:
 -- Blizzard_UnitFrame/Shared/TargetFrameAuraContainer.lua). Its filter string is ignored: ShouldShowAuraAsDebuff
 -- decides, and on an enemy NPC it shows only your (and your pet's) debuffs plus ones NPCs cast; other players' DoTs
--- never show there. So on mobs 'All but my DoTs' turns the debuff row off and keeps the mob's buffs. On a player
--- target Blizzard shows everyone's debuffs, so there the row stays whole.
+-- never show there. Blizzard gives add-ons no safe way to drop only yours (the choice is made inside its own code, and
+-- replacing that would taint the target frame): only how many squares show. So on mobs 'All but my DoTs' turns the
+-- debuff row off, stuns and the mob's own debuffs with it, and keeps the mob's buffs; on a player target Blizzard
+-- shows everyone's debuffs, so there the row stays whole. With the rings off, everything shows (yours too).
 local function targetAuras()
   local c = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual
   return c and c.Auras
@@ -61,6 +63,7 @@ end
 local function squaresNow()
   local db = rdb(); local au = targetAuras(); if not au or not db then return end
   local mode = db.squares or 'notmine'
+  if db.enabled == false and mode == 'notmine' then mode = 'all' end   -- rings off: your DoTs show here instead
   local onPlayer = UnitExists('target') and UnitIsPlayer('target')
   local ok, err = pcall(function()
     -- only touch Blizzard's container when the value really changes (fewer chances to taint it)

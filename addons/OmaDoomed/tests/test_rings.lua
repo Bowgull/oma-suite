@@ -38,11 +38,31 @@ return {
     T.eq(#UI.mainOf(ring).groups, #ring.groups, 'ring and main have the same groups, so buttons line up')
     noErrors(T)
   end,
-  ['the pool: built one pair per frame out of combat, up to 24'] = function(W, T)
+  ['the pool: built one pair per frame out of combat, up to 12'] = function(W, T)
     local ns, F, UI = require('load').addon({ rings = true })
     T.eq(#UI.ringContainers(), 0, 'nothing built at login itself')
     W.advance(.5); T.eq(#UI.ringContainers(), 5, 'one pair per frame')
-    W.advance(3); T.eq(#UI.ringContainers(), 24, 'then stops at 24')
+    W.advance(3); T.eq(#UI.ringContainers(), 12, 'then stops at 12')
+  end,
+  ['the pool grows out of combat: 6 spare beside the plates showing, up to 40 plates and the two target rows'] = function(W, T)
+    local ns, F, UI = setup(W, { where = 'split' })
+    local base = #UI.ringContainers()
+    plates(W, F, 1, 10); W.advance(1)
+    T.eq(rows(UI, 1, 10), 10, 'every plate has a row')
+    T.eq(#UI.ringContainers(), 10 + 6 + 2, '6 spare (and the two Haunt rows)')
+    plates(W, F, 11, 40); W.advance(2)
+    T.eq(rows(UI, 1, 40), 40, 'all 40 plates have a row')
+    T.eq(#UI.ringContainers(), 42, 'the most there can be: 40 plates and the two Haunt rows')
+    T.ok(base <= 14, 'it started small: ' .. base)
+    noErrors(T)
+  end,
+  ['the pool does not grow in combat'] = function(W, T)
+    local ns, F, UI = setup(W)
+    W.combat = true
+    plates(W, F, 1, 8); W.advance(1)
+    T.eq(#UI.ringContainers(), 12, 'nothing built in combat')
+    W.combat = false; W.fire('PLAYER_REGEN_ENABLED'); W.advance(1)
+    T.eq(#UI.ringContainers(), 8 + 6, 'after the fight: back to 6 spare')
   end,
   ['a row goes on an enemy plate, not a friendly one, and back to the pool when the plate goes'] = function(W, T)
     local ns, F, UI = setup(W)
@@ -59,15 +79,15 @@ return {
     T.eq(UI.rowOn('nameplate1'), nil, 'released'); T.ok(not UI.isVisible(ring), 'and hidden')
     F.mob('nameplate3', B, 'Gnoll', 300); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate3')
     T.ok(UI.rowOn('nameplate3') == ring, 'the spare pair is reused')
-    T.eq(#UI.ringContainers(), 24, 'no new pair needed')
+    T.eq(#UI.ringContainers(), 12, 'no new pair needed')
     noErrors(T)
   end,
-  ['pool in combat: the 24 spares are used, nothing is built, the rest is logged'] = function(W, T)
+  ['pool in combat: the 12 spares are used, nothing is built, the rest is logged'] = function(W, T)
     local ns, F, UI = setup(W)
     W.combat = true
     plates(W, F, 1, 30)
-    T.eq(rows(UI, 1, 30), 24, 'the 24 spares are used')
-    T.eq(#UI.ringContainers(), 24, 'no containers made in combat')
+    T.eq(rows(UI, 1, 30), 12, 'the 12 spares are used')
+    T.eq(#UI.ringContainers(), 12, 'no containers made in combat')
     T.ok(errsWith('no free container') > 0, 'logged')
   end,
   ['pool: a plate past the spares gets a new pair out of combat'] = function(W, T)

@@ -14,6 +14,13 @@ ns.log = Core.NewLog({ name = ADDON, store = function() return OmaDoomedDB end, 
 function ns.err(m) ns.log:Note(m) end              -- diagnostics
 function ns.error(m) ns.log:Error(m) end           -- a caught error; nothing stopped
 function ns.fail(m, part) ns.log:Fail(m, part) end -- a caught error that switched `part` off for the session
+-- a line said once per account, ever (a found add-on, the first hello): OmaDoomedDB.told[key]
+function ns.tellOnce(key, msg)
+  local db = OmaDoomedDB; if not db then return end
+  db.told = db.told or {}
+  if db.told[key] then return end
+  db.told[key] = true; ns.say(msg)
+end
 ns.bus = Core.NewBus(function(event, err) ns.log:Error(tostring(event) .. ': ' .. tostring(err)) end)
 
 function ns.isWarlock()
@@ -44,12 +51,14 @@ local function slash()
   s:Word('frame', function(rest) return ns.frameSlash and ns.frameSlash(rest) end, true)
 end
 
+local fresh   -- no saved data before this login: a new install
 local f = CreateFrame('Frame')
 f:RegisterEvent('ADDON_LOADED')
 f:SetScript('OnEvent', function(self, event, name)
   if event == 'ADDON_LOADED' then
     if name ~= ADDON then return end
     self:UnregisterEvent('ADDON_LOADED')
+    fresh = OmaDoomedDB == nil or next(OmaDoomedDB) == nil
     OmaDoomedDB = OmaDoomedDB or {}
     if ns.settings then
       ns.settings:Migrate(OmaDoomedDB, ns.MIGRATIONS or {}, ns.error)
@@ -69,5 +78,7 @@ f:SetScript('OnEvent', function(self, event, name)
     if ns.spells then pcall(ns.spells.learnClientNames) end
     for _, p in pairs(ns.parts) do local ok, err = pcall(p.start); if not ok then ns.error('start: ' .. tostring(err)) end end
     for _, s in ipairs(ns.starts) do local ok, err = pcall(s); if not ok then ns.error('start: ' .. tostring(err)) end end
+    -- one hello per account: what it is (a new install) or what changed (an upgrade), and where the settings are
+    if ns.hello then ns.tellOnce('hello1', fresh and ns.hello.new or ns.hello.upgrade) end
   end
 end)

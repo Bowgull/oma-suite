@@ -201,8 +201,16 @@ end
 -- ---------- the live list ----------
 local function hostile(u) return Secret.call(UnitCanAttack, 'player', u) end   -- true / false / nil (hidden: can't tell)
 
+-- another add-on's plates in use: said once per account and add-on
+function PM.toldSource(source, addon)
+  if addon and type(source) == 'string' and source ~= 'search' and ns.tellOnce and ns.text then
+    ns.tellOnce('plates:' .. source, ns.text.plates:format(source))
+  end
+end
+
 local function find(u, plate)
   local bar, host, source, addon, hidden = ns.plateBar(plate, u)
+  PM.toldSource(source, addon)
   return { bar = bar, host = host, source = source, addon = addon, hidden = hidden }
 end
 -- the bar found for a live unit (kept; looked for again when it had none or a hidden one)
@@ -240,6 +248,7 @@ local function recheckOne(u, plate)
   local b = PM.bars[u]
   if b and b.bar == bar and b.host == host and b.source == source and b.hidden == hidden then return end
   PM.bars[u] = { bar = bar, host = host, source = source, addon = addon, hidden = hidden }
+  PM.toldSource(source, addon)
   ns.bus:Fire('PLATE_CHANGED', u, plate, PM.enemy[u], 'bar')
 end
 local function recheck()

@@ -25,13 +25,18 @@ local function bar(UI, kind, parent, w)
   return b
 end
 local function add(W, ...) for _, t in ipairs({ ... }) do W.fire('NAME_PLATE_UNIT_ADDED', t) end end
--- the kill bar's clip frame on a health bar (KillPlates: a child of the bar that clips its children)
+-- the kill bar's measuring frame on a health bar (KillPlates: a child of the bar holding its invisible status bars)
 local function clipOn(UI, hb) for _, k in ipairs(UI.kids(hb)) do if rawget(k, 'kind') == 'Frame' then return k end end end
 local function piecesShown(UI, hb)
   local c = clipOn(UI, hb); if not c then return 0 end
   local n = 0
   for _, k in ipairs(UI.kids(c)) do if rawget(k, 'kind') == 'StatusBar' and rawget(k, 'shown') ~= false and rawget(k, '_value') then n = n + 1 end end
   return n
+end
+-- the kill bar's visible pieces are textures of the health bar itself (they take its layer, like Blizzard's segments)
+local function insideBar(ns, hb)
+  local set = ns.parts.platebar.setOf(hb)
+  return set ~= nil and rawget(set[1].omArt, '_parent') == hb and rawget(set.charge[1].omArt, '_parent') == hb
 end
 -- the ring row for a token, wherever its host is
 local function rowFor(UI, token)
@@ -52,7 +57,7 @@ return {
     T.eq(source, 'Blizzard'); T.eq(addon, false); T.ok(not hidden)
     T.eq(b, plate('nameplate1').UnitFrame.HealthBarsContainer.healthBar, "Blizzard's health bar")
     T.ok(piecesShown(UI, b) > 0, 'kill bar pieces on it')
-    T.eq(rawget(clipOn(UI, b), '_strata'), nil, 'no strata set on Blizzard bars (same as before)')
+    T.ok(insideBar(ns, b), 'drawn inside the bar itself')
     T.ok(UI.rowOn('nameplate1'), 'a ring row on the plate')
     noErrors(T)
   end,
@@ -66,15 +71,11 @@ return {
     add(W, 'nameplate1'); W.advance(.5, FRAME)
     local b, host, source, addon = ns.plateBar(p, 'nameplate1')
     T.eq(source, 'Plater'); T.eq(b, hb); T.eq(host, uf); T.ok(addon)
-    local clip = clipOn(UI, hb)
-    T.ok(clip, 'pieces on Plater\'s bar'); T.eq(clip._strata, 'LOW', 'its strata'); T.eq(clip._level, 12, 'just above its level')
+    T.ok(insideBar(ns, hb), 'pieces drawn inside Plater\'s bar, so in its layer wherever it goes')
     T.ok(piecesShown(UI, hb) > 0, 'pieces shown')
     T.eq(piecesShown(UI, p.UnitFrame.HealthBarsContainer.healthBar), 0, "nothing on Blizzard's cut-loose bar")
     local row = rowUnder(UI, 'nameplate1', uf)
     T.ok(row, 'the ring row rides Plater\'s unit frame'); T.eq(rawget(row, '_parent')._strata, 'LOW', 'in its strata')
-    -- Plater lifts your target's plate: the pieces follow
-    hb:SetFrameStrata('MEDIUM'); hb:SetFrameLevel(30); W.advance(.3, FRAME)
-    T.eq(clip._strata, 'MEDIUM'); T.eq(clip._level, 32, 'followed the new layer')
     noErrors(T)
   end,
 
@@ -95,7 +96,7 @@ return {
     add(W, 'nameplate1'); W.advance(.5, FRAME)
     local b, host, source = ns.plateBar(p, 'nameplate1')
     T.eq(source, 'EllesmereUI'); T.eq(b, hb); T.eq(host, ep)
-    T.ok(piecesShown(UI, hb) > 0, 'pieces on its bar'); T.eq(clipOn(UI, hb)._strata, 'MEDIUM')
+    T.ok(piecesShown(UI, hb) > 0, 'pieces on its bar'); T.ok(insideBar(ns, hb), 'inside it')
     T.ok(rowUnder(UI, 'nameplate1', ep), 'rows on its plate')
     noErrors(T)
   end,
