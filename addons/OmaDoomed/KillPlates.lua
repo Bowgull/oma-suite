@@ -32,16 +32,22 @@ local function piecesFor(hb)
   -- 2026-11-11 (Joshua: "spilling over just a little"; measured, OmaDoomedDB.plateGeo): Blizzard's fill is the atlas
   -- UI-HUD-CoolDownManager-Bar (ARTWORK 0 of the health bar), whose own shape is inset with soft ends; our pieces were
   -- a plain square texture filling the whole bar box, so they showed past that shape onto the border's inner edge.
-  -- Now every piece uses the fill's own atlas: the same shape, pixel for pixel, tinted to the DoT's colour.
+  -- The fix is the fill's own shape as a stencil (below).
   local okA, atlas = false, nil
   if type(fill) == 'table' and fill.GetAtlas then okA, atlas = pcall(fill.GetAtlas, fill) end
   if not okA or type(atlas) ~= 'string' or atlas == '' then atlas = nil end
   set.atlas = atlas
+  -- 2026-11-11 (2): drawing each piece WITH the atlas stretched the whole bar, round ends and all, over every piece
+  -- ("pills"). Now the pieces are plain and square, so they meet cleanly, and each is cut by a stencil of the fill's
+  -- own atlas laid over the whole health bar: only the bar's real ends are round, exactly where Blizzard's are.
   local function bar(level, from)
     local b = CreateFrame('StatusBar', nil, set.clip)
-    if not (atlas and pcall(b.SetStatusBarTexture, b, atlas)) then b:SetStatusBarTexture(TEX) end
-    b:SetMinMaxValues(0, 1); b:SetValue(0)
+    b:SetStatusBarTexture(TEX); b:SetMinMaxValues(0, 1); b:SetValue(0)
     local t = b:GetStatusBarTexture(); if type(t) == "table" and t.SetDesaturated then t:SetDesaturated(true) end
+    if atlas and type(t) == 'table' and t.AddMaskTexture then
+      local m = b:CreateMaskTexture(); m:SetAllPoints(hb)
+      if pcall(m.SetAtlas, m, atlas) then t:AddMaskTexture(m) end
+    end
     if from then   -- fills rightward from a piece's far edge
       b:SetPoint('TOPLEFT', from, 'TOPLEFT'); b:SetPoint('BOTTOMLEFT', from, 'BOTTOMLEFT')
     else           -- fills leftward from the health's end
