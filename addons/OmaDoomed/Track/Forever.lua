@@ -128,6 +128,12 @@ function T.omaTickMult(dot, at, key)
   return m
 end
 
+-- the boost windows above for one mob, as one number: part of the views' change stamp (OMA.dotsStamp)
+function T.omaBoostStamp(key)
+  local c = key and coe[key]
+  return (c and (c.untilT + c.pct * .01) or 0) + sfShadowUntil * 1.1 + sfFireUntil * 1.2 + rank('sf') * 3
+end
+
 local function dotsAt(key) return key and T.tracking and T.tracking.dotsByTarget[key] end
 -- drop every DoT of this key (name order is the engine's table order; there is one per key at most anyway)
 local function dropKey(dots, k, why)

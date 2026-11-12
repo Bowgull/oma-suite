@@ -74,7 +74,7 @@ ns.text = {
 }
 ns.hello = {
   new = "rings over every enemy you DoT, and on your target's health bar, what your DoTs will still take. Settings: /omadoomed options.",
-  upgrade = "1.0: works on its own (no Does It Die), on Plater and other nameplate add-ons, in every game language. Settings: /omadoomed options.",
+  upgrade = "1.0: no longer needs Does It Die, finds the health bars of Plater and other nameplate add-ons, and works on non-English clients. Settings: /omadoomed options.",
 }
 
 ns.MIGRATIONS = {

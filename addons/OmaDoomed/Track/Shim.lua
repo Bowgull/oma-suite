@@ -51,20 +51,20 @@ function OMA.dotsFor(unit)
   return out
 end
 -- A number that changes whenever the engine's DoTs on the mob behind `unit` change (a tick, a miss, a cast, a
--- refresh, an expiry). Cheap and makes no tables: the kill bar asks it on every health change to tell a DoT's tick
+-- refresh, an expiry, a damage boost window). Cheap and makes no tables: the kill bar asks it on every health change to tell a DoT's tick
 -- from anyone else's hit. nil when it can't tell (then treat it as changed).
 local function stamp(unit)
   local okKey, key = pcall(T.tracking.unitKey, unit)
   if not okKey or not key then return 0 end
   local dots = T.tracking.dotsByTarget and T.tracking.dotsByTarget[key]
-  if not dots then return 0 end
+  if not dots then return T.omaBoostStamp and T.omaBoostStamp(key) or 0 end
   local s, n = 0, 0
   for _, d in pairs(dots) do
     n = n + 1
     s = s + (d.nextTickAt or 0) * 1.7 + (d.expiresAt or 0) * 1.3 + (d.appliedAt or 0) + (d.lastTickAt or 0) * .7
       + (d.ticksSeen or 0) * 7 + (d.missed or 0) * 11 + (d.tickSum or 0) * .01 + (d.omaScale or 1) * 13
   end
-  return s + n * 1000
+  return s + n * 1000 + (T.omaBoostStamp and T.omaBoostStamp(key) or 0)
 end
 function OMA.dotsStamp(unit)
   if not T.tracking then return 0 end

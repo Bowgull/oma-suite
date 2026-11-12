@@ -42,6 +42,10 @@ local function tick(name) ns.bus:Fire('TICK', 'target', name, Spells.key(name)) 
 
 -- ---------- the list ----------
 function M.source(unit) return ns.dotsRaw(unit) end
+local tracked = M.source
+-- a number that changes whenever the unit's DoT list may have (nil: can't tell, so treat it as changed). Only for the
+-- tracking's own list: a stand-in source (tests) has no stamp.
+function M.stampOf(unit) if M.source ~= tracked then return nil end; return ns.dotsStamp(unit) end
 -- one entry per name, the one that runs out first nearest the green; a new list (the source's own table is never
 -- sorted). positive: only DoTs with damage left (the plate bar's list). M.listInto fills the caller's own tables.
 local function byExpiry(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end
@@ -58,15 +62,25 @@ function M.list(unit, positive) return M.listInto(unit, positive, {}, {}) end
 -- the target's DoTs as the bar draws them: { {name, damage, expires, appliedAt, provisional, castStart, castEnd,
 -- landed} }. Adds the precast piece (a DoT you're casting that the tracking doesn't list yet) and the landed piece
 -- (it landed, the tracking lists it at its first tick).
+local targetList, targetSeen = {}, {}
+-- the bar's list and its entries are reused every update (nothing keeps them: Report.lua copies numbers)
+local outDots, pool = {}, {}
+local function entry(i, name, damage, expires)
+  local d = pool[i]; if not d then d = {}; pool[i] = d end
+  d.name, d.damage, d.expires = name, damage, expires
+  d.appliedAt, d.provisional, d.castStart, d.castEnd, d.landed, d.ending = nil, nil, nil, nil, nil, nil
+  return d
+end
 function M.targetDots()
   M.stamp = ns.dotsStamp('target')
-  local list = M.list('target')
+  local list = M.listInto('target', false, targetList, targetSeen)
   for _, e in ipairs(list) do Spells.see(e.spellID, e.name) end
-  local dots = {}
+  local dots, n = wipe(outDots), 0
   local cName, _, _, cStart, cEnd = UnitCastingInfo('player')
   local now = GetTime()
   for _, e in ipairs(list) do if (e.damage or 0) > 0 then
-    local d = { name = e.name, damage = e.damage, expires = e.expiresAt, appliedAt = e.appliedAt, provisional = e.provisional }
+    n = n + 1
+    local d = entry(n, e.name, e.damage, e.expiresAt); d.appliedAt, d.provisional = e.appliedAt, e.provisional
     if e.provisional and cName == e.name and cStart and cEnd then d.castStart, d.castEnd = cStart / 1000, cEnd / 1000 end
     if not e.provisional and e.appliedAt and now - e.appliedAt < 4 then fullBy[e.name] = math.max(fullBy[e.name] or 0, e.damage) end
     dots[#dots + 1] = d
@@ -77,14 +91,14 @@ function M.targetDots()
   local sameMob = cast.plate == nil or cast.plate == here
   if cName and Spells.dot(cName) and cStart and cEnd and fullBy[cName] and sameMob then
     local listed = false; for _, d in ipairs(dots) do if d.name == cName then listed = true end end
-    if not listed then dots[#dots + 1] = { name = cName, damage = fullBy[cName], expires = cEnd / 1000 + 30, provisional = true, castStart = cStart / 1000, castEnd = cEnd / 1000 } end
+    if not listed then n = n + 1; local d = entry(n, cName, fullBy[cName], cEnd / 1000 + 30); d.provisional, d.castStart, d.castEnd = true, cStart / 1000, cEnd / 1000; dots[#dots + 1] = d end
   end
   -- once it lands, keep it (solid) until the tracking lists it at its first tick, so it doesn't blink out for 3 s
   local ld = snap.landed
   if ld and not cName then
     local listed = false; for _, d in ipairs(dots) do if d.name == ld.name then listed = true end end
     if listed or now - ld.at > 4.5 then snap.landed = nil
-    elseif M.landedHere(ld, here) then dots[#dots + 1] = { name = ld.name, damage = ld.dmg, expires = ld.at + 30, landed = true } end
+    elseif M.landedHere(ld, here) then n = n + 1; local d = entry(n, ld.name, ld.dmg, ld.at + 30); d.landed = true; dots[#dots + 1] = d end
   end
   return dots
 end
@@ -110,10 +124,11 @@ function M.dropBites() for _, r in pairs(snap.per) do r.bite = nil end end
 -- ---------- ticks ----------
 -- new numbers (10 times a second and on events): notice ticks (a drop in damage left), keep ended DoTs as empty
 -- ghosts while their last bite closes, note casts landing. dots may grow (ghosts); maxv / hp may be hidden numbers.
+local feedHere, orderA, orderB = {}, {}, {}   -- reused every update
 function M.feed(dots, maxv, hp)
   local now, anow = GetTime(), M.clock()
   -- 2026-11-11 'when a DoT ends there's still a snap': it stays in its old place, empty, while that last bite closes
-  local here = {}; for _, d in ipairs(dots) do here[d.name] = true end
+  local here = wipe(feedHere); for _, d in ipairs(dots) do here[d.name] = true end
   for idx, name in ipairs(snap.order or {}) do
     if not here[name] then
       local r = M.rec(name)
@@ -133,7 +148,7 @@ function M.feed(dots, maxv, hp)
       else r.last = nil end
     end
   end
-  local order = {}
+  local order = wipe(snap.order == orderA and orderB or orderA)   -- the other of two (the last order is read above)
   for i, d in ipairs(dots) do order[i] = d.name; M.rec(d.name).exp = d.expires end
   snap.order = order
   for _, d in ipairs(dots) do
@@ -160,7 +175,9 @@ function M.feed(dots, maxv, hp)
     if d.provisional then r.wasPre = look
     elseif r.wasPre then landAt[d.name] = anow; landLook[d.name] = r.wasPre; r.wasPre = nil end
   end
-  snap.cur = { dots = dots, maxv = maxv, hp = hp }
+  local cur = snap.cur or {}   -- one table, refilled (Report.lua copies what it keeps)
+  cur.dots, cur.maxv, cur.hp = dots, maxv, hp
+  snap.cur = cur
   if not M.test then
     local nb = 0; for _, r in pairs(snap.per) do if r.bite then nb = nb + 1 end end
     ns.bus:Fire('ROW', snap.cur, nb > 0 and ('bites' .. nb) or nil)   -- the bug-report record (Report.lua)

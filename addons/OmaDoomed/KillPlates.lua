@@ -233,19 +233,41 @@ end
 
 local dirty = true
 local live = {}
+local PER_FRAME = 12
+local painted, lastCast = {}, false   -- unit -> { stamp, hb } as last drawn; your cast when last drawn
 local function refresh()
   if not (ns.db and ns.db.doomed and ns.db.platebar) then
     for hb in pairs(shown) do clear(hb) end; return
   end
   wipe(live)
-  -- the live enemy plates (PlateManager); each in its own guard, so one odd plate never stops the others
+  -- your cast starting, ending or changing repaints every plate (its precast look)
+  local cName, _, _, cStart = UnitCastingInfo('player')
+  local castKey = cName and (tostring(cName) .. tostring(cStart)) or false
+  if castKey ~= lastCast then lastCast = castKey; wipe(painted) end
+  -- the live enemy plates (PlateManager); each in its own guard, so one odd plate never stops the others. A plate
+  -- whose DoTs haven't changed since it was drawn (the tracking's stamp) is left as it is.
+  -- At most PER_FRAME plates are drawn in one frame (a 40-mob pull ticking at once); the rest follow next frame.
+  local n = 0
   for u in pairs(PM.live) do
     if PM.enemy[u] and not UnitIsDead(u) then
-      local ok, hb = pcall(paint, u)
-      if ok then if hb then live[hb] = true end
-      else ns.error('platebar: ' .. u .. ': ' .. tostring(hb)) end
-    end
+      local st = ns.model.stampOf(u)
+      local was = painted[u]
+      if st ~= nil and was and was.stamp == st and was.hb and made[was.hb] then
+        live[was.hb] = true
+      elseif n >= PER_FRAME then
+        dirty = true
+        if was and was.hb then live[was.hb] = true end
+      else
+        n = n + 1
+        local ok, hb = pcall(paint, u)
+        if ok then
+          if hb then live[hb] = true end
+          painted[u] = { stamp = st, hb = hb }
+        else painted[u] = nil; ns.error('platebar: ' .. u .. ': ' .. tostring(hb)) end
+      end
+    else painted[u] = nil end
   end
+  for u in pairs(painted) do if not PM.live[u] then painted[u] = nil end end
   for hb in pairs(shown) do if not live[hb] then pcall(clear, hb) end end   -- plates that left, died or changed mob
 end
 
@@ -254,8 +276,12 @@ function K.setOf(hb) return made[hb] end   -- tests and /omadoomed plates
 function K.start()
   if select(2, UnitClass('player')) ~= 'WARLOCK' then return end
   local function again() dirty = true end
-  for _, e in ipairs({ 'DOTS', 'PLATE_ADDED', 'PLATE_REMOVED', 'PLATE_CHANGED' }) do ns.bus:On(e, again) end
-  ns.bus:On('SETTING', function(_, store) if store ~= 'rings' then dirty = true end end)
+  local function all() dirty = true; wipe(painted) end   -- a plate or a setting changed: draw every plate again
+  ns.bus:On('DOTS', again)
+  for _, e in ipairs({ 'PLATE_ADDED', 'PLATE_REMOVED', 'PLATE_CHANGED' }) do ns.bus:On(e, all) end
+  -- learned tick sizes change after a fight: draw everything again as one starts and ends
+  local cf = CreateFrame('Frame'); cf:RegisterEvent('PLAYER_REGEN_ENABLED'); cf:RegisterEvent('PLAYER_REGEN_DISABLED'); cf:SetScript('OnEvent', all)
+  ns.bus:On('SETTING', function(_, store) if store ~= 'rings' then all() end end)
   local off = false
   local f = CreateFrame('Frame')
   f:SetScript('OnUpdate', function()
