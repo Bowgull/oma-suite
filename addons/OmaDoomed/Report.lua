@@ -40,6 +40,49 @@ local function copySettings(t)
   return o
 end
 
+-- How heavy OmaDoomed is, next to a few well-known add-ons as a yardstick. Uses Blizzard's own add-on profiler
+-- (C_AddOnProfiler: milliseconds of CPU per frame) and memory in KB. Every call is guarded: if Forever lacks a
+-- piece, that line just says so.
+local YARDSTICK = { 'OmaDoomed', 'DoesItDie', 'Details', 'Questie', 'RXPGuides', 'Plater', 'BigWigs' }
+local function metric(get, name, key)
+  local E = Enum and Enum.AddOnProfilerMetric; if not (E and E[key]) then return nil end
+  local ok, v = pcall(get, name, E[key]); if ok and type(v) == 'number' then return v end
+end
+function ns.perf()
+  local P = C_AddOnProfiler
+  local out = { profiler = (P and P.GetAddOnMetric) and 'yes' or 'no', rows = {} }
+  if P and P.IsEnabled then local ok, on = pcall(P.IsEnabled); out.profilerOn = ok and on and true or false end
+  if P and P.GetOverallMetric then
+    out.allRecent = metric(function(_, m) return P.GetOverallMetric(m) end, nil, 'RecentAverageTime')
+    out.allSession = metric(function(_, m) return P.GetOverallMetric(m) end, nil, 'SessionAverageTime')
+  end
+  if UpdateAddOnMemoryUsage and not InCombatLockdown() then pcall(UpdateAddOnMemoryUsage) end
+  for _, name in ipairs(YARDSTICK) do
+    local loaded = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(name)
+    if loaded then
+      local r = { name = name }
+      if P and P.GetAddOnMetric then
+        r.recent = metric(P.GetAddOnMetric, name, 'RecentAverageTime')
+        r.session = metric(P.GetAddOnMetric, name, 'SessionAverageTime')
+        r.peak = metric(P.GetAddOnMetric, name, 'PeakTime')
+        r.over5 = metric(P.GetAddOnMetric, name, 'CountTimeOver5Ms')
+      end
+      if GetAddOnMemoryUsage then local ok, kb = pcall(GetAddOnMemoryUsage, name); if ok and type(kb) == 'number' then r.kb = kb end end
+      out.rows[#out.rows + 1] = r
+    end
+  end
+  return out
+end
+local function n(v, f) return v and (f or '%.3f'):format(v) or '-' end
+function ns.perfLines(p)
+  local L = { ('CPU (Blizzard profiler: %s%s), ms per frame and memory:'):format(p.profiler, p.profilerOn == false and ', switched off' or '') }
+  if p.allRecent then L[#L + 1] = ('  all add-ons: recent %s, session %s'):format(n(p.allRecent), n(p.allSession)) end
+  for _, r in ipairs(p.rows) do
+    L[#L + 1] = ('  %-10s recent %s  session %s  peak %s  frames over 5 ms %s  memory %s KB'):format(r.name, n(r.recent), n(r.session), n(r.peak, '%.1f'), n(r.over5, '%d'), n(r.kb, '%d'))
+  end
+  return L
+end
+
 function ns.saveReport(how)
   local db = OmaDoomedDB; if not db then return end
   local version, build, _, iface = GetBuildInfo()
@@ -50,7 +93,7 @@ function ns.saveReport(how)
     inCombat = InCombatLockdown() and true or false, inGroup = (IsInGroup and IsInGroup()) and true or false,
     doesItDie = (DoesItDie and DoesItDie.GetDoTs) and 'yes' or 'no',
     bar = copySettings(db), rings = copySettings(db.rings),
-    errors = {}, rows = lastRows(),
+    errors = {}, rows = lastRows(), perf = ns.perf(),
     compare = db.compare and { checks = db.compare.checks, differ = db.compare.differ, log = { unpack(db.compare.log, 1, math.min(20, #db.compare.log)) } } or nil,
   }
   for i = 1, math.min(10, #(db.errs or {})) do r.errors[i] = db.errs[i] end
@@ -73,6 +116,7 @@ local function asText(r)
     L[#L + 1] = ''; L[#L + 1] = ('own tracking vs DoesItDie: %d checks, %d disagreements'):format(r.compare.checks or 0, r.compare.differ or 0)
     for _, line in ipairs(r.compare.log or {}) do L[#L + 1] = '  ' .. line end
   end
+  if r.perf then L[#L + 1] = ''; for _, line in ipairs(ns.perfLines(r.perf)) do L[#L + 1] = line end end
   L[#L + 1] = ''; L[#L + 1] = 'last ' .. KEEP .. ' seconds (time, DoT=damage left, P casting, L landed, E ending, fps):'
   for _, row in ipairs(r.rows) do L[#L + 1] = '  ' .. row end
   return table.concat(L, '\n')

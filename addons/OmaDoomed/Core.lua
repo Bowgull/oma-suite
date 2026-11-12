@@ -24,6 +24,7 @@ SlashCmdList.OMADOOMED = function(m)
   m = (m or ''):lower()
   local rest = m:match('^rings%s*(.*)$'); if rest then return ns.ringsSlash and ns.ringsSlash(rest) end
   if m == 'report' then return ns.saveReport and ns.saveReport('command') end
+  if m == 'cpu' then if ns.perf then for _, l in ipairs(ns.perfLines(ns.perf())) do print(l) end end; return end
   if m == 'report show' then return ns.showReport and ns.showReport() end
   if m == 'errors' then for i = math.min(8, #(OmaDoomedDB.errs or {})), 1, -1 do print(OmaDoomedDB.errs[i]) end; return end
   if m == 'options' or m == 'settings' then return ns.openSettings and ns.openSettings() end
@@ -31,5 +32,5 @@ SlashCmdList.OMADOOMED = function(m)
   local p = ns.parts[m:match('^(%S+)')]
   if p and p.slash then p.slash(m:match('^%S+%s*(.*)$')) return end
   local on = {}; for k in pairs(ns.parts) do on[#on + 1] = k .. (ns.db[k] and ' on' or ' off') end
-  ns.say(table.concat(on, ', ') .. '. /omadoomed (on/off, test, test off) · /omadoomed rings (on/off, test, others on|off)')
+  ns.say(table.concat(on, ', ') .. '. /omadoomed (on/off, test, test off) · /omadoomed rings (on/off, test, others on|off) · /omadoomed cpu')
 end
