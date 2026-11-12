@@ -214,3 +214,33 @@ g:SetScript("OnUpdate", function()
   if #queue > 0 and now - trickleAt >= 0.5 then trickleAt = now; push(stamp() .. table.remove(queue, 1)) end
 end)
 
+
+-- ---------- /omachat ramp: a 15 s colour test for a thinner strip (2026-11-11) ----------
+-- Three 1-pixel rows at the bottom-left edge, each 256 pixels long: row 1 red 0..255, row 2 green, row 3 blue, one
+-- level per pixel. A screen capture then shows whether every level arrives exactly (needed for 8 bits per channel).
+local ramp
+SLASH_OMACHAT1 = "/omachat"
+SlashCmdList.OMACHAT = function(m)
+  if (m or ""):lower() ~= "ramp" then print("|cffb48cffOmaChat:|r /omachat ramp  shows a 15 s colour test at the bottom-left"); return end
+  if not ramp then
+    ramp = CreateFrame("Frame", nil, UIParent); ramp:SetFrameStrata("TOOLTIP"); ramp:SetFrameLevel(10001)
+    ramp:SetIgnoreParentScale(true); ramp:SetScale(1); ramp.t = {}
+  end
+  local _, ph = GetPhysicalScreenSize()
+  local px = 768 / ph / ramp:GetEffectiveScale()
+  ramp:ClearAllPoints(); ramp:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0); ramp:SetSize(256 * px, 3 * px)
+  local k = 0
+  for row = 1, 3 do
+    for v = 0, 255 do
+      k = k + 1
+      local t = ramp.t[k] or ramp:CreateTexture(nil, "OVERLAY"); ramp.t[k] = t
+      if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(false); t:SetTexelSnappingBias(0) end
+      t:ClearAllPoints(); t:SetPoint("BOTTOMLEFT", ramp, "BOTTOMLEFT", v * px, (3 - row) * px); t:SetSize(px, px)
+      local c = v / 255
+      t:SetColorTexture(row == 1 and c or 0, row == 2 and c or 0, row == 3 and c or 0, 1); t:Show()
+    end
+  end
+  strip:Hide(); ramp:Show()
+  print("|cffb48cffOmaChat:|r colour test on for 15 s (the chat strip is paused)")
+  C_Timer.After(15, function() ramp:Hide(); strip:Show() end)
+end
