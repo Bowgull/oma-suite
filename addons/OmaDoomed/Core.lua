@@ -14,7 +14,7 @@ f:RegisterEvent('PLAYER_LOGIN')
 f:SetScript('OnEvent', function()
   OmaDoomedDB = OmaDoomedDB or {}
   for k, v in pairs(DEFAULTS) do if OmaDoomedDB[k] == nil then OmaDoomedDB[k] = v end end
-  OmaDoomedDB.trace, OmaDoomedDB.traceErr, OmaDoomedDB.tffind = nil, nil, nil   -- left by test builds' debug commands
+  OmaDoomedDB.trace, OmaDoomedDB.traceErr, OmaDoomedDB.tffind, OmaDoomedDB.plateGeo = nil, nil, nil, nil   -- left by test builds' debug commands
   if type(OmaDoomedDB.rings) == 'table' then OmaDoomedDB.rings.log = nil end
   ns.db = OmaDoomedDB
   for _, p in pairs(ns.parts) do pcall(p.start) end

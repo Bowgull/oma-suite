@@ -29,9 +29,18 @@ local function piecesFor(hb)
   local fill = hb:GetStatusBarTexture(); if not fill then return nil end
   set = { clip = CreateFrame('Frame', nil, hb), fill = fill }
   set.clip:SetAllPoints(hb); set.clip:SetClipsChildren(true); set.clip:SetFrameLevel(hb:GetFrameLevel() + 2)
+  -- 2026-11-11 (Joshua: "spilling over just a little"; measured, OmaDoomedDB.plateGeo): Blizzard's fill is the atlas
+  -- UI-HUD-CoolDownManager-Bar (ARTWORK 0 of the health bar), whose own shape is inset with soft ends; our pieces were
+  -- a plain square texture filling the whole bar box, so they showed past that shape onto the border's inner edge.
+  -- Now every piece uses the fill's own atlas: the same shape, pixel for pixel, tinted to the DoT's colour.
+  local okA, atlas = false, nil
+  if type(fill) == 'table' and fill.GetAtlas then okA, atlas = pcall(fill.GetAtlas, fill) end
+  if not okA or type(atlas) ~= 'string' or atlas == '' then atlas = nil end
+  set.atlas = atlas
   local function bar(level, from)
     local b = CreateFrame('StatusBar', nil, set.clip)
-    b:SetStatusBarTexture(TEX); b:SetMinMaxValues(0, 1); b:SetValue(0)
+    if not (atlas and pcall(b.SetStatusBarTexture, b, atlas)) then b:SetStatusBarTexture(TEX) end
+    b:SetMinMaxValues(0, 1); b:SetValue(0)
     local t = b:GetStatusBarTexture(); if type(t) == "table" and t.SetDesaturated then t:SetDesaturated(true) end
     if from then   -- fills rightward from a piece's far edge
       b:SetPoint('TOPLEFT', from, 'TOPLEFT'); b:SetPoint('BOTTOMLEFT', from, 'BOTTOMLEFT')
@@ -57,6 +66,10 @@ local function piecesFor(hb)
     ov.motes = ov:CreateTexture(nil, 'ARTWORK', nil, 3); ov.motes:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\motes', 'REPEAT', 'REPEAT'); ov.motes:SetBlendMode('ADD')
     ov.mask = ov:CreateMaskTexture(); ov.mask:SetTexture('Interface\\Buttons\\WHITE8X8', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE')
     for _, t in ipairs({ ov.pre, ov.motes }) do t:SetAllPoints(hb); t:AddMaskTexture(ov.mask); t:Hide() end
+    if atlas then   -- and cut to the bar's own shape too, like the pieces
+      ov.shape = ov:CreateMaskTexture(); ov.shape:SetAllPoints(hb)
+      if pcall(ov.shape.SetAtlas, ov.shape, atlas) then ov.pre:AddMaskTexture(ov.shape); ov.motes:AddMaskTexture(ov.shape) end
+    end
     set.ov[i] = ov
   end
   -- stencil i: from piece i's far edge to piece i-1's far edge (piece 1: the health's end)
