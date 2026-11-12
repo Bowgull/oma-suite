@@ -27,7 +27,7 @@ ns.settings = Core.NewSettings({
       tip = "Ember: the bitten part glows in its own colour and settles. Cinders: the same glow, and small embers lift off it. Essence: a soft curl of shadow haze rises from it. Plain: it just slides shut." },
     { key = 'low', default = 3, control = 'slider', label = 'Ending soon', parent = BAR, min = 2, max = 5, step = 1,
       format = function(v) return ('%d s'):format(v) end,
-      tip = "A DoT's piece and ring number turn gold for its last seconds." },
+      tip = "A DoT's piece and its ring turn gold for its last seconds." },
     { key = 'lowlook', default = 'breathe', control = 'dropdown', label = 'Ending soon look', parent = BAR,
       choices = { { 'breathe', 'Breathing gold' }, { 'steady', 'Steady gold' } },
       tip = "How the gold looks in a DoT's last seconds: breathing on the rings' beat, or steady." },
@@ -42,7 +42,7 @@ ns.settings = Core.NewSettings({
       tip = "Above enemies: rings over every enemy's head. Target frame: only on your target's frame. Haunt: over every enemy you're not targeting; the one you target shows its rings on its frame." },
     { key = 'squares', store = R, default = 'notmine', control = 'dropdown', label = "Blizzard's squares",
       choices = { { 'notmine', 'All but my DoTs' }, { 'all', 'All' }, { 'hide', 'Hide' } },
-      tip = "Blizzard's own buff and debuff squares on the target frame. All but my DoTs keeps everyone else's debuffs, stuns and the enemy's buffs, and leaves out yours (the rings already show them)." },
+      tip = "Blizzard's own buff and debuff squares on the target frame. All but my DoTs: on mobs the debuff squares go, stuns and the mob's own debuffs too (Blizzard can't hide only yours; the rings show yours), and buffs stay. On players everything stays." },
     { key = 'which', store = R, default = 'all', control = 'dropdown', label = 'Which enemies',
       choices = { { 'all', 'Every enemy' }, { 'target', 'Only your target' }, { 'combat', 'Only in combat' } },
       tip = "Rings on every enemy, only your target, or only while you're fighting." },
@@ -52,7 +52,7 @@ ns.settings = Core.NewSettings({
       tip = 'How solid your own rings are.' },
     { key = 'othersAlpha', store = R, default = 55, control = 'slider', label = "Other players' DoTs", min = 0, max = 100, step = 5,
       format = function(v) return v == 0 and 'Hidden' or ('%d%%'):format(v) end,
-      tip = "How solid other players' rings are. 0 hides them." },
+      tip = "How solid other warlocks' DoT rings are (theirs only, not every debuff). 0 hides them; another strength shows after a /reload." },
     { key = 'enabled', store = R, default = true },   -- /omadoomed rings on|off
     { key = 'others', store = R, default = true },    -- /omadoomed rings others on|off
 

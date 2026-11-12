@@ -7,15 +7,15 @@ local ART = 'Interface\\AddOns\\OmaDoomed\\Art\\'
 local BAR_ATLAS = 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health'
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
 local GREEN = { .21, .59, .16 }
-local GOLD = { 206 / 255, 160 / 255, 44 / 255 }
 local SP, Anim = ns.spells.byKey, ns.core.Anim
-local COLOR = { c = SP.corruption.deep, a = SP.agony.deep, i = SP.immolate.deep }     -- pieces
+local KEY = { c = 'corruption', a = 'agony', i = 'immolate' }
+local K = ns.killStyle             -- the kill bar's colours and looks (KillBarStyle.lua)
+local look, ask = K.new(), {}
 local RING = { c = SP.corruption.color, a = SP.agony.color, i = SP.immolate.color }    -- rings and tick light
 local NAME = { c = 'Corruption', a = 'Bane of Agony', i = 'Immolate' }
 local MAXHP, START = 198, 124      -- your DoTs finish this one, so the skull shows
 local H = 150                      -- the preview's height in the list
 
-local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
 local ss, sst = Anim.smoothstep, Anim.smootherstep
 local function barTex(t)
   local a = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(BAR_ATLAS)
@@ -156,7 +156,7 @@ function ns.previewDraw()
   if t > 26 then t0 = GetTime(); t = 0; P.plan = plan() end
   local low, steady = db.low or 3, db.lowlook == 'steady'
   local castLook, tickLook = db.cast or 'charging', db.tick or 'ember'
-  local function breath(x) if steady then return 1 end; return Anim.breath(x, low, 1.5, .3) end
+  local function breath(x) return K.breath(x, low, steady) end
   -- the numbers
   local hp, pending = START, 0
   local live = {}
@@ -181,43 +181,42 @@ function ns.previewDraw()
     for _, tx in ipairs({ s.base, s.lift, s.bite, s.wash, s.fill, s.spark, s.stripes, s.motes, s.crease }) do tx:Hide() end
     for k = 1, 5 do s.parts[k]:Hide() end
     if d and db.doomed ~= false and d.left > 0 then
-      local c = COLOR[d.k]; local tn = RING[d.k]
-      local lowNow = d.timeLeft <= low
-      if lowNow then local b = .6 + .4 * breath(d.timeLeft); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
       local bl, a = 0, 9
       if d.lastTick then a = t - d.lastTick.at; if a < .5 then bl = d.lastTick.amt * (1 - sst(a / .5)) end end
       local w, bw = d.left * pxPer, bl * pxPer
-      local full = { math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15) }
+      -- the look: KillBarStyle.lua, the same as the target bar's
+      ask.left, ask.low, ask.steady = d.timeLeft, low, steady
+      ask.provisional, ask.look, ask.pr = d.casting, castLook, d.cpr
+      ask.landAge, ask.landLook = t - d.cast[2], castLook
+      ask.light, ask.quiet, ask.rawTone = bw > 0 and tickLook or nil, nil, true
+      local o = K.piece(look, SP[KEY[d.k]], ask)
+      local tn = o.tn
       if d.casting then
-        place(s.base, x, w); s.base:SetVertexColor(c[1] * .45, c[2] * .45, c[3] * .45)
-        if castLook == 'charging' then
-          place(s.fill, x, w * d.cpr); s.fill:SetVertexColor(full[1], full[2], full[3])
-          place(s.spark, x + w * d.cpr - 6, 8); s.spark:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(tn[1] * .45, tn[2] * .45, tn[3] * .45, 1))
-        elseif castLook == 'smoulder' then local k = d.cpr ^ 1.6; s.base:SetVertexColor(c[1] * (.3 + .85 * k), c[2] * (.3 + .85 * k), c[3] * (.3 + .85 * k))
-        elseif castLook == 'stripes' then local o = (t * .35) % 1; place(s.stripes, x, w); s.stripes:SetTexCoord(o, o + w / 24, 0, bar.h / 24); s.stripes:SetVertexColor(tn[1], tn[2], tn[3], .55)
-        elseif castLook == 'motes' then local o = (t * .08) % 1; place(s.motes, x, w); s.motes:SetTexCoord(o, o + w / 64, 0, 1); s.motes:SetVertexColor(tn[1] * .8, tn[2] * .8, tn[3] * .8)
+        place(s.base, x, w); s.base:SetVertexColor(o.base[1], o.base[2], o.base[3])
+        if o.cpr then
+          place(s.fill, x, w * o.cpr); s.fill:SetVertexColor(o.fill[1], o.fill[2], o.fill[3])
+          local f = o.spark; place(s.spark, x + w * o.cpr - 6, 8); s.spark:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(tn[1] * f, tn[2] * f, tn[3] * f, 1))
+        elseif o.stripes then local at = K.stripesAt(t); place(s.stripes, x, w); s.stripes:SetTexCoord(at, at + w / 24, 0, bar.h / 24); s.stripes:SetVertexColor(tn[1], tn[2], tn[3], K.STRIPES_A)
+        elseif o.motes then local at = K.motesAt(t); place(s.motes, x, w); s.motes:SetTexCoord(at, at + w / 64, 0, 1); s.motes:SetVertexColor(tn[1] * K.MOTES_K, tn[2] * K.MOTES_K, tn[3] * K.MOTES_K)
         end
       else
-        local la = t - d.cast[2]; local k = 1
-        if castLook ~= 'charging' and castLook ~= 'smoulder' and la < .3 then k = .4 + .6 * ss(la / .3) end
-        place(s.base, x, w); s.base:SetVertexColor(full[1] * k, full[2] * k, full[3] * k)
-        place(s.lift, x, w); s.lift:SetVertexColor(c[1] * .7 * k, c[2] * .7 * k, c[3] * .7 * k)
-        if castLook == 'charging' and la < .35 then local f = .45 * (1 - la / .35) ^ 2; place(s.spark, x + w - 6, 8); s.spark:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(tn[1] * f, tn[2] * f, tn[3] * f, 1)) end
+        place(s.base, x, w); s.base:SetVertexColor(o.base[1], o.base[2], o.base[3])
+        place(s.lift, x, w); s.lift:SetVertexColor(o.lift[1], o.lift[2], o.lift[3])
+        if o.spark then local f = o.spark; place(s.spark, x + w - 6, 8); s.spark:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(tn[1] * f, tn[2] * f, tn[3] * f, 1)) end
         if bw > 0 then
-          place(s.bite, x + w, bw); s.bite:SetVertexColor(full[1] + c[1] * .7, full[2] + c[2] * .7, full[3] + c[3] * .7)
+          place(s.bite, x + w, bw); s.bite:SetVertexColor(o.ghost[1], o.ghost[2], o.ghost[3])
           if tickLook ~= 'plain' then
-            local flare = a < .16 and ss(a / .16) or 1 - ss((a - .16) / .5); local fa = flare * .55
-            local tone = lowNow and { c[1] * 1.3, c[2] * 1.3, c[3] * 1.3 } or tn
+            local flare = a < .16 and ss(a / .16) or 1 - ss((a - .16) / .5); local fa = K.lightA(flare)
+            local tone = o.tone
             place(s.wash, x + w - 16, 16 + bw); s.wash:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(tone[1] * fa, tone[2] * fa, tone[3] * fa, 1))
             if tickLook == 'cinders' or tickLook == 'essence' then
-              local life = a / .7
               for k = 1, 5 do
-                local l = math.max(0, math.min(1, (life - (k - 1) * .04) / .9))
-                if l > 0 and l < 1 then
-                  local p = s.parts[k]; local fade = math.sin(math.pi * math.min(1, l * 1.15)); local e = 1 - (1 - l) ^ 2
+                local l, fade, e = K.particle(k, a)
+                if l then
+                  local p = s.parts[k]
                   p:ClearAllPoints(); p:SetPoint('CENTER', frame, 'TOPLEFT', bar.x + x + w + bw - 2 - (k - 1) * 3 + math.sin(a * 4 + k * 1.7) * 2, bar.y - bar.h * .8 + e * bar.h * .6)
                   if tickLook == 'cinders' then p:SetTexture(ART .. 'mote'); p:SetSize(5 - 2 * l, 5 - 2 * l); p:SetVertexColor(tone[1], tone[2], tone[3], .7 * fade)
-                  else p:SetTexture(ART .. 'haze'); p:SetSize(10 + 14 * l, 10 + 14 * l); local hz = mix(c, tone, .45); p:SetVertexColor(hz[1], hz[2], hz[3], .45 * fade) end
+                  else p:SetTexture(ART .. 'haze'); p:SetSize(10 + 14 * l, 10 + 14 * l); p:SetVertexColor(o.haze[1], o.haze[2], o.haze[3], .45 * fade) end
                   p:Show()
                 end
               end

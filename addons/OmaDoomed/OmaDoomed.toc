@@ -30,11 +30,14 @@ Track\Engine.lua
 Track\Wrack.lua
 Track\Forever.lua
 DotModel.lua
+KillBarStyle.lua
 PlateManager.lua
 TargetFinder.lua
 Doomed.lua
 KillPlates.lua
 BlizzardControls.lua
+RingsLook.lua
+RingsFade.lua
 Rings.lua
 Preview.lua
 Settings.lua

@@ -4,7 +4,8 @@
 -- Your own casts (a DoT's size when fresh, the moment it landed) are kept across targets.
 --
 -- Bus events: TICK (unit, name, key) a DoT ticked or is due to, TARGET a new target (fresh snapshot),
--- DOTS something may have changed (redraw), ROW (cur, extra) what the bar is about to draw (bug reports).
+-- DOTS something may have changed (redraw), HEALTH the target's health changed (the skull), ROW (cur, extra) what the
+-- bar is about to draw (bug reports).
 local ADDON, ns = ...
 local M = {}
 ns.model = M
@@ -40,23 +41,25 @@ function M.step(dt) M.dt = math.min(dt, .05); M.now = M.clock() + math.min(dt, .
 local function tick(name) ns.bus:Fire('TICK', 'target', name, Spells.key(name)) end
 
 -- ---------- the list ----------
-function M.source(unit) return ns.dotsFor(unit) end
--- one entry per name, the one that runs out first nearest the green; a copy (the source's own table is never
--- sorted). positive: only DoTs with damage left (the plate bar's list).
+function M.source(unit) return ns.dotsRaw(unit) end
+-- one entry per name, the one that runs out first nearest the green; a new list (the source's own table is never
+-- sorted). positive: only DoTs with damage left (the plate bar's list). M.listInto fills the caller's own tables.
 local function byExpiry(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end
-function M.list(unit, positive)
-  local raw, list, seen = M.source(unit), {}, {}
-  for _, e in ipairs(raw) do
+function M.listInto(unit, positive, list, seen)
+  wipe(list); wipe(seen)
+  for _, e in ipairs(M.source(unit)) do
     if e.name and not seen[e.name] and (not positive or (e.damage or 0) > 0) then seen[e.name] = true; list[#list + 1] = e end
   end
   table.sort(list, byExpiry)
   return list
 end
+function M.list(unit, positive) return M.listInto(unit, positive, {}, {}) end
 
 -- the target's DoTs as the bar draws them: { {name, damage, expires, appliedAt, provisional, castStart, castEnd,
 -- landed} }. Adds the precast piece (a DoT you're casting that the tracking doesn't list yet) and the landed piece
 -- (it landed, the tracking lists it at its first tick).
 function M.targetDots()
+  M.stamp = ns.dotsStamp('target')
   local list = M.list('target')
   for _, e in ipairs(list) do Spells.see(e.spellID, e.name) end
   local dots = {}
@@ -232,7 +235,14 @@ function M.start()
   local function onEv(_, e, unit, castGUID, spellID)
     if e == 'UNIT_SPELLCAST_SUCCEEDED' then return M.castSucceeded(castGUID, spellID) end
     if e == 'UNIT_SPELLCAST_START' then return M.castStart(castGUID) end
-    if e == 'UNIT_HEALTH' then pcall(M.onHealth) end
+    if e == 'UNIT_HEALTH' then
+      pcall(M.onHealth)
+      -- a DoT's tick changes the tracking too (redraw now, so the bite meets the green); anyone else's hit moves only
+      -- the skull
+      local st = ns.dotsStamp('target')
+      if st == nil or st ~= M.stamp then return ns.bus:Fire('DOTS') end
+      return ns.bus:Fire('HEALTH')
+    end
     if e == 'PLAYER_TARGET_CHANGED' then M.reset(); return ns.bus:Fire('TARGET') end
     ns.bus:Fire('DOTS')
   end

@@ -10,15 +10,9 @@
 local ADDON, ns = ...
 local P = {}; ns.parts.doomed = P
 
-local Spells, Anim, M = ns.spells, ns.core.Anim, ns.model
--- colours, ring tones and beats: Spells.lua (by spell ID; a DoT's name, in any client language, finds its entry)
-local GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- gold means only 'ending soon' (last 3 s); at the green's strength like the other pieces
+local Spells, M, Secret = ns.spells, ns.model, ns.core.Secret
+local K = ns.killStyle                -- colours and looks (KillBarStyle.lua); colours and beats by spell: Spells.lua
 local function LOWS() return (ns.db and ns.db.low) or 3 end   -- 'Ending soon' (settings): seconds of gold
-local function breath(x)              -- the rings' own breath (Anim.breath): 1 at the start, 0.3 halfway, 1 every 1.5 s
-  if ns.db and ns.db.lowlook == 'steady' then return 1 end
-  return Anim.breath(x, LOWS(), 1.5, .3)
-end
-local OTHER = { .55, .45, .65 }
 local FILL = 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health'
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
 local MARK = 'Interface\\AddOns\\OmaDoomed\\Art\\doomed-mark'
@@ -33,7 +27,7 @@ local clip, shine
 local segs = {}
 local win, longBar, mark
 local test
-local JOIN = { crease = 4, fade = 6, thin = 2, none = 0 }   -- sheet 25: 'crease' = hard join + soft dark crease (Blizzard's way)
+local C0, C45, GA, GB                  -- colours reused for every gradient (a texture copies the values)
 
 local function atlasOK(n) return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(n) ~= nil end
 -- the bar's own grain: a thin middle slice of Blizzard's health texture (the whole texture stretched into a short piece
@@ -87,6 +81,7 @@ P.sizeSkull = function() pcall(sizeSkull) end
 local function build()
   if built then return true end
   if not find() then return false end
+  if CreateColor and not C0 then C0, C45, GA, GB = CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, .45), CreateColor(0, 0, 0, 1), CreateColor(0, 0, 0, 1) end
   -- clipped to the bar, minus the see-through margin Blizzard's texture has at its left end (measured: 5 screen px);
   -- another add-on's bar has its own margin: none
   clip = CreateFrame('Frame', nil, hb); clip:SetPoint('TOPLEFT', hb, 'TOPLEFT', P.blizz and px(5, hb) or 0, 0); clip:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')
@@ -146,18 +141,10 @@ local function build()
     local s = { mark = P.E[i], edge = P.E[i].f, shown = 0, target = 0 }
     s.base = art:CreateTexture(nil, 'ARTWORK', nil, 1); barTex(s.base)
     s.lift = art:CreateTexture(nil, 'ARTWORK', nil, 2); barTex(s.lift); s.lift:SetBlendMode('ADD')
-    -- the flash and the shine use the bar's own texture: a plain white one also lit the bar's see-through top edge
-    s.flash = art:CreateTexture(nil, 'OVERLAY', nil, 1); barTex(s.flash); s.flash:SetVertexColor(1, 1, 1); s.flash:SetBlendMode('ADD'); s.flash:SetAlpha(0)
-    s.join = art:CreateTexture(nil, 'ARTWORK', nil, 3); barTex(s.join)      -- the fade into the next piece
-    s.joinLift = art:CreateTexture(nil, 'ARTWORK', nil, 4); barTex(s.joinLift); s.joinLift:SetBlendMode('ADD')   -- same brightening as the pieces, or the fade reads as a dark seam
     -- the crease uses the bar's own texture tinted black, so it has the bar's exact shape and never runs onto the brass
     -- borders into the name banner or the mana bar (a plain square did)
     s.creaseL = art:CreateTexture(nil, 'OVERLAY', nil, 0); barTex(s.creaseL)
     s.creaseR = art:CreateTexture(nil, 'OVERLAY', nil, 0); barTex(s.creaseR)
-    local g = s.flash:CreateAnimationGroup()
-    local a1 = g:CreateAnimation('Alpha'); a1:SetFromAlpha(0); a1:SetToAlpha(.42); a1:SetDuration(.08); a1:SetOrder(1)
-    local a2 = g:CreateAnimation('Alpha'); a2:SetFromAlpha(.42); a2:SetToAlpha(0); a2:SetDuration(.45); a2:SetOrder(2); a2:SetSmoothing('OUT')
-    s.flashAnim = g
     -- sheet 27 (approved "Looks right"): the bite. A second bar holds where this piece's edge WAS; the chunk between it and
     -- the new edge glows bright in the DoT's colour, holds 120 ms, then drains over 380 ms.
     s.gmark = newMark(); s.gedge = s.gmark.f
@@ -184,61 +171,46 @@ local function build()
     for _, t in ipairs({ s.pre, s.motes }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', hb, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT') end
     s.pmask = art:CreateMaskTexture(); s.pmask:SetTexture('Interface\\Buttons\\WHITE8X8', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE')
     s.pre:AddMaskTexture(s.pmask); s.motes:AddMaskTexture(s.pmask)
-    s.preGlow = art:CreateTexture(nil, 'OVERLAY', nil, 3); s.preGlow:SetTexture('Interface/RaidFrame/Shield-Overshield'); s.preGlow:SetBlendMode('ADD'); s.preGlow:SetDesaturated(true); s.preGlow:Hide()
-    -- the light it casts: 9 screen px onto each neighbour, fading out (left fade, core, right fade), the bar's own shape
-    s.spillL = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillL); s.spillL:SetBlendMode('ADD'); s.spillL:Hide()
+    -- the light a tick casts on the bitten part (the bar's own shape)
     s.spillC = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillC); s.spillC:SetBlendMode('ADD'); s.spillC:Hide()
-    s.spillR = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillR); s.spillR:SetBlendMode('ADD'); s.spillR:Hide()
     -- every texture of a piece keeps to the health bar's own shape (2026-11-11: saw colour outside the bar once)
     if P.barMask then
-      for _, t in ipairs({ s.base, s.lift, s.flash, s.join, s.joinLift, s.creaseL, s.creaseR, s.ghost, s.spillL, s.spillC, s.spillR, s.pre, s.preGlow, s.cbase, s.clift, s.spark, s.wash, s.motes, s.parts[1], s.parts[2], s.parts[3], s.parts[4], s.parts[5] }) do t:AddMaskTexture(P.barMask) end
+      for _, t in ipairs({ s.base, s.lift, s.creaseL, s.creaseR, s.ghost, s.spillC, s.pre, s.cbase, s.clift, s.spark, s.wash, s.motes, s.parts[1], s.parts[2], s.parts[3], s.parts[4], s.parts[5] }) do t:AddMaskTexture(P.barMask) end
     end
+    s.quiet = { s.wash, s.motes, s.parts[1], s.parts[2], s.parts[3], s.parts[4], s.parts[5], s.cbase, s.clift, s.spark, s.pre, s.ghost, s.spillC }   -- an empty slot hides these
     segs[i] = s
   end
   for i, s in ipairs(segs) do
     local right, rp = (i == 1) and P.E[0].f or segs[i - 1].edge, 'BOTTOMLEFT'
-    for _, t in ipairs({ s.base, s.lift, s.flash, s.pre }) do
+    for _, t in ipairs({ s.base, s.lift, s.pre }) do
       t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, rp)
     end
-    s.preGlow:SetPoint('TOPLEFT', s.edge, 'TOPLEFT', -px(3, hb), 0); s.preGlow:SetPoint('BOTTOMLEFT', s.edge, 'BOTTOMLEFT', -px(3, hb), 0); s.preGlow:SetWidth(px(8, hb))
     -- the bite sits at this piece's end nearest the bar's end: from the bite bar's edge to the previous piece's edge
     s.ghost:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); s.ghost:SetPoint('BOTTOMRIGHT', right, rp)
-    local sp = px(9, hb)
     s.spillC:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); s.spillC:SetPoint('BOTTOMRIGHT', right, rp)
-    s.spillL:SetPoint('TOPRIGHT', s.gedge, 'TOPLEFT'); s.spillL:SetPoint('BOTTOMRIGHT', s.gedge, 'BOTTOMLEFT'); s.spillL:SetWidth(sp)
-    s.spillR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, rp); s.spillR:SetWidth(sp)
-    -- the join sits on this piece's right edge, fading from this colour into the previous (nearer the green) one
     if i > 1 then
-      for _, t in ipairs({ s.join, s.joinLift }) do t:SetPoint('TOP', segs[i - 1].edge, 'TOPLEFT'); t:SetPoint('BOTTOM', segs[i - 1].edge, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
       -- the crease: 2 screen px of soft dark either side of the join, darkest (45%) on it
       s.creaseL:SetPoint('TOPRIGHT', segs[i - 1].edge, 'TOPLEFT'); s.creaseL:SetPoint('BOTTOMRIGHT', segs[i - 1].edge, 'BOTTOMLEFT'); s.creaseL:SetWidth(px(2, hb))
       s.creaseR:SetPoint('TOPLEFT', segs[i - 1].edge, 'TOPLEFT'); s.creaseR:SetPoint('BOTTOMLEFT', segs[i - 1].edge, 'BOTTOMLEFT'); s.creaseR:SetWidth(px(2, hb))
-      if CreateColor then
-        s.creaseL:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, .45))
-        s.creaseR:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, .45), CreateColor(0, 0, 0, 0))
-      end   -- 6 screen px: what the 2-game-pixel fade looked like on sheet 22 (seen ~3x); 2 px read as a hard cut on the TV
+      if C0 then s.creaseL:SetGradient('HORIZONTAL', C0, C45); s.creaseR:SetGradient('HORIZONTAL', C45, C0) end
     end
   end
   function P.reanchor(s, right)
     -- the piece touching the health's end runs 1 screen px past it: Blizzard's green snaps to whole pixels and ours
     -- don't, so a 1 px sliver of green showed beside it ('a tiny bit of green peeking out')
     local dx = (right == P.E[0].f) and px(1, hb) or 0
-    for _, t in ipairs({ s.base, s.lift, s.flash, s.pmask }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
+    for _, t in ipairs({ s.base, s.lift, s.pmask }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
     for _, t in ipairs({ s.ghost, s.spillC }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
-    s.spillR:ClearAllPoints(); s.spillR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.spillR:SetPoint('BOTTOMLEFT', right, 'BOTTOMLEFT'); s.spillR:SetWidth(px(9, hb))
-    for _, t in ipairs({ s.join, s.joinLift }) do t:ClearAllPoints(); t:SetPoint('TOP', right, 'TOPLEFT'); t:SetPoint('BOTTOM', right, 'BOTTOMLEFT'); t:SetWidth(px(6, hb)) end
     s.creaseL:ClearAllPoints(); s.creaseL:SetPoint('TOPRIGHT', right, 'TOPLEFT'); s.creaseL:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT'); s.creaseL:SetWidth(px(2, hb))
     s.creaseR:ClearAllPoints(); s.creaseR:SetPoint('TOPLEFT', right, 'TOPLEFT'); s.creaseR:SetPoint('BOTTOMLEFT', right, 'BOTTOMLEFT'); s.creaseR:SetWidth(px(2, hb))
-    if CreateColor then
-      s.creaseL:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, .45))
-      s.creaseR:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, .45), CreateColor(0, 0, 0, 0))
-    end
+    if C0 then s.creaseL:SetGradient('HORIZONTAL', C0, C45); s.creaseR:SetGradient('HORIZONTAL', C45, C0) end
     s.right = right
   end
   -- one shine along the top of all the pieces (sheet 22: "fade and shine")
   shine = art:CreateTexture(nil, 'OVERLAY', nil, 2); barTex(shine); shine:SetBlendMode('ADD')
   shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMRIGHT', P.E[0].f, 'BOTTOMLEFT')
   if CreateColor then shine:SetGradient('VERTICAL', CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, .30)) end
+  P.shineFar = nil
 
   -- the skull and bones, on the ring's top edge like a raid mark (sheet 23 v5); none when the frame has no portrait
   win, longBar, mark = nil, nil, nil
@@ -256,26 +228,54 @@ local function build()
     mark:SetSize(W, H); mark:SetPoint('RIGHT', longBar:GetStatusBarTexture(), 'RIGHT')
   end
   P.builtOn = hb
+  P.hidden, P.animating, P.wakeAt, P.redraw = false, false, nil, true
   built = true
   return true
 end
 
+-- Setters that remember what they last set and skip a call that changes nothing (our own textures only; a value that
+-- may be hidden is never compared: health goes through a counter of new readings instead).
+local function shown(t, v) if t.omShown ~= v then t.omShown = v; t:SetShown(v) end end
+local function color3(t, r, g, b) if t.omR ~= r or t.omG ~= g or t.omB ~= b or t.omA ~= false then t.omR, t.omG, t.omB, t.omA = r, g, b, false; t:SetVertexColor(r, g, b) end end
+local function color4(t, r, g, b, a) if t.omR ~= r or t.omG ~= g or t.omB ~= b or t.omA ~= a then t.omR, t.omG, t.omB, t.omA = r, g, b, a; t:SetVertexColor(r, g, b, a) end end
+local function alpha(t, a) if t.omAl ~= a then t.omAl = a; t:SetAlpha(a) end end
+local function texCoord(t, a, b, c, d) if t.omT1 ~= a or t.omT2 ~= b or t.omT3 ~= c or t.omT4 ~= d then t.omT1, t.omT2, t.omT3, t.omT4 = a, b, c, d; t:SetTexCoord(a, b, c, d) end end
+-- black at the left fading into (r, g, b) at the right
+local function glowRight(t, r, g, b)
+  if t.omGR ~= r or t.omGG ~= g or t.omGB ~= b then
+    t.omGR, t.omGG, t.omGB = r, g, b
+    if GA then GA:SetRGBA(0, 0, 0, 1); GB:SetRGBA(r, g, b, 1); t:SetGradient('HORIZONTAL', GA, GB) end
+  end
+end
+
+-- health and max health may be hidden numbers: a new reading bumps a counter, and only status bars are handed them
+local hpGen, maxGen, lastMax = 0, 0, nil
+local function newHealth(cur)
+  hpGen = hpGen + 1
+  local m = cur.maxv
+  if Secret.is(m) or Secret.is(lastMax) or m ~= lastMax then maxGen = maxGen + 1 end
+  lastMax = m
+end
+
 local function hide()
   if not built then return end
-  P.hpLate = nil
-  clip:Hide(); if win then win:Hide() end
+  if P.hidden then M.dropBites(); return end   -- already hidden: nothing left to put away
+  P.hidden, P.animating, P.wakeAt = true, false, nil
+  clip:Hide(); if win then shown(win, false) end
   for _, r in pairs(M.snap().per) do r.slot = nil end
-  for _, s in ipairs(segs) do s.owner = nil; s.shown = 0; s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide() end
+  for _, s in ipairs(segs) do s.owner = nil; s.shown = 0; shown(s.ghost, false); shown(s.spillC, false) end
   M.dropBites()
 end
 
 -- put a mark p health-points from the health's end (negative = into the green), on whichever side it falls
 local function setMark(m, p, maxv)
-  m.L:SetMinMaxValues(0, maxv); m.R:SetMinMaxValues(0, maxv)
+  if m.omGen ~= maxGen then
+    m.omGen = maxGen; m.L:SetMinMaxValues(0, maxv); m.R:SetMinMaxValues(0, maxv); m.omP = nil
+  end
   local side = p < 0 and 'L' or 'R'
   -- both sides stay alive (never 0): a side WoW had hidden took a frame or two to place when an edge first crossed the
   -- health's end (filmed 2026-11-11: the last DoT's piece vanished for 2 frames as it ended)
-  m.L:SetValue(math.max(-p, .0001)); m.R:SetValue(math.max(p, .0001))
+  if m.omP ~= p then m.omP = p; m.L:SetValue(math.max(-p, .0001)); m.R:SetValue(math.max(p, .0001)) end
   if side ~= m.side then
     m.f:ClearAllPoints()
     local t, a, b = (side == 'L') and m.lt or m.rt, (side == 'L') and 'TOPLEFT' or 'TOPRIGHT', (side == 'L') and 'BOTTOMLEFT' or 'BOTTOMRIGHT'
@@ -283,31 +283,146 @@ local function setMark(m, p, maxv)
   end
 end
 
-local function colorOf(name) local sp = Spells.dot(name); return sp and sp.deep or OTHER end
+-- sheet 30 (approved "Yes, build it", 2026-11-11). dots: { {name, damage, expires} } nearest the bar's end first;
+-- maxv / hp may be hidden numbers (only handed to status bars). A tick spends part of its own DoT's piece: the bite
+-- flares hot in that DoT's colour (60 ms), holds (to 160 ms), then cools to an ember while the gap closes, fast then
+-- settling (340 ms). The green never moves. Its ring breathes the same instant.
+-- Ticks, bites, precast and landed pieces and ending ghosts are worked out by the model (DotModel.lua); colours and
+-- looks by KillBarStyle.lua. It draws only when something moves (P.animating), the numbers changed (P.redraw) or a
+-- piece is due to turn gold (P.wakeAt); health alone moves only the skull and the test bar's end.
+local look = K.new()                  -- the style's answer for one piece (reused)
+local ask = {}                        -- the style's question (reused)
+local seen, order, used = {}, {}, {}
+local run, slide, wake, moving
 
--- sheet 30 (approved "Yes, build it", 2026-11-11). Every frame. dots: { {name, damage, expires} } nearest the bar's end
--- first; maxv / hp may be hidden numbers (only handed to status bars). A tick spends part of its own DoT's piece: the
--- bite flares hot in that DoT's colour (60 ms), holds (to 160 ms), then cools to an ember while the gap closes, fast
--- then settling (340 ms); it lights 9 px of its neighbours. The green never moves. Its ring breathes the same instant.
--- Ticks, bites, precast and landed pieces and ending ghosts are worked out by the model (DotModel.lua).
-local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
-local function toneOf(name) local sp = Spells.dot(name); return sp and sp.color end   -- the ring's colour, for the tick
+-- the skull, and the health's own end (the test bar's): the parts that follow health
+local function drawHealth(cur)
+  local maxv, hp = cur.maxv, cur.hp
+  if P.base.omGen ~= hpGen then P.base.omGen = hpGen; P.base:SetMinMaxValues(0, maxv); P.base:SetValue(hp) end
+  -- the skull: hidden when the mob already carries a real raid mark (that one wins)
+  if not win then return end -- no portrait on this frame: no skull
+  if GetRaidTargetIndex('target') or ns.db.skull == false then shown(win, false)
+  else
+    shown(win, true)
+    if longBar.omGen ~= hpGen then longBar.omGen = hpGen; longBar:SetMinMaxValues(0, hp); longBar.omV = nil end
+    if longBar.omV ~= P.total then longBar.omV = P.total; longBar:SetValue(P.total) end
+  end
+end
+
+local function drawPiece(s, d, i, now, anow)
+  if d then
+    local bl, flare = M.bite(d.name, anow); slide = slide + bl
+    local before = run                                 -- where this piece starts, from the bar's end
+    local r = M.rec(d.name)
+    local pr = r.pred
+    -- each DoT remembers its OWN size (2026-11-11: sizes were kept per slot, so when a DoT ended the others moved up a
+    -- slot, took the wrong size and regrew: the green jumped out). A new or refreshed DoT grows in; shrinking is bites.
+    local want = math.max(0, d.damage - (pr and pr.est or 0)) + bl
+    local sh = r.shown or 0
+    if want > sh then sh = sh + (want - sh) * (1 - math.exp(-(M.dt or .033) * 9)) else sh = want end
+    if want - sh > 1e-6 then moving = true end
+    r.shown = sh; seen[d.name] = true
+    run = run + sh; s.shown = run; s.sz = sh
+    local b = M.biteOf(d.name)
+    if b then moving = true end
+    -- the style: gold through its last seconds and on past zero while it glides out
+    local left = d.expires and (d.expires - now)
+    ask.left, ask.low, ask.steady = left, LOWS(), ns.db.lowlook == 'steady'
+    ask.provisional, ask.look, ask.pr = d.provisional, ns.db.cast or 'charging', 1
+    if d.provisional and d.castStart and d.castEnd and d.castEnd > d.castStart then ask.pr = math.max(0, math.min(1, (now - d.castStart) / (d.castEnd - d.castStart))) end
+    local la = M.landAt[d.name]
+    ask.landAge, ask.landLook = la and (anow - la) or 9, M.landLook[d.name]
+    ask.light, ask.quiet = bl > 0 and (ns.db.tick or 'ember') or nil, b and b.quiet
+    local o = K.piece(look, Spells.dot(d.name), ask)
+    if o.animating then moving = true end
+    if left and not o.lowNow then local w = d.expires - ask.low; if not wake or w < wake then wake = w end end
+    local c = o.c
+    color3(s.base, o.base[1], o.base[2], o.base[3]); color3(s.lift, o.lift[1], o.lift[2], o.lift[3])
+    s.cpr = o.cpr
+    local charge = d.provisional and o.cpr ~= nil
+    if charge then
+      color3(s.cbase, o.fill[1], o.fill[2], o.fill[3]); color3(s.clift, o.fillLift[1], o.fillLift[2], o.fillLift[3])
+    end
+    shown(s.cbase, charge); shown(s.clift, charge)
+    if o.spark then local al = o.spark; glowRight(s.spark, o.glow[1] * al, o.glow[2] * al, o.glow[3] * al) end
+    shown(s.spark, o.spark ~= nil)
+    if o.stripes then   -- the stripes drift toward the green
+      local bw, bh = hb:GetWidth(), hb:GetHeight(); local at = K.stripesAt(anow)
+      texCoord(s.pre, at, at + bw / 24, 0, bh / 24); color4(s.pre, o.tn[1], o.tn[2], o.tn[3], K.STRIPES_A)
+    end
+    shown(s.pre, o.stripes)
+    if o.motes then
+      local bw = hb:GetWidth(); local at = K.motesAt(anow)
+      texCoord(s.motes, at, at + bw / 128 * 2, 0, 1); color3(s.motes, o.tn[1] * K.MOTES_K, o.tn[2] * K.MOTES_K, o.tn[3] * K.MOTES_K)
+    end
+    shown(s.motes, o.motes)
+    s.biteK = 1
+    local lit = false
+    local np = 0                                      -- particles alive this frame
+    if bl > 0 then
+      -- settings 'Tick light'. The light (Ember, Cinders, Essence) washes up out of the piece across the seam into the
+      -- bitten part (sheet 37: no hard cut, no band) and settles back into its own colour.
+      local tone = o.tone
+      s.biteK = (b and b.amt > 0) and math.min(1, bl / b.amt) or 0
+      s.gtarget = before + bl; color3(s.ghost, o.ghost[1], o.ghost[2], o.ghost[3])
+      if o.light ~= 'plain' then
+        lit = true
+        local a = K.lightA(flare)
+        color3(s.spillC, tone[1] * a, tone[2] * a, tone[3] * a)
+        glowRight(s.wash, tone[1] * a * .6, tone[2] * a * .6, tone[3] * a * .6)
+        if (o.light == 'cinders' or o.light == 'essence') and b and s.right then
+          local age = anow - b.at; local H = hb:GetHeight()
+          for k = 1, 5 do
+            local l, fade, e = K.particle(k, age)
+            local t = s.parts[k]
+            if l then
+              np = k
+              local sd = (b.at * 7.3 + k * .618) % 1
+              t:ClearAllPoints()
+              t:SetPoint('CENTER', s.right, 'LEFT', -px(2 + (k - 1) * 3 + math.sin(age * 4 + k * 1.7) * 2, hb), -H * .3 + e * H * (.5 + sd * .3))
+              if o.light == 'cinders' then
+                if t.omTex ~= 1 then t.omTex = 1; t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\mote') end
+                local z = px(5 - 2 * l, hb); t:SetSize(z, z)
+                color4(t, tone[1], tone[2], tone[3], .7 * fade)
+              else
+                if t.omTex ~= 2 then t.omTex = 2; t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\haze') end
+                local z = px(12 + 16 * l, hb); t:SetSize(z, z)
+                color4(t, o.haze[1], o.haze[2], o.haze[3], .45 * fade)
+              end
+              shown(t, true)
+            else shown(t, false) end
+          end
+        end
+      end
+    end
+    if np == 0 then for k = 1, 5 do shown(s.parts[k], false) end end
+    shown(s.ghost, bl > 0); shown(s.spillC, lit); shown(s.wash, lit)
+  else
+    s.shown = run; s.sz = 0; s.cpr = nil
+    for _, t in ipairs(s.quiet) do shown(t, false) end
+  end
+  local on = d and true or false
+  -- no crease next to an empty piece (a DoT that just ended): two creases stacked on one spot, then popped away
+  local cr = (on and i > 1 and (s.sz or 0) > .3 and order[i - 1] and (order[i - 1].sz or 0) > .3) and true or false
+  shown(s.creaseL, cr); shown(s.creaseR, cr)
+  local ck = (ns.db.tick ~= 'plain' and d and s.biteK) and (1 - .85 * s.biteK) or 1; alpha(s.creaseL, ck); alpha(s.creaseR, ck)
+  shown(s.base, on); shown(s.lift, on)
+end
 
 local function render()
   local cur = M.cur()
   if not cur or not built then return end
-  local dots, maxv, hp = cur.dots, cur.maxv, cur.hp
+  local dots, maxv = cur.dots, cur.maxv
   if #dots == 0 then return hide() end
-  clip:Show()
+  if P.hidden then P.hidden = false; clip:Show() end
   local now = GetTime()
   local anow = M.clock()
-  local run, slide = 0, 0
-  local seen = {}
+  run, slide, wake, moving = 0, 0, nil, false
+  wipe(seen); wipe(order); wipe(used)
   -- 2026-11-11 'the entire bar repaints for a second when a DoT ends': pieces were slots, so when one DoT left, every
   -- DoT behind it moved into the next slot and borrowed that slot's textures, glows and edges, still showing the old
   -- DoT for a frame or two. Now each DoT owns its slot (textures and edges) for its whole life; when the order
   -- changes only the neighbour anchors move, in the same frame as the edges.
-  local order, used = {}, {}
   for j, d in ipairs(dots) do
     if j > MAX then break end
     local r = M.rec(d.name)
@@ -317,146 +432,47 @@ local function render()
   end
   for _, r in pairs(M.snap().per) do local s = r.slot; if s and used[s] == nil then s.owner = nil; r.slot = nil end end
   for j, s in ipairs(order) do local right = (j == 1) and P.E[0].f or order[j - 1].edge; if s.right ~= right then P.reanchor(s, right) end end
-  local seq = {}
-  for j, s in ipairs(order) do seq[#seq + 1] = { s, used[s], j } end
-  for _, c in ipairs(segs) do if used[c] == nil then seq[#seq + 1] = { c, nil, 99 } end end
-  for _, e in ipairs(seq) do
-    local s, d, i = e[1], e[2], e[3]
-    if d then
-      local bl, flare = M.bite(d.name, anow); slide = slide + bl
-      local before = run                                 -- where this piece starts, from the bar's end
-      local r = M.rec(d.name)
-      local pr = r.pred
-      -- each DoT remembers its OWN size (2026-11-11: sizes were kept per slot, so when a DoT ended the others moved up a
-      -- slot, took the wrong size and regrew: the green jumped out). A new or refreshed DoT grows in; shrinking is bites.
-      local want = math.max(0, d.damage - (pr and pr.est or 0)) + bl
-      local sh = r.shown or 0
-      if want > sh then sh = sh + (want - sh) * (1 - math.exp(-(M.dt or .033) * 9)) else sh = want end
-      r.shown = sh; seen[d.name] = true
-      run = run + sh; s.shown = run; s.sz = sh
-      local left = d.expires and (d.expires - now)
-      local lowNow = left and left <= LOWS()   -- gold through its last 3 s and on past zero while it glides out (it flipped back)
-      local c = colorOf(d.name)
-      if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
-      local tn = toneOf(d.name) or c
-      local sp = mix(c, tn, .7)   -- the glow: its own colour, low (no white: warlock light)
-      local function spark(al)
-        if CreateColor then s.spark:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(sp[1] * al, sp[2] * al, sp[3] * al, 1)) end
-        s.spark:Show()
-      end
-      local look = ns.db.cast or 'charging'
-      s.pre:Hide(); s.preGlow:Hide(); s.motes:Hide()
-      local full = { math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15) }
-      if d.provisional then   -- still being cast (settings 'While you cast')
-        local pr = 1
-        if d.castStart and d.castEnd and d.castEnd > d.castStart then pr = math.max(0, math.min(1, (now - d.castStart) / (d.castEnd - d.castStart))) end
-        s.base:SetVertexColor(c[1] * .45, c[2] * .45, c[3] * .45); s.lift:SetVertexColor(0, 0, 0)
-        s.cbase:Hide(); s.clift:Hide(); s.spark:Hide(); s.cpr = nil
-        if look == 'charging' then   -- fills with your cast bar in its landed colour, an ember at the front
-          s.cpr = pr
-          s.cbase:SetVertexColor(full[1], full[2], full[3]); s.cbase:Show()
-          s.clift:SetVertexColor(c[1] * .7, c[2] * .7, c[3] * .7); s.clift:Show()
-          spark(.45)
-        elseif look == 'smoulder' then   -- its colour rises out of the dark as you cast
-          local k = pr ^ 1.6
-          s.base:SetVertexColor(c[1] * (.3 + .85 * k), c[2] * (.3 + .85 * k), c[3] * (.3 + .85 * k)); s.lift:SetVertexColor(c[1] * .7 * k, c[2] * .7 * k, c[3] * .7 * k)
-        elseif look == 'stripes' then   -- Blizzard's shield stripes in its ring colour, drifting toward the green
-          local bw, bh = hb:GetWidth(), hb:GetHeight(); local o = (anow * .35) % 1
-          s.pre:SetTexCoord(o, o + bw / 24, 0, bh / 24); s.pre:SetVertexColor(tn[1], tn[2], tn[3], .55); s.pre:Show()
-        elseif look == 'motes' then   -- small pixels drifting through the dim piece toward the green
-          local bw = hb:GetWidth(); local o = (anow * .08) % 1
-          s.motes:SetTexCoord(o, o + bw / 128 * 2, 0, 1); s.motes:SetVertexColor(tn[1] * .8, tn[2] * .8, tn[3] * .8); s.motes:Show()
-        end
-      else
-        -- landed (the model noted when, and in which look)
-        s.cbase:Hide(); s.clift:Hide()
-        local la = M.landAt[d.name] and (anow - M.landAt[d.name]) or 9
-        local ll = M.landLook[d.name]
-        if ll == 'charging' and la < .35 then s.cpr = 1; spark(.45 * (1 - la / .35) ^ 2) else s.cpr = nil; s.spark:Hide() end
-        local k = 1   -- the other looks ease from dim to full colour as it lands (no snap)
-        if ll and ll ~= 'charging' and ll ~= 'smoulder' and la < .3 then k = .4 + .6 * Anim.smoothstep(la / .3) end
-        s.base:SetVertexColor(full[1] * k, full[2] * k, full[3] * k)
-        s.lift:SetVertexColor(c[1] * .7 * k, c[2] * .7 * k, c[3] * .7 * k)
-      end
-      local tl = ns.db.tick or 'ember'
-      local b = M.biteOf(d.name)
-      if b and b.quiet then tl = 'plain' end   -- removed early: no light
-      s.biteK = 1
-      for k = 1, 5 do s.parts[k]:Hide() end
-      if bl > 0 then
-        -- settings 'Tick light'. The bitten part keeps its piece's colour; the light (Ember, Cinders, Essence) washes up out
-        -- of the piece across the seam into it (sheet 37: no hard cut, no band) and settles back into its own colour.
-        local tone = lowNow and { math.min(1, c[1] * 1.3), math.min(1, c[2] * 1.3), math.min(1, c[3] * 1.3) } or (toneOf(d.name) or c)
-        s.biteK = (b and b.amt > 0) and math.min(1, bl / b.amt) or 0
-        s.gtarget = before + bl; s.ghost:SetVertexColor(full[1] + c[1] * .7, full[2] + c[2] * .7, full[3] + c[3] * .7); s.ghost:Show()
-        if tl == 'plain' then
-          s.spillC:Hide(); s.wash:Hide()
-        else
-          local a = flare * .55
-          s.spillC:SetVertexColor(tone[1] * a, tone[2] * a, tone[3] * a); s.spillC:Show()
-          if CreateColor then s.wash:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(tone[1] * a * .6, tone[2] * a * .6, tone[3] * a * .6, 1)) end
-          s.wash:Show()
-          if (tl == 'cinders' or tl == 'essence') and b and s.right then
-            local age = anow - b.at; local life = age / .7; local H = hb:GetHeight()
-            for k = 1, 5 do
-              local l = math.max(0, math.min(1, (life - (k - 1) * .04) / .9))
-              if l > 0 and l < 1 then
-                local t = s.parts[k]; local fade = math.sin(math.pi * math.min(1, l * 1.15)); local e = 1 - (1 - l) ^ 2
-                local sd = (b.at * 7.3 + k * .618) % 1
-                t:ClearAllPoints()
-                t:SetPoint('CENTER', s.right, 'LEFT', -px(2 + (k - 1) * 3 + math.sin(age * 4 + k * 1.7) * 2, hb), -H * .3 + e * H * (.5 + sd * .3))
-                if tl == 'cinders' then
-                  t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\mote'); local z = px(5 - 2 * l, hb); t:SetSize(z, z)
-                  t:SetVertexColor(tone[1], tone[2], tone[3], .7 * fade)
-                else
-                  t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\haze'); local z = px(12 + 16 * l, hb); t:SetSize(z, z)
-                  local hz = mix(c, tone, .45); t:SetVertexColor(hz[1], hz[2], hz[3], .45 * fade)
-                end
-                t:Show()
-              end
-            end
-          end
-        end
-        s.spillL:Hide(); s.spillR:Hide()
-      else
-        s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide(); s.wash:Hide()
-      end
-    else
-      s.shown = run; s.sz = 0; s.cpr = nil; s.wash:Hide(); s.motes:Hide(); for k = 1, 5 do s.parts[k]:Hide() end; s.cbase:Hide(); s.clift:Hide(); s.spark:Hide(); s.pre:Hide(); s.preGlow:Hide(); s.ghost:Hide(); s.spillL:Hide(); s.spillC:Hide(); s.spillR:Hide()
-    end
-    local on = d and true or false
-    local mode = 'crease'
-    local jw = mode == 'crease' and 0 or (JOIN[mode] or 0)
-    -- no crease next to an empty piece (a DoT that just ended): two creases stacked on one spot, then popped away
-    local cr = on and i > 1 and mode == 'crease' and (s.sz or 0) > .3 and order[i - 1] and (order[i - 1].sz or 0) > .3
-    s.creaseL:SetShown(cr); s.creaseR:SetShown(cr)
-    local ck = (ns.db.tick ~= 'plain' and d and s.biteK) and (1 - .85 * s.biteK) or 1; s.creaseL:SetAlpha(ck); s.creaseR:SetAlpha(ck)
-    if jw > 0 then s.join:SetWidth(px(jw, hb)); s.joinLift:SetWidth(px(jw, hb)) end
-    s.base:SetShown(on); s.lift:SetShown(on); s.flash:SetShown(false); s.join:SetShown(on and i > 1 and jw > 0); s.joinLift:SetShown(on and i > 1 and jw > 0)
-  end
-  -- the pieces hang one status bar deeper than the health's end, and WoW lays each level out a frame later; so the end
-  -- takes its new value one frame late too, or on every tick the pieces slipped 2 px for a frame (filmed 2026-11-11)
-  P.base:SetMinMaxValues(0, maxv); P.base:SetValue(hp)
+  for j, s in ipairs(order) do drawPiece(s, used[s], j, now, anow) end
+  for _, c in ipairs(segs) do if used[c] == nil then drawPiece(c, nil, 99, now, anow) end end
   for name, r in pairs(M.snap().per) do if not seen[name] then r.shown = nil end end
   -- every edge in one pass, all one link from the health's end
   setMark(P.E[0], slide, maxv)
   for _, s in ipairs(order) do
     setMark(s.mark, slide - s.shown, maxv)
-    if s.ghost:IsShown() and s.gtarget then setMark(s.gmark, slide - s.gtarget, maxv) end
+    if s.ghost.omShown and s.gtarget then setMark(s.gmark, slide - s.gtarget, maxv) end
     if s.cpr then setMark(s.cmark, slide - s.shown + s.cpr * (s.sz or 0), maxv) end
   end
   local far = order[#order] or segs[1]
-  shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT')
-  -- the skull: hidden when the mob already carries a real raid mark (that one wins)
-  local total = 0; for _, d in ipairs(dots) do if not d.provisional and not d.landed then total = total + d.damage end end   -- review #4: only confirmed DoTs make the skull
-  if not win then -- no portrait on this frame: no skull
-  elseif GetRaidTargetIndex('target') or ns.db.skull == false then win:Hide() else win:Show(); longBar:SetMinMaxValues(0, hp); longBar:SetValue(total) end
+  if P.shineFar ~= far then P.shineFar = far; shine:ClearAllPoints(); shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMLEFT', far.edge, 'BOTTOMLEFT') end
+  -- the pieces hang one status bar deeper than the health's end, and WoW lays each level out a frame later; so the end
+  -- takes its new value one frame late too, or on every tick the pieces slipped 2 px for a frame (filmed 2026-11-11)
+  local total = 0; for _, d in ipairs(dots) do if not d.provisional and not d.landed then total = total + d.damage end end   -- only confirmed DoTs make the skull
+  P.total = total
+  drawHealth(cur)
+  P.animating, P.wakeAt = moving, wake
+end
+
+-- what the bar last drew from, to tell whether new numbers change anything (plain numbers only)
+local sig, sigN = {}, 0
+local function put(v) sigN = sigN + 1; if sig[sigN] ~= v then sig[sigN] = v; P.redraw = true end end
+local function noteChanges(cur)
+  sigN = 0
+  put(maxGen); put(#cur.dots)
+  for _, d in ipairs(cur.dots) do
+    put(d.name); put(d.damage); put(d.expires); put(d.provisional or false); put(d.castStart or false); put(d.castEnd or false)
+    put(d.landed or false); put(d.ending or false)
+    local r = M.peek(d.name); local pr, b = r and r.pred, r and r.bite
+    put(pr and pr.est or false); put(b and b.at or false); put(b and b.amt or false); put(b and b.quiet or false)
+    put(M.landAt[d.name] or false); put(M.landLook[d.name] or false)
+  end
 end
 
 -- new numbers (10 times a second and on events): the model notices ticks and keeps them for render
 local function draw(dots, maxv, hp)
   if not build() then return end
-  M.feed(dots, maxv, hp)
+  local cur = M.feed(dots, maxv, hp)
+  newHealth(cur); noteChanges(cur)
+  if P.base.omGen ~= hpGen and not P.hidden then P.hpDirty = true end
 end
 
 -- Which bar to draw on, every update. A different bar (another add-on's target frame showed up, or one was picked)
@@ -469,7 +485,7 @@ local function once(key, msg) if not told[key] then told[key] = true; ns.say(msg
 local function unbuild()
   if not built then return end
   hide(); clip:Hide(); if win then win:Hide() end
-  segs = {}; built = false
+  segs = {}; built = false; P.hidden = nil
 end
 local choose1
 local function choose()
@@ -529,7 +545,7 @@ local function update()
       end
     end
     table.sort(dots, function(a, b) return a.expires < b.expires end)
-    if build() then P.lost:Show(); P.hangOn(P.baseEdge) end   -- the empty bar past the fake health (P.base carries its end)
+    if build() then shown(P.lost, true); P.hangOn(P.baseEdge) end   -- the empty bar past the fake health (P.base carries its end)
     return draw(dots, m, hp)
   end
   if not UnitExists('target') or UnitIsDead('target') or not choose() then M.clearCur(); return hide() end
@@ -550,15 +566,24 @@ function P.start()
   pcall(otherMarkers)
   local function newTarget()
     for _, s in ipairs(segs) do s.owner = nil; s.shown = 0 end
-    P.dirty = true; update()
+    P.dirty = true; P.redraw = true; update()
   end
   ns.bus:On('TARGET', newTarget)
   ns.bus:On('DOTS', function() P.dirty = true end)
+  ns.bus:On('TICK', function() P.redraw = true end)
+  -- health alone moves only the skull (and the test bar's end); a death takes the bar away at once
+  ns.bus:On('HEALTH', function()
+    if UnitIsDead('target') then P.dirty = true; return end
+    local cur = M.cur(); if not cur or test or not built then return end
+    cur.hp, cur.maxv = UnitHealth('target'), UnitHealthMax('target')
+    local mg = maxGen; newHealth(cur)
+    if maxGen ~= mg then P.redraw = true else P.hpDirty = true end
+  end)
   ns.bus:On('TARGET_BAR', function() told.hidden = nil; chosenAt = -1; P.dirty = true end)   -- a frame path was set or cleared
   local ev = CreateFrame('Frame')
-  -- the skull's whole-number step follows the screen and the UI scale
-  for _, e in ipairs({ 'UI_SCALE_CHANGED', 'DISPLAY_SIZE_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
-  ev:SetScript('OnEvent', function() P.sizeSkull() end)
+  -- the skull's whole-number step follows the screen and the UI scale; a raid mark on the target hides the skull
+  for _, e in ipairs({ 'UI_SCALE_CHANGED', 'DISPLAY_SIZE_CHANGED', 'RAID_TARGET_UPDATE' }) do pcall(ev.RegisterEvent, ev, e) end
+  ev:SetScript('OnEvent', function(_, e) if e == 'RAID_TARGET_UPDATE' then P.hpDirty = true else P.sizeSkull() end end)
   local acc = 0
   ev:SetScript('OnUpdate', function(_, dt)
     M.step(dt)
@@ -568,7 +593,16 @@ function P.start()
       local ok, err = pcall(update)
       if not ok then ns.fail('update: ' .. tostring(err), 'the kill bar'); P.off = true; pcall(hide); M.clearCur() end
     end
-    local ok, err = pcall(render)
+    -- draw only when something moves, the numbers changed, or a piece is due to turn gold
+    local ok, err = true, nil
+    if P.redraw or P.animating or (P.wakeAt and GetTime() >= P.wakeAt - .001) then
+      P.redraw, P.hpDirty = false, false
+      ok, err = pcall(render)
+    elseif P.hpDirty then
+      P.hpDirty = false
+      local cur = M.cur()
+      if cur and built and not P.hidden then ok, err = pcall(drawHealth, cur) end
+    end
     if not ok then ns.fail('render: ' .. tostring(err), 'the kill bar'); P.off = true; pcall(hide); M.clearCur() end
   end)
 end
@@ -576,7 +610,8 @@ end
 -- /omadoomed on | off    the kill bar part on or off
 -- /omadoomed test        fake DoTs on your current target (live)   ... test off
 function P.slash(m)
-  if m == 'test off' then test = nil; M.test = false; if built then P.lost:Hide(); P.hangOn(fill) end; ns.say('test off.'); return update() end
+  P.redraw = true
+  if m == 'test off' then test = nil; M.test = false; if built then shown(P.lost, false); P.hangOn(fill) end; ns.say('test off.'); return update() end
   if m:match('^test') then
     test = {}; M.test = true; M.forget()
     ns.say('test DoTs on your target. /omadoomed test off'); return update()
@@ -587,5 +622,9 @@ function P.slash(m)
   ns.say('/omadoomed on|off, options, report, report show, errors, plates, frame · /omadoomed rings on|off, others on|off')
 end
 
--- a setting changed on the Options page (Settings.lua): show it at once; every other kill bar setting is read each frame
-ns.bus:On('SETTING', function(key) if key == 'doomed' then update() end end)
+-- a setting changed on the Options page (Settings.lua): show it at once
+ns.bus:On('SETTING', function(key, store)
+  if store == 'rings' then return end
+  P.redraw = true
+  if key == 'doomed' then update() end
+end)
