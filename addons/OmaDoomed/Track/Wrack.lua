@@ -58,3 +58,4 @@ f:SetScript('OnEvent', function(_, event, _, castGUID, spellID)
   end
 end)
 f:SetScript('OnUpdate', function() if active then shift(GetTime()) end end)
+OMA.trackOffWith(function() f:UnregisterAllEvents(); f:SetScript('OnUpdate', nil); active = nil end)

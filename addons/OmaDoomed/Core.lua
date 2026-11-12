@@ -32,6 +32,12 @@ local function slash()
   s:Exact('cpu', function() if ns.perf then for _, l in ipairs(ns.perfLines(ns.perf())) do print(l) end end end)
   s:Exact('errors', function() local e = ns.log:List(); for i = math.min(8, #e), 1, -1 do print(e[i]) end end)
   s:Exact('options', function() return ns.openSettings and ns.openSettings() end)
+  -- the tracking's trace log, for bug reports (off by default: it costs a line per unmatched hit)
+  s:Word('trace', function(rest)
+    local t = OmaDoomedDB and OmaDoomedDB.track; if not t then return end
+    if rest == 'on' then t.omaTrace = true; t.log = t.log or {} elseif rest == 'off' then t.omaTrace = nil; t.log = {} end
+    ns.say('trace log ' .. (t.omaTrace and 'on' or 'off') .. '.')
+  end)
   s:Exact('settings', function() return ns.openSettings and ns.openSettings() end)
 end
 
@@ -47,7 +53,7 @@ f:SetScript('OnEvent', function(self, event, name)
       ns.settings:Fill(OmaDoomedDB)
     end
     ns.db = OmaDoomedDB
-    if not ns.isWarlock() then return end
+    if not ns.isWarlock() then if ns.trackOff then ns.trackOff() end; return end
     ns.warlock = true
     slash()
     if ns.buildSettings then

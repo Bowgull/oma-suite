@@ -40,7 +40,7 @@ local function setup(W)
     nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 9 }, { name = 'Corruption', damage = 30, expiresAt = 5 } },
     nameplate2 = {},
   }
-  ns.parts.doomed.source = function(u) return DOTS[u] or {} end
+  ns.model.source = function(u) return DOTS[u] or {} end
   for i = #made, 1, -1 do made[i] = nil end   -- only what KillPlates makes from here on
   -- KillPlates makes, per piece, its bar then its Charging fill: pieces[k] / fills[k]
   local view = setmetatable({}, { __index = function(_, k) if k == 'count' then return #made / 2 end; return made[2 * k - 1] end })

@@ -121,15 +121,10 @@ local function chargeStep()
   end
 end
 
+-- the model's list for a plate: one entry per DoT with damage left, the one ending first nearest the green
 local function dotsOn(unit)
-  local src = ns.parts.doomed and ns.parts.doomed.source
-  if not src then return {} end
-  local ok, raw = pcall(src, unit); if not ok or type(raw) ~= 'table' then return {} end
-  local list, seen = {}, {}
-  for _, e in ipairs(raw) do
-    if e.name and not seen[e.name] and (e.damage or 0) > 0 then seen[e.name] = true; list[#list + 1] = e end
-  end
-  table.sort(list, function(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end)
+  local ok, list = pcall(ns.model.list, unit, true)
+  if not ok or type(list) ~= 'table' then return {} end
   return list
 end
 

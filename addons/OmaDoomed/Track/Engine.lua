@@ -90,6 +90,12 @@ local OMA_TRACKED = { ["Corruption"] = true, ["Curse of Agony"] = true, ["Bane o
 -- OMA: Wrack (Forever warlock channel, 1316697) speeds up other DoTs; it is not a DoT itself.
 IGNORED_SPELLS["Wrack"] = true
 local NAME_TABLES = { KNOWN_TICK_INTERVALS, TICK_SHAPES, SCHOOL_BY_NAME, IGNORED_SPELLS, PROJECTILE_DOTS, TRAP_DOTS, OMA_TRACKED }
+-- OMA: by spell ID first (OmaDoomed's Spells.lua, every rank), so any client language counts; else by name
+local function omaTracked(name, spellID)
+    local sp = OMA.spells and OMA.spells.ofID(spellID)
+    if sp then return sp.kind == "dot" end
+    return OMA_TRACKED[name] == true
+end
 ns.locale.addNames(NAME_TABLES)
 
 local SCHOOL_MASKS = {
@@ -213,7 +219,7 @@ end
 
 -- Always recorded to SavedVariables (db.log) for diagnosing accuracy; echoed to chat with /did debug.
 local function trace(msg)
-    if not db then return end
+    if not db or not (db.omaTrace or db.debug) then return end -- OMA: off unless asked for
     table.insert(db.log, string.format("%.1f %s", GetTime(), msg))
     if #db.log > MAX_TRACE_LINES then table.remove(db.log, 1) end
     if db.debug then print("|cff888888" .. msg .. "|r") end
@@ -837,7 +843,7 @@ local function onPlayerCast(spellID, castGUID)
         -- Only one Fire trap can be active: any new one (Explosive Trap too) replaces the armed one.
         if armedTrap and desc:find("Fire trap") then armedTrap = nil end
     end
-    if IGNORED_SPELLS[name] or not OMA_TRACKED[name] then return end -- OMA: warlock DoTs only
+    if IGNORED_SPELLS[name] or not omaTracked(name, spellID) then return end -- OMA: warlock DoTs only
     local isFinisher = isFinisherDescription(desc)
     local comboPoints, comboSource
     if isFinisher then comboPoints, comboSource = comboPointsForCast() end
@@ -924,7 +930,7 @@ local function onCastStart(castGUID, spellID)
     castInProgress = nil
     if not db.estimateDuringCast or isSecret(spellID) then return end
     local ok, name, desc = pcall(spellNameAndDescription, spellID)
-    if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or not OMA_TRACKED[name] or isFinisherDescription(desc) then return end -- OMA: warlock only
+    if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or not omaTracked(name, spellID) or isFinisherDescription(desc) then return end -- OMA: warlock only
     local total, school, duration, statedInterval = parseDot(desc, 1)
     if not total then return end
     -- The mob it was sent at (a [@focus] macro's focus), else the target. Kept for the cast's success.
@@ -1289,7 +1295,14 @@ local function learnFromMeter(spells, counted)
 end
 ns.learnFromMeter = learnFromMeter
 
+-- OMA: only the units a mob of yours can be seen on
+local OMA_UNITS = { target = true, focus = true, softenemy = true, mouseover = true }
+local function omaWatched(unit)
+    return type(unit) == "string" and not isSecret(unit) and (OMA_UNITS[unit] or unit:sub(1, 9) == "nameplate")
+end
+ns.omaWatched = omaWatched
 local function onUnitCombat(unit, action, flag, amount, school)
+    if not omaWatched(unit) then return end -- OMA
     if isSecret(action) then return end
     -- A fully absorbed tick still landed (a shield ate it): it proves the DoT is on and keeps its rhythm, so ABSORB
     -- matches like WOUND, but a 0 never feeds tick sizes. With two DoTs it could be, it's ignored.
@@ -1560,17 +1573,11 @@ frame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
         if ... ~= ADDON_NAME then return end
-        -- OMA: saved in OmaDoomedDB.track; learned tick sizes are taken from DoesItDie once, when present
+        -- OMA: warlocks only (Core.lua also switches every tracking frame off for other classes)
+        if OMA.isWarlock and not OMA.isWarlock() then self:UnregisterAllEvents(); return end
+        -- OMA: saved in OmaDoomedDB.track (standalone: nothing is taken from DoesItDie)
         OmaDoomedDB = OmaDoomedDB or {}
-        if type(OmaDoomedDB.track) ~= "table" then
-            OmaDoomedDB.track = {}
-            local did = type(DoesItDieDB) == "table" and DoesItDieDB
-            if did and did.version == DB_VERSION and type(did.ticks) == "table" then
-                OmaDoomedDB.track.version = DB_VERSION
-                OmaDoomedDB.track.ticks = CopyTable and CopyTable(did.ticks) or did.ticks
-                if type(did.tickWeights) == "table" then OmaDoomedDB.track.tickWeights = CopyTable and CopyTable(did.tickWeights) or did.tickWeights end
-            end
-        end
+        if type(OmaDoomedDB.track) ~= "table" then OmaDoomedDB.track = {} end
         db = OmaDoomedDB.track
         if db.version ~= DB_VERSION then
             db.ticks, db.intervals, db.version = nil, nil, DB_VERSION
@@ -1630,6 +1637,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
         local _, castGUID, spellID = ...
         onCastSucceeded(castGUID, spellID)
         local appliedTo, waiting = onPlayerCast(spellID, castGUID)
+        ns.tracking.omaLastCast = { guid = castGUID, key = appliedTo } -- OMA: for DotModel.lua
         ns.refresh()
         -- A DoT waiting for its first tick isn't drawn yet; it flashes when that tick lands instead.
         if appliedTo and not waiting and appliedTo == unitKey("target") then ns.playFlash() end
@@ -1734,3 +1742,7 @@ end)
 ns.tracking.dotsByTarget = dotsByTarget
 ns.tracking.castTargetKey = castTargetKey
 ns.tracking.trace = trace
+-- OMA: other classes: the engine stops listening (Core.lua, through Track/Shim.lua)
+function ns.tracking.off()
+    frame:UnregisterAllEvents(); frame:SetScript("OnUpdate", nil); meterFrame:UnregisterAllEvents()
+end

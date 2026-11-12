@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds OmaDoomed's DoT tracking (Track/) from DoesItDie's engine (tools/upstream/), MIT, Joe Greive.
+"""Builds OmaDoomed's DoT tracking (Track/) from DoesItDie's engine (tools/upstream/), MIT (see Track/LICENSE-DoesItDie).
 
 Run from the OmaDoomed folder:  python3 -I tools/import_doesitdie.py
 Safe to run again: it rewrites Track/Engine.lua and Track/Locale*.lua from upstream every time.
@@ -31,6 +31,12 @@ def locale_files():
         if f.startswith('Locale') and f.endswith('.lua'):
             src = open(os.path.join(UP, f), encoding='utf-8').read()
             src = edit(src, NS_LINE_LOCALE, NS_SHIM, f + ': namespace')
+            if f == 'Locale.lua':
+                # Immolate was missing, so no client in another language ever tracked it.
+                src = edit(src, '    ["Serpent Sting"] = 1978, ["Pyroblast"] = 11366, ["Corruption"] = 172,\n}\n',
+                    '    ["Serpent Sting"] = 1978, ["Pyroblast"] = 11366, ["Corruption"] = 172,\n}\n'
+                    'L.SPELL_IDS["Immolate"] = 348 -- OMA: missing upstream, so other languages never tracked it\n',
+                    'Locale.lua: Immolate id')
             open(os.path.join(OUT, f), 'w', encoding='utf-8').write(src)
 
 def engine():
@@ -49,30 +55,46 @@ def engine():
         '    ["Immolate"] = true, ["Siphon Life"] = true }\n'
         '-- OMA: Wrack (Forever warlock channel, 1316697) speeds up other DoTs; it is not a DoT itself.\n'
         'IGNORED_SPELLS["Wrack"] = true\n'
-        'local NAME_TABLES = { KNOWN_TICK_INTERVALS, TICK_SHAPES, SCHOOL_BY_NAME, IGNORED_SPELLS, PROJECTILE_DOTS, TRAP_DOTS, OMA_TRACKED }',
+        'local NAME_TABLES = { KNOWN_TICK_INTERVALS, TICK_SHAPES, SCHOOL_BY_NAME, IGNORED_SPELLS, PROJECTILE_DOTS, TRAP_DOTS, OMA_TRACKED }\n'
+        '-- OMA: by spell ID first (OmaDoomed\'s Spells.lua, every rank), so any client language counts; else by name\n'
+        'local function omaTracked(name, spellID)\n'
+        '    local sp = OMA.spells and OMA.spells.ofID(spellID)\n'
+        '    if sp then return sp.kind == "dot" end\n'
+        '    return OMA_TRACKED[name] == true\n'
+        'end',
         'warlock gate table')
     s = edit(s, '    if IGNORED_SPELLS[name] then return end\n    local isFinisher',
-        '    if IGNORED_SPELLS[name] or not OMA_TRACKED[name] then return end -- OMA: warlock DoTs only\n    local isFinisher',
+        '    if IGNORED_SPELLS[name] or not omaTracked(name, spellID) then return end -- OMA: warlock DoTs only\n    local isFinisher',
         'warlock gate on cast')
     s = edit(s, 'if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or isFinisherDescription(desc) then return end',
-        'if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or not OMA_TRACKED[name] or isFinisherDescription(desc) then return end -- OMA: warlock only',
+        'if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or not omaTracked(name, spellID) or isFinisherDescription(desc) then return end -- OMA: warlock only',
         'warlock gate on cast start')
     s = edit(s, 'DEFAULT_CHAT_FRAME:AddMessage("|cffff6666DoesItDie|r " .. msg)',
         'DEFAULT_CHAT_FRAME:AddMessage("|cffb48cffOmaDoomed:|r " .. msg) -- OMA', 'chat prefix')
-    # Saved data: OmaDoomedDB.track, seeded once from DoesItDie's learned tick sizes when they're there.
+    # Saved data: OmaDoomedDB.track. Standalone: nothing is read from DoesItDie's saved data. Other classes: off.
     s = edit(s, '        DoesItDieDB = DoesItDieDB or {}\n        db = DoesItDieDB\n',
-        '        -- OMA: saved in OmaDoomedDB.track; learned tick sizes are taken from DoesItDie once, when present\n'
+        '        -- OMA: warlocks only (Core.lua also switches every tracking frame off for other classes)\n'
+        '        if OMA.isWarlock and not OMA.isWarlock() then self:UnregisterAllEvents(); return end\n'
+        '        -- OMA: saved in OmaDoomedDB.track (standalone: nothing is taken from DoesItDie)\n'
         '        OmaDoomedDB = OmaDoomedDB or {}\n'
-        '        if type(OmaDoomedDB.track) ~= "table" then\n'
-        '            OmaDoomedDB.track = {}\n'
-        '            local did = type(DoesItDieDB) == "table" and DoesItDieDB\n'
-        '            if did and did.version == DB_VERSION and type(did.ticks) == "table" then\n'
-        '                OmaDoomedDB.track.version = DB_VERSION\n'
-        '                OmaDoomedDB.track.ticks = CopyTable and CopyTable(did.ticks) or did.ticks\n'
-        '                if type(did.tickWeights) == "table" then OmaDoomedDB.track.tickWeights = CopyTable and CopyTable(did.tickWeights) or did.tickWeights end\n'
-        '            end\n'
-        '        end\n'
+        '        if type(OmaDoomedDB.track) ~= "table" then OmaDoomedDB.track = {} end\n'
         '        db = OmaDoomedDB.track\n', 'saved variables')
+    # The trace log costs a string and a 500-line shift per unmatched hit: off unless asked for (/omadoomed trace on).
+    s = edit(s, 'local function trace(msg)\n    if not db then return end\n',
+        'local function trace(msg)\n    if not db or not (db.omaTrace or db.debug) then return end -- OMA: off unless asked for\n',
+        'trace off by default')
+    # UNIT_COMBAT fires for party and raid members, the player and pets too: none carry your DoTs.
+    s = edit(s, 'local function onUnitCombat(unit, action, flag, amount, school)\n    if isSecret(action) then return end\n',
+        '-- OMA: only the units a mob of yours can be seen on\n'
+        'local OMA_UNITS = { target = true, focus = true, softenemy = true, mouseover = true }\n'
+        'local function omaWatched(unit)\n'
+        '    return type(unit) == "string" and not isSecret(unit) and (OMA_UNITS[unit] or unit:sub(1, 9) == "nameplate")\n'
+        'end\n'
+        'ns.omaWatched = omaWatched\n'
+        'local function onUnitCombat(unit, action, flag, amount, school)\n'
+        '    if not omaWatched(unit) then return end -- OMA\n'
+        '    if isSecret(action) then return end\n',
+        'watched units only')
     # A DoT that ticked and then misses two ticks in a row is gone: a decurse, the mob resetting, Conflagrate eating
     # Immolate, Bane of Doom/Havoc replacing Agony... (DoesItDie only drops DoTs that never ticked.)
     s = edit(s, '                if dot.ticksSeen == 0 and isObservable(key) then dot.missed = dot.missed + 1 end',
@@ -136,6 +158,11 @@ end""", """local function remainingDamage(dot, key) -- OMA: key, and timed boost
 end""", 'remaining damage per tick')
     s = edit(s, "expiresAt = dot.expiresAt, damage = remainingDamage(dot) })", "expiresAt = dot.expiresAt, damage = remainingDamage(dot, key) }) -- OMA: key", 'breakdown key')
     s = edit(s, "damage = remainingDamage(cast.dot),", "damage = remainingDamage(cast.dot, key), -- OMA: key", 'breakdown key (cast)')
+    # Where each cast's DoT went (by cast ID), so the kill bar's "landed" piece shows on that mob only (DotModel.lua).
+    s = edit(s, '        local appliedTo, waiting = onPlayerCast(spellID, castGUID)\n',
+        '        local appliedTo, waiting = onPlayerCast(spellID, castGUID)\n'
+        '        ns.tracking.omaLastCast = { guid = castGUID, key = appliedTo } -- OMA: for DotModel.lua\n',
+        'where a cast went')
     # Hits OmaDoomed knows aren't DoT ticks (your own channel's ticks, your Imp's Firebolt) are claimed before
     # tick matching, so they can't keep a finished DoT alive (Track/Forever.lua, ns.omaClaim).
     s = edit(s, '    if action == "WOUND" or absorbed then onHit(key, school) end\n',
@@ -149,7 +176,11 @@ end""", 'remaining damage per tick')
         '-- OMA: what OmaDoomed\'s own additions (Track/Wrack.lua) need from the engine.\n'
         'ns.tracking.dotsByTarget = dotsByTarget\n'
         'ns.tracking.castTargetKey = castTargetKey\n'
-        'ns.tracking.trace = trace\n')
+        'ns.tracking.trace = trace\n'
+        '-- OMA: other classes: the engine stops listening (Core.lua, through Track/Shim.lua)\n'
+        'function ns.tracking.off()\n'
+        '    frame:UnregisterAllEvents(); frame:SetScript("OnUpdate", nil); meterFrame:UnregisterAllEvents()\n'
+        'end\n')
     open(os.path.join(OUT, 'Engine.lua'), 'w', encoding='utf-8').write(s)
 
 os.makedirs(OUT, exist_ok=True)

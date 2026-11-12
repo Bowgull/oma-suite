@@ -60,12 +60,20 @@ function F.start(opts)
 end
 
 -- mob(token, guid, name, hp, opts): opts.secretGuid (instances), opts.dead, opts.friendly
--- talents{ ['Shadow and Flame'] = 5 }: what the talent API answers, read like at login
-function F.talents(t)
+-- talents{ ['Shadow and Flame'] = 5 }: what the talent API answers, read like at login. Each talent sits at its place
+-- in the tree (tab, tier, column); names{ ['Shadow and Flame'] = 'Schatten und Flamme' } gives another language.
+local POS = { ['Shadow and Flame'] = { 3, 6, 3 }, ['Improved Shadow Bolt'] = { 3, 1, 2 } }
+function F.talents(t, names)
+  local tabs = { {}, {}, {} }
   local list = {}; for n, r in pairs(t) do list[#list + 1] = { n, r } end
-  GetNumTalentTabs = function() return 1 end
-  GetNumTalents = function() return #list end
-  GetTalentInfo = function(_, i) return list[i][1], nil, 1, 1, list[i][2], 5 end
+  table.sort(list, function(a, b) return a[1] < b[1] end)
+  for i, e in ipairs(list) do
+    local p = POS[e[1]] or { 1, 9, i }
+    local tab = tabs[p[1]]; tab[#tab + 1] = { (names and names[e[1]]) or e[1], e[2], p[2], p[3] }
+  end
+  GetNumTalentTabs = function() return 3 end
+  GetNumTalents = function(tab) return #tabs[tab] end
+  GetTalentInfo = function(tab, i) local e = tabs[tab][i]; return e[1], nil, e[3], e[4], e[2], 5 end
   local c = W.combat; W.combat = false; F.oma.readTalents(); W.combat = c   -- talents are read out of combat
 end
 

@@ -116,10 +116,9 @@ function ns.saveReport(how)
     addon = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, 'Version')) or '?',
     game = ('%s (%s) %s'):format(tostring(version), tostring(build), tostring(iface)), locale = GetLocale and GetLocale() or '?',
     inCombat = InCombatLockdown() and true or false, inGroup = (IsInGroup and IsInGroup()) and true or false,
-    doesItDie = (DoesItDie and DoesItDie.GetDoTs) and 'yes' or 'no',
+    doesItDie = (ns.doesItDieOn and ns.doesItDieOn()) and 'yes' or 'no',
     bar = nil, rings = nil,
     errors = {}, rows = lastRows(), perf = ns.perf(),
-    compare = db.compare and { checks = db.compare.checks, differ = db.compare.differ, log = { unpack(db.compare.log, 1, math.min(20, #db.compare.log)) } } or nil,
   }
   local dump = ns.settings and ns.settings:Dump(db) or { main = {}, rings = {} }
   r.bar, r.rings = dump.main, dump.rings or {}
@@ -139,10 +138,6 @@ local function asText(r)
   local function kv(t) local ks = {}; for k in pairs(t) do ks[#ks + 1] = k end; table.sort(ks); for _, k in ipairs(ks) do L[#L + 1] = '  ' .. k .. ' = ' .. tostring(t[k]) end end
   kv(r.bar); L[#L + 1] = 'ring settings:'; kv(r.rings)
   L[#L + 1] = ''; L[#L + 1] = 'recent errors:'; for _, e in ipairs(r.errors) do L[#L + 1] = '  ' .. e end
-  if r.compare then
-    L[#L + 1] = ''; L[#L + 1] = ('own tracking vs DoesItDie: %d checks, %d disagreements'):format(r.compare.checks or 0, r.compare.differ or 0)
-    for _, line in ipairs(r.compare.log or {}) do L[#L + 1] = '  ' .. line end
-  end
   if r.perf then L[#L + 1] = ''; for _, line in ipairs(ns.perfLines(r.perf)) do L[#L + 1] = line end end
   L[#L + 1] = ''; L[#L + 1] = 'last ' .. KEEP .. ' seconds (time, DoT=damage left, P casting, L landed, E ending, fps; a row that repeats says how long):'
   for _, row in ipairs(r.rows) do L[#L + 1] = '  ' .. row end

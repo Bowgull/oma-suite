@@ -89,6 +89,7 @@ L.SPELL_IDS = {
     ["Immolation Trap"] = 13795, ["Explosive Trap"] = 13813, ["Wyvern Sting"] = 19386,
     ["Serpent Sting"] = 1978, ["Pyroblast"] = 11366, ["Corruption"] = 172,
 }
+L.SPELL_IDS["Immolate"] = 348 -- OMA: missing upstream, so other languages never tracked it
 
 -- Gives `alias` the entry `englishName` has, in every table that has one and doesn't know `alias` yet.
 local function addAlias(tables, englishName, alias)

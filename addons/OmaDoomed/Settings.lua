@@ -64,6 +64,12 @@ ns.settings = Core.NewSettings({
 ns.MIGRATIONS = {
   -- 1: the first numbered version. Earlier saves need no change (defaults fill whatever is missing).
   function(db) end,
+  -- 2: standalone (phase 3): the engine choice, the side-by-side log and Does It Die's saved look are gone; the
+  -- tracking's trace log is off by default, so its old lines go too
+  function(db)
+    db.engine, db.compare, db.didSaved = nil, nil, nil
+    if type(db.track) == 'table' then db.track.log = nil end
+  end,
 }
 
 function ns.buildSettings() ns.settingsCategory = ns.settings:Build(ns.db, 'OmaDoomed') end

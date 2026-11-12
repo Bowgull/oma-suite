@@ -32,7 +32,7 @@ end
 local function corruptionColoured(W, T, spells, locale)
   local ns, by = fight(W, spells, locale)
   local e = by[172]; T.ok(e, 'Corruption tracked')
-  local s = ns.parts.doomed.slotOf[e.name]; T.ok(s, 'a piece on the kill bar')
+  local s = (ns.model.peek(e.name) or {}).slot; T.ok(s, 'a piece on the kill bar')
   T.near(s.base._r, math.min(1, COLOR.Corruption[1] * 1.15), 1e-6, "Corruption's colour, not the grey for unknown DoTs (" .. e.name .. ')')
   T.near(s.base._b, math.min(1, COLOR.Corruption[3] * 1.15), 1e-6, "Corruption's colour (blue)")
 end
@@ -52,17 +52,14 @@ return {
   ['English client: Corruption keeps its colour on the kill bar'] = function(W, T) corruptionColoured(W, T, nil, 'enUS') end,
   ['German client: Corruption (Verderbnis) keeps its colour on the kill bar'] = function(W, T) corruptionColoured(W, T, german(), 'deDE') end,
 
-  -- phase 3: prune claims and Shadow Vulnerability per mob
-  ['memory: 200 drained mobs leave the claims and ISB tables small'] = function(W, T)
+  -- phase 3: claims and curses pruned on the housekeeping beat (the eyes and their Shadow Vulnerability table are gone)
+  ['memory: 200 drained mobs leave the claims and curse tables small'] = function(W, T)
     local F = require('fight'); F.start({ compare = false })
     local oma = F.oma; W.combat = true
-    oma.eyesUnits = function() return { 'nameplate1' } end
-    oma.eyeKeyFor = function() return nil end
-    oma.eyes = function() return { isb = true } end            -- Shadow Vulnerability seen on every mob
     for m = 1, 200 do
       local guid = 'Creature-0-1-0-1-' .. (1000 + m) .. '-L'
       F.mob('nameplate1', guid, 'Mob' .. m, 300); F.target(guid)
-      oma.eyesLook()
+      F.cast(1490)                                              -- Curse of the Elements on every mob
       local g = 'Chan-L' .. m
       W.fire('UNIT_SPELLCAST_SENT', 'player', 'Mob' .. m, g, 689); W.fire('UNIT_SPELLCAST_CHANNEL_START', 'player', g, 689)
       for _ = 1, 5 do W.advance(1, .1); F.hit('target', 32); F.hit('nameplate1', 32) end
@@ -70,17 +67,13 @@ return {
     end
     W.advance(10, .1)
     local claimed = upvalue(upvalue(oma.track.omaClaim, 'claimSlot'), 'claimed')
-    local isbUntil = upvalue(oma.track.omaTickMult, 'isbUntil')
-    T.ok(claimed and isbUntil, 'found the tables')
+    local coe = upvalue(oma.track.omaTickMult, 'coe')
+    T.ok(claimed and coe, 'found the tables')
     T.ok(countEntries(claimed) <= 20, 'claims kept: ' .. countEntries(claimed))
-    T.ok(countEntries(isbUntil) <= 20, 'Shadow Vulnerability entries kept: ' .. countEntries(isbUntil))
-  end,
-
-  -- phase 3: fully standalone, never touch Does It Die
-  ['Does It Die\'s saved settings are never written'] = function(W, T)
-    require('load').addon({ before = function() DoesItDieDB = { showMarkers = true, showSkull = true } end })
-    W.advance(.5)
-    T.eq(DoesItDieDB.showMarkers, true, 'its markers'); T.eq(DoesItDieDB.showSkull, true, 'its skull')
+    -- a curse lasts 5 min: only the mobs cursed in the last 5 min (6 s each) are kept
+    local mobs = 0; for _ in pairs(coe) do mobs = mobs + 1 end
+    T.ok(mobs > 0 and mobs <= 300 / 6 + 2, 'cursed mobs kept: ' .. mobs)
+    T.eq(upvalue(oma.track.omaTickMult, 'isbUntil'), nil, 'no Shadow Vulnerability table any more')
   end,
 
   -- phase 4: rows follow hostility changes (UNIT_FACTION / UNIT_FLAGS)

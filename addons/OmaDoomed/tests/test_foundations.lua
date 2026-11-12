@@ -59,9 +59,9 @@ return {
     T.eq(au:GetMaxDebuffs(), 16, "'All' gives the row back")
   end,
 
-  ['saved data: a fresh install is version 1 with every default'] = function(W, T)
+  ['saved data: a fresh install is the newest version with every default'] = function(W, T)
     local ns = require('load').addon()
-    T.eq(OmaDoomedDB.v, 1)
+    T.eq(OmaDoomedDB.v, #ns.MIGRATIONS)
     T.eq(OmaDoomedDB.doomed, true); T.eq(OmaDoomedDB.platebar, true); T.eq(OmaDoomedDB.cast, 'charging')
     T.eq(OmaDoomedDB.rings.enabled, true); T.eq(OmaDoomedDB.rings.others, true); T.eq(OmaDoomedDB.rings.size, 40)
   end,
@@ -70,7 +70,7 @@ return {
     local ns = require('load').addon({ rings = true, before = function()
       OmaDoomedDB = { cast = 'motes', tick = 'cinders', rings = { where = 'split', saved = {} } }; OmaPlatesDB = old
     end })
-    T.eq(OmaDoomedDB.v, 1); T.eq(OmaDoomedDB.cast, 'motes'); T.eq(OmaDoomedDB.tick, 'cinders'); T.eq(OmaDoomedDB.rings.where, 'split')
+    T.eq(OmaDoomedDB.v, #ns.MIGRATIONS); T.eq(OmaDoomedDB.cast, 'motes'); T.eq(OmaDoomedDB.tick, 'cinders'); T.eq(OmaDoomedDB.rings.where, 'split')
     T.eq(OmaDoomedDB.rings.size, 40, 'not taken from OmaPlatesDB'); T.ok(OmaPlatesDB == old and old.size == 99, 'OmaPlatesDB left alone')
     local toc = io.open('OmaDoomed.toc'):read('*a'); T.ok(not toc:find('OmaPlatesDB', 1, true), 'not a SavedVariable any more')
   end,
@@ -128,7 +128,7 @@ return {
     local ns = require('load').addon({ before = function() OmaDoomedDB = { cast = 'motes', rings = { size = 52 } } end })
     ns.saveReport('command')
     local r = OmaDoomedDB.reports[1]
-    T.eq(r.bar.cast, 'motes'); T.eq(r.bar.low, 3); T.eq(r.bar.v, 1); T.eq(r.rings.size, 52); T.eq(r.rings.where, 'enemy')
+    T.eq(r.bar.cast, 'motes'); T.eq(r.bar.low, 3); T.eq(r.bar.v, #ns.MIGRATIONS); T.eq(r.rings.size, 52); T.eq(r.rings.where, 'enemy')
   end,
 
   ['bus: a kill bar tick pulses its ring on the target plate'] = function(W, T)
@@ -147,7 +147,7 @@ return {
     local ns, F = require('load').addon({ before = function() geterrorhandler = function() return function(m) seen[#seen + 1] = m end end end })
     local P = ns.parts.doomed
     F.mob('nameplate1', A, 'Kobold', 300); F.target(A)
-    P.source = function() error('engine broke', 0) end
+    ns.model.source = function() error('engine broke', 0) end
     W.advance(1, 1 / 30)
     local lines = 0; for _, p in ipairs(W.printed) do if p:find('paused until /reload', 1, true) then lines = lines + 1 end end
     T.eq(lines, 1, 'one chat line'); T.eq(#seen, 1, 'one error for BugSack'); T.ok(seen[1]:find('engine broke', 1, true), seen[1])

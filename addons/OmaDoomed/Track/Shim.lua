@@ -6,7 +6,7 @@
 -- runs the engine's housekeeping (expiry, missed ticks) and tells OmaDoomed something may have changed.
 --
 -- What OmaDoomed reads:  ns.dotsFor(unit)  -> list of { name, spellID, school, damage, appliedAt, expiresAt,
--- provisional }, oldest first, damage rounded (the same shape DoesItDie.GetDoTs gives).
+-- provisional }, oldest first, damage rounded. ns.trackOff() switches every tracking frame off (other classes).
 local _, OMA = ...
 local T = {}
 OMA.track = T
@@ -20,10 +20,22 @@ T.display = setmetatable({
 T.registerOptions, T.openOptions, T.playFlash = noop, noop, noop
 T.probeNameplates, T.toggleExecuteProbe, T.toggleTickViewer = noop, noop, noop
 
--- The engine calls this every 0.1 s and after casts, ticks and target changes.
+-- The engine calls this every 0.1 s and after casts, ticks and target changes. T.omaHousekeep: Forever.lua's pruning.
 function T.refresh()
-  if T.tracking then T.tracking.housekeep(GetTime()) end
+  if T.tracking then
+    local now = GetTime()
+    T.tracking.housekeep(now)
+    if T.omaHousekeep then T.omaHousekeep(now) end
+  end
   if OMA.onTrackChanged then OMA.onTrackChanged() end
+end
+
+-- every tracking frame's off switch (Engine, Wrack, Forever); Core.lua calls this for other classes
+local offs = {}
+function OMA.trackOffWith(fn) offs[#offs + 1] = fn end
+function OMA.trackOff()
+  if T.tracking and T.tracking.off then T.tracking.off() end
+  for _, fn in ipairs(offs) do fn() end
 end
 
 function OMA.dotsFor(unit)

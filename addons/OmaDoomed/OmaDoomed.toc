@@ -7,7 +7,6 @@
 ## IconTexture: Interface\AddOns\OmaDoomed\Art\icon
 ## X-License: MIT
 ## SavedVariables: OmaDoomedDB
-## OptionalDeps: DoesItDie
 Libs\LibStub\LibStub.lua
 Libs\OmaCore\OmaCore.lua
 Libs\OmaCore\Bus.lua
@@ -30,6 +29,7 @@ Track\Locale_ruRU.lua
 Track\Engine.lua
 Track\Wrack.lua
 Track\Forever.lua
+DotModel.lua
 Doomed.lua
 KillPlates.lua
 BlizzardControls.lua
