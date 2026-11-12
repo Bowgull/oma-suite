@@ -1,15 +1,19 @@
--- OmaChat: chat for the phone remote: new chat goes out as a thin strip of coloured blocks along the bottom-left
+-- OmaChat: chat for the phone remote: new chat goes out as a thin line of coloured pixels along the very bottom-left
 -- edge of the screen, and Couch Mode reads it back letter for letter. WoW's own chat log can't be used: WoW writes
--- it only when the game closes (tested 2026-11-09).
+-- it only when the game closes (tested 2026-11-09); research 2026-11-11 (reports/WoW live chat out of game.md)
+-- found no better live route.
 --
--- The strip: blocks of 2x2 screen pixels on the bottom two rows. Block 1 magenta, block 2 cyan (the start), then
--- 6 bits per block, 2 in each of red, green and blue as 0 / 85 / 170 / 255. The bytes:
---   flags (1: chat box open, 2: aux's search box is on screen, 4: aux's search box has the keyboard) | how many lines (1) | each line: number (2) + length (2) + UTF-8 |
---   check (2: sum of every byte before it)
--- It always shows the NEWEST lines that fit (300 bytes, at most ~40% of the screen width), so a line stays on the strip for several looks and
--- Couch Mode loses nothing if it misses a moment; it keeps the lines whose number it hasn't had yet.
+-- The strip (version 2, 2026-11-11): ONE row of 1x1 screen pixels on the bottom edge. Pixel 1 magenta, pixel 2 cyan,
+-- pixel 3 = (2, 79, 77) ("v2"), then 3 bytes per pixel in red, green, blue (every level 0-255 arrives exactly: the
+-- /omachat ramp test, 768 of 768). The bytes:
+--   flags (1: chat box open, 2: aux's search box is on screen, 4: aux's search box has the keyboard) | how many lines (1) |
+--   each line: number (2) + length (2) + speaker's class (1: 0 unknown, else WoW's class ID) + UTF-8 |
+--   check (2: CRC-16/CCITT of every byte before it)
+-- It always shows the NEWEST lines that fit (300 bytes, about 105 pixels), so a line stays on the strip for several
+-- looks and Couch Mode loses nothing if it misses a moment; it keeps the lines whose number it hasn't had yet.
+-- Version 1 (2x2 blocks, 6 bits each) was about 15 times the area; Couch Mode still reads both.
 -- Lines are in WoWChatLog.txt's own format (that's what Aang reads).
-local W, H, ROOM, GAP = 2, 2, 300, 0.15   -- block size (px), bytes of lines on the strip, seconds between redraws
+local ROOM, GAP = 300, 0.15   -- bytes of lines on the strip, seconds between redraws
 
 local strip = CreateFrame("Frame", "OmashuStrip", UIParent)
 strip:SetFrameStrata("TOOLTIP"); strip:SetFrameLevel(10000)
@@ -17,29 +21,32 @@ strip:SetIgnoreParentScale(true); strip:SetScale(1)
 local blocks, recent, nextId, drawnAt, dirty, lastFlags = {}, {}, 0, 0, true, nil
 
 local function u16(t, n) t[#t + 1] = math.floor(n / 256) % 256; t[#t + 1] = n % 256 end
-local function draw(bytes)
-  local sum = 0
-  for _, b in ipairs(bytes) do sum = sum + b end
-  u16(bytes, sum % 65536)
-  local cols, acc, nb = { {1, 0, 1}, {0, 1, 1} }, 0, 0
-  local function sym(s) cols[#cols + 1] = { math.floor(s / 16) / 3, (math.floor(s / 4) % 4) / 3, (s % 4) / 3 } end
+local function crc16(bytes)   -- CRC-16/CCITT-FALSE: catches torn or half-drawn frames the old sum let through
+  local c = 0xFFFF
   for _, b in ipairs(bytes) do
-    acc = acc * 256 + b; nb = nb + 8
-    while nb >= 6 do nb = nb - 6; local s = math.floor(acc / 2 ^ nb); sym(s); acc = acc - s * 2 ^ nb end
+    c = bit.bxor(c, bit.lshift(b, 8))
+    for _ = 1, 8 do
+      if bit.band(c, 0x8000) ~= 0 then c = bit.band(bit.bxor(bit.lshift(c, 1), 0x1021), 0xFFFF) else c = bit.band(bit.lshift(c, 1), 0xFFFF) end
+    end
   end
-  if nb > 0 then sym(acc * 2 ^ (6 - nb)) end
+  return c
+end
+local function draw(bytes)
+  u16(bytes, crc16(bytes))
+  local cols = { { 255, 0, 255 }, { 0, 255, 255 }, { 2, 79, 77 } }
+  for i = 1, #bytes, 3 do cols[#cols + 1] = { bytes[i], bytes[i + 1] or 0, bytes[i + 2] or 0 } end
   local _, ph = GetPhysicalScreenSize()
   local px = 768 / ph / strip:GetEffectiveScale()   -- one screen pixel in this frame's units
   strip:ClearAllPoints(); strip:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
-  strip:SetSize(#cols * W * px, H * px)
+  strip:SetSize(#cols * px, px)
   for i, c in ipairs(cols) do
     local t = blocks[i]
     if not t then
       t = strip:CreateTexture(nil, "OVERLAY"); blocks[i] = t
       if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(false); t:SetTexelSnappingBias(0) end
     end
-    t:ClearAllPoints(); t:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT", (i - 1) * W * px, 0)
-    t:SetSize(W * px, H * px); t:SetColorTexture(c[1], c[2], c[3], 1); t:Show()
+    t:ClearAllPoints(); t:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT", (i - 1) * px, 0)
+    t:SetSize(px, px); t:SetColorTexture(c[1] / 255, c[2] / 255, c[3] / 255, 1); t:Show()
   end
   for i = #cols + 1, #blocks do blocks[i]:Hide() end
 end
@@ -90,12 +97,12 @@ local function packet(flags)
   local pick, used = {}, 0
   for i = #recent, 1, -1 do
     local l = recent[i]
-    if used + #l.text + 4 > ROOM then break end
-    table.insert(pick, 1, l); used = used + #l.text + 4
+    if used + #l.text + 5 > ROOM then break end
+    table.insert(pick, 1, l); used = used + #l.text + 5
   end
   local bytes = { flags, #pick }
   for _, l in ipairs(pick) do
-    u16(bytes, l.id); u16(bytes, #l.text)
+    u16(bytes, l.id); u16(bytes, #l.text); bytes[#bytes + 1] = l.cls or 0
     for i = 1, #l.text do bytes[#bytes + 1] = l.text:byte(i) end
   end
   return bytes
@@ -138,6 +145,17 @@ f:RegisterEvent("PLAYER_ENTERING_WORLD"); f:RegisterEvent("DISPLAY_SIZE_CHANGED"
 -- can't go on the strip (counting or reading its letters is an error). Such lines are skipped, and the phone gets
 -- one plain line saying chat is hidden here, at most every 30 s.
 local function locked(v) return issecretvalue and v ~= nil and issecretvalue(v) or false end
+-- The speaker's class for the phone's name colours (2026-11-11, Joshua: "On the phone I'd like to see colours"): the
+-- chat event's 12th value is the speaker's GUID; GetPlayerInfoByGUID gives back the English class name, sent as WoW's
+-- class ID. 0 = unknown (system lines, NPCs, locked chat, a player WoW has no info on yet).
+local CLASSID = { WARRIOR = 1, PALADIN = 2, HUNTER = 3, ROGUE = 4, PRIEST = 5, DEATHKNIGHT = 6, SHAMAN = 7, MAGE = 8,
+  WARLOCK = 9, MONK = 10, DRUID = 11, DEMONHUNTER = 12, EVOKER = 13 }
+local function classOf(guid)
+  if type(guid) ~= "string" or guid == "" or locked(guid) or not GetPlayerInfoByGUID then return 0 end
+  local ok, _, eng = pcall(GetPlayerInfoByGUID, guid)
+  if not ok or locked(eng) then return 0 end
+  return CLASSID[eng] or 0
+end
 local hiddenAt = -1e9
 local function onLocked()
   local now = GetTime(); if now - hiddenAt < 30 then return end
@@ -154,11 +172,12 @@ f:SetScript("OnEvent", function(_, event, ...)
   if locked(text0) or locked(who0) or locked(chan0) then return onLocked() end
   local ok, b = pcall(body, event, ...)
   if not ok or locked(b) or type(b) ~= "string" or b == "" then return end
+  local cls = classOf(select(12, ...))
   local t = GetTime()
   local text = date("%m/%d %H:%M:%S") .. string.format(".%03d", math.floor((t % 1) * 1000)) .. "  " .. b
-  if #text > ROOM - 4 then text = text:sub(1, ROOM - 4) end
+  if #text > ROOM - 5 then text = text:sub(1, ROOM - 5) end
   nextId = (nextId % 65535) + 1
-  recent[#recent + 1] = { id = nextId, text = text }
+  recent[#recent + 1] = { id = nextId, text = text, cls = cls }
   if #recent > 40 then table.remove(recent, 1) end
   dirty = true
 end)
@@ -171,7 +190,7 @@ end)
 local TAG, queue, lastSig, listNo, trickleAt = "{omashu-guild} ", {}, nil, 0, 0
 local function stamp() local t = GetTime(); return date("%m/%d %H:%M:%S") .. string.format(".%03d", math.floor((t % 1) * 1000)) .. "  " end
 local function push(text)
-  if #text > ROOM - 4 then text = text:sub(1, ROOM - 4) end
+  if #text > ROOM - 5 then text = text:sub(1, ROOM - 5) end
   nextId = (nextId % 65535) + 1
   recent[#recent + 1] = { id = nextId, text = text }
   if #recent > 40 then table.remove(recent, 1) end
