@@ -1,4 +1,4 @@
--- Real fights from DoesItDie's log of Bujuju's play (DoesItDieDB.log, 2026-11-11), replayed into both engines.
+-- Real fights from DoesItDie's log of a level 11 warlock's play (DoesItDieDB.log, 2026-11-11), replayed into both engines.
 -- Pass = OmaDoomed's copy says exactly what DoesItDie says at every 0.05 s step.
 local function diffsMsg(F) return #F.diffs .. ' differences, first: ' .. tostring(F.diffs[1]) end
 return {

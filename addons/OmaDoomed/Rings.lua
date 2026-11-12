@@ -1,4 +1,4 @@
--- OmaDoomed, the rings (was Omashu Plates / OmaPlates; one add-on since 2026-11-11, Joshua: "the now unified name is
+-- OmaDoomed, the rings (was Omashu Plates / OmaPlates; one add-on since 2026-11-11: "the now unified name is
 -- omadoomed"): your DoTs above every enemy nameplate, in the Omashu skin (mockup 15, section C, style 3, approved).
 -- Rules this file is built on: reports/Nameplate DoT rules.md and research_notes/Nameplate DoT timers/.
 --
@@ -23,7 +23,7 @@ local NUM_FONT = STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 
 -- Blizzard's own nameplate aura size, so nothing needs tuning: AURA_ITEM_HEIGHT 25 x Nameplate Size Huge (1.6) x
 -- Debuff Scale 140% (1.4) = 56 units, square, no gaps; at that scale Blizzard puts 6 per row and grows rows upward.
-local S = 25 * 1.6                -- 2026-11-10 Joshua: 56 was too big; Blizzard Huge at 100% = 40
+local S = 25 * 1.6                -- 2026-11-10: 56 was too big; Blizzard Huge at 100% = 40
 local PER_ROW = 6
 local FRAME_ROW = 5                 -- target frame row (Haunt / Target frame): 5 rings fit under the bars, before the level badge
 local FRAME_SCALE = 0.56            -- sheet 42 B: 40 px under the frame (they were 72 px over it: "too big")
@@ -56,15 +56,15 @@ local SPELLS = {
     ids = { 348, 707, 1094, 2941, 11665, 11667, 11668, 25309, 27215 } },
   { key = 'siphon', names = { 'Siphon Life' }, color = hex('d63048'),
     ids = { 18265, 18879, 18880, 18881, 27264, 30911 } },
-  -- channels keep the same ring and timer as before (Joshua: "the original version of the channel was excellent"),
+  -- channels keep the same ring and timer as before ("the original version of the channel was excellent"),
   -- only their own colour: bone white (sheet 28, "Bone white")
-  -- curses that do no damage (sheet 41, Joshua 2026-11-11: "a green curse ring"): their own ring so you can see which
+  -- curses that do no damage (sheet 41, "a green curse ring"): their own ring so you can see which
   -- mobs are cursed; IDs Classic + TBC ranks (assumed; the exact ID is learned on every cast, as for the DoTs)
   { key = 'curse', names = { 'Curse of Weakness', 'Curse of Tongues', 'Curse of the Elements', 'Curse of Exhaustion',
       'Curse of Recklessness', 'Curse of Shadow', 'Curse of Doom' }, color = hex('96ce54'),
     ids = { 702, 1108, 6205, 7646, 11707, 11708, 27224, 30909, 1714, 11719, 1490, 11721, 11722, 27228, 18223,
       704, 7658, 7659, 11717, 27226, 17862, 17937, 603, 30910 } },
-  -- 'Soul Siphon' (Joshua: "what about other drains?"): by name only; if Forever has it as a channel it rides here
+  -- 'Soul Siphon' ("what about other drains?"): by name only; if Forever has it as a channel it rides here
   { key = 'channel', names = { 'Drain Soul', 'Drain Life', 'Drain Mana', 'Wrack', 'Soul Siphon' }, color = hex('ece2c6'),   -- Wrack: Forever's channel
     ids = { 1120, 8288, 8289, 11675, 27217, 689, 699, 709, 7651, 11699, 11700, 27219, 27220, 5138, 6226, 11703, 11704, 27221 } },
 }
@@ -463,7 +463,7 @@ local function place(anchor, plate)
   local pad = tonumber(C_CVar.GetCVar('nameplateDebuffPadding') or '') or 0
   if bar then
     -- 2026-11-10: reading the name's top came back secret/empty in a real fight, so the row sat on the bar and covered
-    -- the name (Joshua's photo). Blizzard anchors its debuff row TO the name frame, which needs no numbers: do the same.
+    -- the name (a screenshot). Blizzard anchors its debuff row TO the name frame, which needs no numbers: do the same.
     local above = bar
     if not nameInsideBar() and uf.name then above = uf.name end
     anchor:SetPoint('BOTTOM', above, 'TOP', 0, pad + GAP)
@@ -520,7 +520,7 @@ local function isTarget(u)
   if ok and ok2 and tp and up then return tp == up end
   local ok3, v = pcall(UnitIsUnit, u, 'target'); return ok3 and not secret(v) and v == true
 end
--- sheet 38 'Fade' (Joshua 2026-11-11: "i want fade ... rich and smooth for both"): leave quick, arrive soft.
+-- sheet 38 'Fade' ("i want fade ... rich and smooth for both"): leave quick, arrive soft.
 -- Leaving: lifts 6 px and fades out over 0.2 s (ease-in). Arriving: starts 0.06 s later, rises 8 px into place and
 -- fades in over 0.25 s (ease-out). Driven per frame from GetTime, so it's the same at any frame rate.
 local LEAVE, ARRIVE, ARRIVE_DELAY, LIFT, RISE = .2, .25, .06, 6, 8
@@ -594,7 +594,7 @@ local function makeFramePair()
   for i, q in ipairs(free) do if q == p then table.remove(free, i) break end end
   framePair = p
   p.anchor:SetParent(TargetFrame); p.anchor:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
-  -- sheet 42 B (Joshua 2026-11-11: "B"): a row UNDER the bars, where WoW itself puts your debuffs on a target, 40 px
+  -- sheet 42 B ("B"): a row UNDER the bars, where WoW itself puts your debuffs on a target, 40 px
   -- (it was 72 px over the name box and looked like a hat). Hung on the mana bar's bottom left (the frame's lowest
   -- bar); the row's own bottom sits S + gap below it, in the row's own scaled units.
   local main = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
@@ -612,7 +612,7 @@ local function makeFramePair()
   look(p); visible()
 end
 
--- sheet 41 (Joshua: "channels I'd also want to see above the enemy in Haunt mode"): in Haunt your target's rings sit
+-- sheet 41 ("channels I'd also want to see above the enemy in Haunt mode"): in Haunt your target's rings sit
 -- on its frame, which took your Drain Life off the mob too. chanPair is one more row, channel group only, unit
 -- 'target', that rides your target's plate. Moving our own frames between plates is allowed in combat.
 local function makeChanPair()
@@ -844,7 +844,7 @@ onEvent = (function(_, e, a1, _, a3)
   elseif e == 'NAME_PLATE_UNIT_REMOVED' then release(a1)
   elseif e == 'PLAYER_TARGET_CHANGED' then
     visible(); if ns.squaresApply then ns.squaresApply() end
-    -- 2026-11-12 (Joshua: "in haunt mode switching between targets rapidly shows the wrong or missing dots under frame
+    -- 2026-11-12 ("in haunt mode switching between targets rapidly shows the wrong or missing dots under frame
     -- and over head"): framePair and chanPair follow the unit 'target', and a container re-reads its auras only when
     -- it is shown (Blizzard_AuraContainer OnShow). Going from one enemy straight to another keeps them shown, so they
     -- kept the last mob's rings. A hide + show on the container (our own frame, allowed in combat) makes it re-read.

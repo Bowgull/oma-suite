@@ -1,4 +1,4 @@
--- The kill bar over every dotted mob (sheet 41, Joshua 2026-11-11: "I should be able to see the dots in the enemy bar
+-- The kill bar over every dotted mob (sheet 41, "I should be able to see the dots in the enemy bar
 -- above the actual enemy"). Each enemy nameplate's health bar shows the health your DoTs will still take, in each
 -- DoT's colour, at the end of its health: the same pieces as the target frame, without the slide and the skull.
 --
@@ -29,7 +29,7 @@ local function piecesFor(hb)
   local fill = hb:GetStatusBarTexture(); if not fill then return nil end
   set = { clip = CreateFrame('Frame', nil, hb), fill = fill }
   set.clip:SetAllPoints(hb); set.clip:SetClipsChildren(true); set.clip:SetFrameLevel(hb:GetFrameLevel() + 2)
-  -- 2026-11-11 (Joshua: "spilling over just a little"; measured, OmaDoomedDB.plateGeo): Blizzard's fill is the atlas
+  -- 2026-11-11 ("spilling over just a little"; measured, OmaDoomedDB.plateGeo): Blizzard's fill is the atlas
   -- UI-HUD-CoolDownManager-Bar (ARTWORK 0 of the health bar), whose own shape is inset with soft ends; our pieces were
   -- a plain square texture filling the whole bar box, so they showed past that shape onto the border's inner edge.
   -- The fix is the fill's own shape as a stencil (below).
@@ -61,7 +61,7 @@ local function piecesFor(hb)
     local lv = set.clip:GetFrameLevel() + 2 * (MAX - i)   -- the piece nearest the green on top
     set[i] = bar(lv)
     -- Charging: fills over this piece in its landed colour from its far edge toward the green, the same way as the
-    -- target frame (Joshua 2026-11-11: "why is precast charge two different directions?")
+    -- target frame ("why is precast charge two different directions?")
     local far = set[i]:GetStatusBarTexture()
     set.charge[i] = bar(lv + 1, type(far) == 'table' and far or nil)
     -- Drifting stripes / Motes: laid across the whole bar (its width is known) and cut to this piece by a stencil
@@ -143,7 +143,7 @@ local function paint(unit, plate)
   local w = hb:GetWidth()
   local maxv = UnitHealthMax(unit)
   local color = ns.doomedColor or {}
-  -- precast (Joshua 2026-11-11: "I don't see the precast" on these bars; "whatever look I chose from settings"):
+  -- precast ("I don't see the precast" on these bars; "whatever look I chose from settings"):
   -- while you cast a DoT at this mob its piece shows your 'While you cast' look, as on the target frame
   local cName, _, _, cStart, cEnd = UnitCastingInfo('player')
   local look = ns.db.cast or 'charging'

@@ -1,4 +1,4 @@
--- Bug reports (2026-11-11, Joshua: "build the bug report button"). OmaDoomed always keeps the last 15 seconds of what
+-- Bug reports (2026-11-11: "build the bug report button"). OmaDoomed always keeps the last 15 seconds of what
 -- it drew (a small ring buffer, never saved on its own). One press, a key binding (Options > Key Bindings > OmaDoomed,
 -- bind it to a controller button) or /omadoomed report, saves a report with those 15 seconds, the settings, recent
 -- errors and the game version, and takes a screenshot. Nothing personal goes in: no character, realm, guild, target

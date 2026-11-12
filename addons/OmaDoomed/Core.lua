@@ -1,4 +1,4 @@
--- OmaDoomed (named by Joshua 2026-11-11). Settings live in OmaDoomedDB; /omadoomed.
+-- OmaDoomed (named 2026-11-11). Settings live in OmaDoomedDB; /omadoomed.
 local ADDON, ns = ...
 ns.say = function(m) print('|cffb48cffOmaDoomed:|r ' .. tostring(m)) end
 ns.parts = {}

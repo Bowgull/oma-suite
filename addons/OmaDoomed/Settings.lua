@@ -1,4 +1,4 @@
--- OmaDoomed's settings page (sheet 37, Joshua 2026-11-11: "Yes, build it"): Options > AddOns > Oma > OmaDoomed, built
+-- OmaDoomed's settings page (sheet 37, "Yes, build it"): Options > AddOns > Oma > OmaDoomed, built
 -- only from Blizzard's own settings controls so the controller, search and Defaults work. Values live in OmaDoomedDB
 -- (kill bar) and OmaDoomedDB.rings (rings). Every change calls ns.applySetting(key) so it shows at once.
 local ADDON, ns = ...
@@ -48,7 +48,7 @@ local function slider(tbl, key, label, lo, hi, step, tip, fmt, parent)
   local opts = Settings.CreateSliderOptions(lo, hi, step)
   opts:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, fmt)
   local init = Settings.CreateSlider(cat, setting, opts, tip); child(init, parent)
-  -- a small gold notch on the track marks the default (Joshua 2026-11-11: "a default spot for sliders")
+  -- a small gold notch on the track marks the default ("a default spot for sliders")
   local def = (tbl == ns.db and ns.DEFAULTS or ns.RING_DEFAULTS)[key]
   local orig = init.InitFrame
   init.InitFrame = function(self, frame)

@@ -9,7 +9,7 @@
 local ADDON, ns = ...
 local P = {}; ns.parts.doomed = P
 
-local COLOR = {   -- sheet 34 B 'shadow and fire' (Joshua 2026-11-11: "shadow and fire for sure"): deep pieces, bright only on the tick and the rings
+local COLOR = {   -- sheet 34 B 'shadow and fire' ("shadow and fire for sure"): deep pieces, bright only on the tick and the rings
   ['Corruption'] = { 78 / 255, 40 / 255, 136 / 255 }, ['Curse of Agony'] = { 128 / 255, 30 / 255, 74 / 255 },
   ['Bane of Agony'] = { 128 / 255, 30 / 255, 74 / 255 }, ['Immolate'] = { 160 / 255, 66 / 255, 22 / 255 },
   ['Siphon Life'] = { 110 / 255, 20 / 255, 30 / 255 },
@@ -123,7 +123,7 @@ local function build()
     s.join = art:CreateTexture(nil, 'ARTWORK', nil, 3); barTex(s.join)      -- the fade into the next piece
     s.joinLift = art:CreateTexture(nil, 'ARTWORK', nil, 4); barTex(s.joinLift); s.joinLift:SetBlendMode('ADD')   -- same brightening as the pieces, or the fade reads as a dark seam
     -- the crease uses the bar's own texture tinted black, so it has the bar's exact shape and never runs onto the brass
-    -- borders into the name banner or the mana bar (a plain square did, Joshua 2026-11-11)
+    -- borders into the name banner or the mana bar (a plain square did)
     s.creaseL = art:CreateTexture(nil, 'OVERLAY', nil, 0); barTex(s.creaseL)
     s.creaseR = art:CreateTexture(nil, 'OVERLAY', nil, 0); barTex(s.creaseR)
     local g = s.flash:CreateAnimationGroup()
@@ -133,7 +133,7 @@ local function build()
     -- sheet 27 (approved "Looks right"): the bite. A second bar holds where this piece's edge WAS; the chunk between it and
     -- the new edge glows bright in the DoT's colour, holds 120 ms, then drains over 380 ms.
     s.gmark = newMark(); s.gedge = s.gmark.f
-    -- sheet 36 C 'charging' (Joshua 2026-11-11: "Yes, build it"): while you cast, the piece fills with your cast bar in
+    -- sheet 36 C 'charging' ("Yes, build it"): while you cast, the piece fills with your cast bar in
     -- its landed colour (so landing changes nothing), an ember glow in its own colour at the front; never white
     -- tick light parts (settings 'Tick light'): a soft wash that reaches into the piece, and five particles
     s.wash = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.wash); s.wash:SetBlendMode('ADD'); s.wash:Hide()
@@ -161,7 +161,7 @@ local function build()
     s.spillL = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillL); s.spillL:SetBlendMode('ADD'); s.spillL:Hide()
     s.spillC = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillC); s.spillC:SetBlendMode('ADD'); s.spillC:Hide()
     s.spillR = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillR); s.spillR:SetBlendMode('ADD'); s.spillR:Hide()
-    -- every texture of a piece keeps to the health bar's own shape (2026-11-11: Joshua saw colour outside the bar once)
+    -- every texture of a piece keeps to the health bar's own shape (2026-11-11: saw colour outside the bar once)
     if P.barMask then
       for _, t in ipairs({ s.base, s.lift, s.flash, s.join, s.joinLift, s.creaseL, s.creaseR, s.ghost, s.spillL, s.spillC, s.spillR, s.pre, s.preGlow, s.cbase, s.clift, s.spark, s.wash, s.motes, s.parts[1], s.parts[2], s.parts[3], s.parts[4], s.parts[5] }) do t:AddMaskTexture(P.barMask) end
     end
@@ -193,7 +193,7 @@ local function build()
   end
   function P.reanchor(s, right)
     -- the piece touching the health's end runs 1 screen px past it: Blizzard's green snaps to whole pixels and ours
-    -- don't, so a 1 px sliver of green showed beside it (Joshua, 2026-11-11: 'a tiny bit of green peeking out')
+    -- don't, so a 1 px sliver of green showed beside it ('a tiny bit of green peeking out')
     local dx = (right == P.E[0].f) and px(1, hb) or 0
     for _, t in ipairs({ s.base, s.lift, s.flash, s.pmask }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.edge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
     for _, t in ipairs({ s.ghost, s.spillC }) do t:ClearAllPoints(); t:SetPoint('TOPLEFT', s.gedge, 'TOPLEFT'); t:SetPoint('BOTTOMRIGHT', right, 'BOTTOMLEFT', dx, 0) end
@@ -569,7 +569,7 @@ local function update()
     if not e.provisional and e.appliedAt and GetTime() - e.appliedAt < 4 then P.fullBy[e.name] = math.max(P.fullBy[e.name] or 0, e.damage) end
     dots[#dots + 1] = d
   end end
-  -- DoesItDie leaves a fresh DoT out until its first tick, so a first cast showed nothing (Joshua: "i didnt see precast").
+  -- DoesItDie leaves a fresh DoT out until its first tick, so a first cast showed nothing ("i didnt see precast").
   -- While you cast a DoT it doesn't list, show it at the size it last had when fresh.
   -- review #4: a cast belongs to the mob you were targeting when it started (nameplate frames are never secret)
   local here = C_NamePlate.GetNamePlateForUnit('target', false) or false
@@ -600,7 +600,7 @@ local function quiet(on)
   end
 end
 
--- Where the numbers come from (2026-11-11, Joshua: "make it standalone first", "compare first"). OmaDoomed has its
+-- Where the numbers come from (2026-11-11: "make it standalone first", "compare first"). OmaDoomed has its
 -- own DoT tracking (Track/). While DoesItDie is also installed, the bar keeps showing DoesItDie's numbers and
 -- OmaDoomed's own run silently beside them; every disagreement that lasts goes into OmaDoomedDB.compare (and into
 -- bug reports). Once those logs are clean the default becomes 'own'. ns.db.engine: 'auto' (that), 'own', 'did'.

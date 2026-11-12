@@ -5,7 +5,7 @@ local L = require('load')
 local F = {}
 
 -- Forever's warlock spells as the client describes them (Classic wording; totals checked against DoesItDie's log
--- from Bujuju's fights: Corruption 47 over 12 s, Immolate 20 over 15 s, Bane of Agony 84 over 24 s).
+-- from real level 11 fights: Corruption 47 over 12 s, Immolate 20 over 15 s, Bane of Agony 84 over 24 s).
 F.SPELLS = {
   [172] = { name = 'Corruption', desc = 'Corrupts the target, causing 47 Shadow damage over 12 sec.' },
   [348] = { name = 'Immolate', desc = 'Burns the enemy for 11 Fire damage and then an additional 20 Fire damage over 15 sec.' },

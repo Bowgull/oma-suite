@@ -152,7 +152,7 @@ def swipe_track(x, y, d):
     return (10, 5, 3, 0.92 * ring_cov(d, RING_R, TRACK_W))
 
 
-# sheet 39 A 'Bold' (Joshua 2026-11-11): the colour ring twice as thick, growing inward so its outer edge stays put
+# sheet 39 A 'Bold': the colour ring twice as thick, growing inward so its outer edge stays put
 BOLD_W = 2 * RING_W
 BOLD_R = RING_R - RING_W / 2
 
@@ -167,7 +167,7 @@ def swipe_track_bold(x, y, d):
     return (10, 5, 3, 0.92 * ring_cov(d, BOLD_R, BOLD_W + (TRACK_W - RING_W)))
 
 
-# sheet 41 'Bold, richer' (Joshua 2026-11-11: "Let's try bold richer in game"): the same Bold pieces with depth.
+# sheet 41 'Bold, richer' ("Let's try bold richer in game"): the same Bold pieces with depth.
 # ring_light lies over the tinted Bold ring: cream lift on the top 40%, shade on the bottom, a warm sheen up-left
 # (mockup: gradient 20..236 of 256, stops cream .45 / colour / black .6; sheen at 80,60 radius 90). No glowing tip.
 def ring_light(x, y, d):
