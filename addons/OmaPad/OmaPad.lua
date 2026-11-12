@@ -481,10 +481,8 @@ local function rxpProbe()
 end
 -- RestedXP auto-fit (Joshua, 2026-11-09): its bottom bar is pinned and the steps stack upward, so a long step group
 -- can climb into the shard gems. Twice a second: if the topmost step is above LIMIT px from the screen top, shrink the
--- whole window just enough (keeping the bottom bar where it is); grow back when there is room again. Never below 62%
--- (2026-11-11, Joshua: "Let's go with one": at 85% a three-quest list still reached the pet frame; the saved log said
--- "top 176px -> scale 1.02 (base 1.20)", and getting that top under 300 px needs about two-thirds).
-local LIMIT, ROOM, MINF = 300, 60, .62
+-- whole window just enough (keeping the bottom bar where it is); grow back when there is room again. Never below 85%.
+local LIMIT, ROOM, MINF = 300, 60, .85
 local fit = { base = nil, last = 0 }
 local function pxTop(fr) local tp = fr:GetTop(); if not tp then return nil end; return 1080 - tp * fr:GetEffectiveScale() * 1080 / 768 end
 local function rxpTopPx(f)
@@ -497,17 +495,34 @@ local function rxpTopPx(f)
 end
 local function rxpFit()
   local f = _G.RXPFrame; if not f or not f:IsVisible() then return end
-  local s = f:GetScale(); fit.base = fit.base or s
-  if s > fit.base * 1.001 or s < fit.base * MINF * .999 then fit.base = s end            -- RestedXP (or Joshua) changed its size: follow it
+  -- its full size: 1.2 (Joshua's pick, 2026-11-09) unless he makes it bigger. Not "whatever it was at login": RestedXP
+  -- saves its scale on reload, so a shrunk size would otherwise become the new normal (2026-11-11).
+  local s = f:GetScale(); fit.base = fit.base or math.max(s, OmaPadDB.rxpBase or 1.2)
+  if s > fit.base * 1.001 then fit.base = s; OmaPadDB.rxpBase = s end            -- Joshua made it bigger: follow it
   local top = rxpTopPx(f); local bottom = f:GetBottom() and (1080 - f:GetBottom() * f:GetEffectiveScale() * 1080 / 768)
   if not top or not bottom or bottom - top < 10 then return end
+  -- the bottom bar's place (2026-11-11, Joshua: "a reload broke it"): it had drifted ~275 px up from where it was put
+  -- on 2026-11-09 (18 px above the chat tabs), so the steps had no room and climbed into the frames. Now it is pinned
+  -- there every time: 18 screen px above the General chat tab's top, left edge kept.
+  local u, e = UIParent:GetEffectiveScale(), f:GetEffectiveScale()
+  local tab = _G.ChatFrame1Tab
+  local wantB = tab and tab:GetTop() and (tab:GetTop() * tab:GetEffectiveScale() / u + 18 * 768 / 1080 / u)
+  if wantB then
+    local curB = f:GetBottom() * e / u
+    if math.abs(curB - wantB) > 1 then
+      local l = f:GetLeft() * e / u
+      f:ClearAllPoints(); f:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', l / s, wantB / s)
+      bottom = 1080 - wantB * u * 1080 / 768; top = rxpTopPx(f)
+      if not top then return end
+    end
+  end
   local want = s
   if top < LIMIT then want = s * (bottom - LIMIT) / (bottom - top)
   elseif top > LIMIT + ROOM and s < fit.base then want = math.min(fit.base, s * (bottom - LIMIT - ROOM / 2) / (bottom - top)) end
   want = math.max(fit.base * MINF, math.min(fit.base, want))
   if math.abs(want - s) < .01 then return end
   -- keep the bottom-left corner where it is on screen while the scale changes
-  local u = UIParent:GetEffectiveScale(); local e = f:GetEffectiveScale()
+  e = f:GetEffectiveScale()
   local l, b = f:GetLeft() * e / u, f:GetBottom() * e / u
   f:SetScale(want); f:ClearAllPoints(); f:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', l / want, b / want)
   OmaPadDB.rxpFit = ('%s top %dpx -> scale %.2f (base %.2f)'):format(date('%H:%M:%S'), top, want, fit.base)
