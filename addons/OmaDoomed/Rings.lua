@@ -844,6 +844,13 @@ onEvent = (function(_, e, a1, _, a3)
   elseif e == 'NAME_PLATE_UNIT_REMOVED' then release(a1)
   elseif e == 'PLAYER_TARGET_CHANGED' then
     visible(); if ns.squaresApply then ns.squaresApply() end
+    -- 2026-11-12 (Joshua: "in haunt mode switching between targets rapidly shows the wrong or missing dots under frame
+    -- and over head"): framePair and chanPair follow the unit 'target', and a container re-reads its auras only when
+    -- it is shown (Blizzard_AuraContainer OnShow). Going from one enemy straight to another keeps them shown, so they
+    -- kept the last mob's rings. A hide + show on the container (our own frame, allowed in combat) makes it re-read.
+    for _, p in ipairs({ framePair, chanPair }) do
+      if p and p.ring then pcall(p.ring.Hide, p.ring); pcall(p.ring.Show, p.ring) end
+    end
     -- the name can appear or move when the target changes; keep each row on top of its name
     for u, p in pairs(active) do local plate = C_NamePlate.GetNamePlateForUnit(u, false); if plate then place(p.anchor, plate) end end
   elseif e == 'PLAYER_REGEN_DISABLED' then stopTest(); visible()
