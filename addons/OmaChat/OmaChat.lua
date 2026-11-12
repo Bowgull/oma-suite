@@ -133,10 +133,27 @@ for _, e in ipairs({ "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_WHISPER", "CHAT_
   "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER",
   "CHAT_MSG_RAID_WARNING", "CHAT_MSG_INSTANCE_CHAT", "CHAT_MSG_INSTANCE_CHAT_LEADER" }) do f:RegisterEvent(e) end
 f:RegisterEvent("PLAYER_ENTERING_WORLD"); f:RegisterEvent("DISPLAY_SIZE_CHANGED"); f:RegisterEvent("UI_SCALE_CHANGED")
+-- Locked chat (2026-11-11, research 'WoW live chat out of game'): Forever has Midnight's "secret values". In boss
+-- fights, Mythic+, PvP and some instances a chat line reaches add-ons locked: it can be shown but not read, so it
+-- can't go on the strip (counting or reading its letters is an error). Such lines are skipped, and the phone gets
+-- one plain line saying chat is hidden here, at most every 30 s.
+local function locked(v) return issecretvalue and v ~= nil and issecretvalue(v) or false end
+local hiddenAt = -1e9
+local function onLocked()
+  local now = GetTime(); if now - hiddenAt < 30 then return end
+  hiddenAt = now
+  recent[#recent + 1] = { id = (nextId % 65535) + 1, text = date("%m/%d %H:%M:%S") .. string.format(".%03d", math.floor((now % 1) * 1000))
+    .. "  OmaChat: chat is hidden here (WoW keeps chat from add-ons in this fight or instance)" }
+  nextId = (nextId % 65535) + 1
+  if #recent > 40 then table.remove(recent, 1) end
+  dirty = true
+end
 f:SetScript("OnEvent", function(_, event, ...)
   if event:sub(1, 9) ~= "CHAT_MSG_" then dirty = true; return end   -- screen changed: redraw
+  local text0, who0, _, _, _, _, _, _, chan0 = ...
+  if locked(text0) or locked(who0) or locked(chan0) then return onLocked() end
   local ok, b = pcall(body, event, ...)
-  if not ok or type(b) ~= "string" or b == "" then return end
+  if not ok or locked(b) or type(b) ~= "string" or b == "" then return end
   local t = GetTime()
   local text = date("%m/%d %H:%M:%S") .. string.format(".%03d", math.floor((t % 1) * 1000)) .. "  " .. b
   if #text > ROOM - 4 then text = text:sub(1, ROOM - 4) end
