@@ -224,7 +224,26 @@ ns.shardsSlash = function(msg)
   elseif cmd == 'motion' then db.reduced = (arg == 'off'); say('motion ' .. (db.reduced and 'reduced' or 'full'))
   elseif cmd == 'sound' then db.sound = (arg ~= 'off'); say('chime ' .. (db.sound and 'on' or 'off'))
   elseif cmd == 'nopet' then testNoPet = true; place(); say('no-pet spot for 15 s'); C_Timer.After(15, function() testNoPet = false; place() end)
-  elseif cmd == 'place' then place(); say('placed at ' .. tostring(db.placed))
+  elseif cmd == 'place' or cmd == 'where' then
+    place(); say('placed at ' .. tostring(db.placed))
+    -- where each pet frame piece really sits, in UI units from the screen's left/top, printed to chat for a screenshot
+    local sh = UIParent:GetHeight()
+    local function where(name, f)
+      if not f or not f.GetRect then print(name .. ': none'); return end
+      local ok, l, b, w, h = pcall(f.GetRect, f)
+      if not ok or not l then print(name .. ': no rect'); return end
+      local k = f:GetEffectiveScale() / UIParent:GetEffectiveScale()
+      local a = f.GetEffectiveAlpha and f:GetEffectiveAlpha() or (f.GetAlpha and f:GetAlpha()) or 1
+      print(('%s x=%.0f y=%.0f w=%.0f h=%.0f alpha=%.2f shown=%s'):format(name, l * k, sh - (b + h) * k, w * k, h * k, a, tostring(f:IsVisible())))
+    end
+    where('gems', root); where('PetPortrait', _G.PetPortrait); where('PetFrame', _G.PetFrame)
+    where('PetFrameTexture', _G.PetFrameTexture); where('PetName', _G.PetName); where('PetHealth', _G.PetFrameHealthBar)
+    local frames = {}
+    for _, a in ipairs({ 'BetterBlizzFrames', 'ClassicFrames', 'EasyFrames', 'ElvUI', 'ShadowedUnitFrames', 'Pitbull4', 'UnhaltedUnitFrames' }) do
+      if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(a) then frames[#frames + 1] = a end
+    end
+    local bbf = _G.BetterBlizzFramesDB
+    print('frame add-ons: ' .. (#frames > 0 and table.concat(frames, ', ') or 'none') .. (bbf and (' | bbf classic=' .. tostring(bbf.classicFrames) .. ' noPortrait=' .. tostring(bbf.noPortraitModes)) or ''))
   elseif cmd == 'probe' then   -- where the pet and player frames are, in TV pixels (top-left origin), for placing the row
     local _, ph = GetPhysicalScreenSize(); ph = (ph and ph > 0) and ph or 1080
     local out = {}
