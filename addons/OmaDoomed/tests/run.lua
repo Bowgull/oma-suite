@@ -7,9 +7,7 @@ local pattern = arg[1]
 -- to fail until the plan phase named here fixes it: a failure prints KNOWN FAIL and doesn't fail the run. One that
 -- passes prints FIXED and does fail the run, so this list is kept honest: take it off when its phase lands.
 local KNOWN = {
-  ['rings stay off on a non-warlock'] = 2,
   ['German client: Immolate (Feuerbrand) is tracked'] = 3,
-  ['German client: Corruption (Verderbnis) keeps its colour on the kill bar'] = 3,
   ['memory: 200 drained mobs leave the claims and ISB tables small'] = 3,
   ['Does It Die\'s saved settings are never written'] = 3,
   ['a duel: a plate that turns hostile gets its row'] = 4,

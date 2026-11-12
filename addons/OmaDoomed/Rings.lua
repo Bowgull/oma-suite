@@ -40,34 +40,12 @@ local LOW, BREATH, LOW_ALPHA = 3, 1.5, 0.3   -- last 3 s: gold, one breath every
 local GOLD = { 0xff / 255, 0xf0 / 255, 0xb0 / 255 }
 local WHITE = { 1, 1, 1 }
 local DARK_BRASS = { 0x8a / 255, 0x6a / 255, 0x2a / 255 }
-local function hex(h) return { tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3, 4), 16) / 255, tonumber(h:sub(5, 6), 16) / 255 } end
 
--- The four DoTs. IDs: Classic Era ranks plus TBC ranks (Forever kept Classic IDs for renamed spells, e.g. Bane of
--- Agony is Curse of Agony 980; ASSUMED, not checked in game). Belt and braces: at login we also add whatever ID the
--- game returns for each name, and we learn the exact ID every time you cast one (UNIT_SPELLCAST_SUCCEEDED).
-local SPELLS = {
-  -- colours: one set shared with OmaDoomed (sheet 25, approved 2026-11-11): Corruption teal (green vanished inside the
-  -- green health bar), Immolate a touch lighter, Siphon Life deeper, so no two merge; gold only means 'ending soon'
-  { key = 'corruption', names = { 'Corruption' }, color = hex('b078ff'),
-    ids = { 172, 6222, 6223, 7648, 11671, 11672, 25311, 27216 } },
-  { key = 'agony', names = { 'Bane of Agony', 'Curse of Agony' }, color = hex('f05496'),
-    ids = { 980, 1014, 6217, 11711, 11712, 11713, 27218 } },
-  { key = 'immolate', names = { 'Immolate' }, color = hex('ff8a3d'),
-    ids = { 348, 707, 1094, 2941, 11665, 11667, 11668, 25309, 27215 } },
-  { key = 'siphon', names = { 'Siphon Life' }, color = hex('d63048'),
-    ids = { 18265, 18879, 18880, 18881, 27264, 30911 } },
-  -- channels keep the same ring and timer as before ("the original version of the channel was excellent"),
-  -- only their own colour: bone white (sheet 28, "Bone white")
-  -- curses that do no damage (sheet 41, "a green curse ring"): their own ring so you can see which
-  -- mobs are cursed; IDs Classic + TBC ranks (assumed; the exact ID is learned on every cast, as for the DoTs)
-  { key = 'curse', names = { 'Curse of Weakness', 'Curse of Tongues', 'Curse of the Elements', 'Curse of Exhaustion',
-      'Curse of Recklessness', 'Curse of Shadow', 'Curse of Doom' }, color = hex('96ce54'),
-    ids = { 702, 1108, 6205, 7646, 11707, 11708, 27224, 30909, 1714, 11719, 1490, 11721, 11722, 27228, 18223,
-      704, 7658, 7659, 11717, 27226, 17862, 17937, 603, 30910 } },
-  -- 'Soul Siphon' ("what about other drains?"): by name only; if Forever has it as a channel it rides here
-  { key = 'channel', names = { 'Drain Soul', 'Drain Life', 'Drain Mana', 'Wrack', 'Soul Siphon' }, color = hex('ece2c6'),   -- Wrack: Forever's channel
-    ids = { 1120, 8288, 8289, 11675, 27217, 689, 699, 709, 7651, 11699, 11700, 27219, 27220, 5138, 6226, 11703, 11704, 27221 } },
-}
+-- The DoTs, curses and channels, one group each, in Spells.lua's order with its ring colours and IDs. Belt and
+-- braces: at login we also add whatever ID the game returns for each name, and we learn the exact ID every time you
+-- cast one (UNIT_SPELLCAST_SUCCEEDED).
+local Spells, Anim, Secret = ns.spells, ns.core.Anim, ns.core.Secret
+local SPELLS = Spells.list
 
 local OWN = 'HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY'        -- PLAYER = you, your pet or vehicle (AuraUtil.lua)
 local OTHERS = 'HARMFUL|!PLAYER|INCLUDE_NAME_PLATE_ONLY'    -- "!" negates (AuraUtil.lua, forever branch)
@@ -78,10 +56,11 @@ local REMAINING = (Enum.DurationTextBindingProperty and Enum.DurationTextBinding
 local POOL_START, POOL_MIN_FREE, POOL_MAX = 24, 4, 40   -- review #7: 12 ran out in big pulls
 
 local db
+local BC                            -- BlizzardControls.lua: Blizzard's nameplate debuffs and target-frame squares
 local function say(m) print('|cffb48cffOmaDoomed:|r ' .. m) end
 -- failures go to the error list (/omadoomed errors and bug reports); start-up probes are kept quiet
 local function log(m) if ns.err and not m:find('^probe') and not m:find('^number formatter') then ns.err('rings: ' .. m) end end
-local function secret(v) return issecretvalue and issecretvalue(v) or false end
+local secret = Secret.is
 
 -- ---------- what the load check decides (out of combat, before any container exists) ----------
 local GLYPH = false           -- true: the ring is the font glyph and goes gold + breathes
@@ -91,8 +70,7 @@ local othersOK = true         -- false if the game refused the "!PLAYER" group
 
 local function breath(x)
   -- x = seconds left (0..3). 1 at 3 s, 0.3 at 2.25 s, 1 at 1.5 s, 0.3 at 0.75 s, 1 at 0 s.
-  local t = LOW - x
-  return LOW_ALPHA + (1 - LOW_ALPHA) * (0.5 + 0.5 * math.cos(2 * math.pi * t / BREATH))
+  return Anim.breath(x, LOW, BREATH, LOW_ALPHA)
 end
 
 local function makeCurve(normal, low, lowBreathes)
@@ -279,9 +257,7 @@ end
 -- sheet 27 (approved): on each tick the bar calls ns.ringsPulse(unit, spell name) and that DoT's ring on that
 -- unit's nameplate breathes brighter for 400 ms, in the same instant as its piece in the bar
 local pulseRings = setmetatable({}, { __mode = 'k' })     -- ring button -> spell key
-local function keyOfName(name)
-  for _, sp in ipairs(SPELLS) do for _, n in ipairs(sp.names) do if n == name then return sp.key end end end
-end
+local keyOfName = Spells.key
 local framePair, attachAll, chanPair -- defined further down (forward-declared so earlier code sees them, not a nil global)
 function ns.ringsPulse(unit, name)
   local key = keyOfName(name); if not key then return end
@@ -373,7 +349,7 @@ local function setupEyes(c)
 end
 
 -- ---------- the pool: containers can't be created in combat, so we keep spares and fill up after each fight ----------
-local holder = CreateFrame('Frame', nil, UIParent); holder:Hide()
+local holder                        -- parent of every spare row (made at start)
 local pairsAll, free, active = {}, {}, {}
 
 -- What the eyes see on a plate: { corruption = true/false, ... }, or nil when unknown (no eyes, or secret).
@@ -438,7 +414,7 @@ local function newPair(gap)
   return p
 end
 
-local filler = CreateFrame('Frame')
+local filler                        -- made at start
 local function wanted() local n = 0; for _ in pairs(active) do n = n + 1 end; return math.min(POOL_MAX, math.max(POOL_START, n + POOL_MIN_FREE)) end
 local function fill()
   -- one pair per frame, out of combat, so login never hitches
@@ -525,9 +501,8 @@ end
 -- fades in over 0.25 s (ease-out). Driven per frame from GetTime, so it's the same at any frame rate.
 local LEAVE, ARRIVE, ARRIVE_DELAY, LIFT, RISE = .2, .25, .06, 6, 8
 local fading = {}
-local fader = CreateFrame('Frame')
-local function easeIn(x) return x * x end
-local function easeOut(x) return 1 - (1 - x) ^ 3 end
+local fader                         -- made at start
+local easeIn, easeOut = Anim.easeIn, Anim.easeOut
 local function fadeStep(p, now)
   local a = now - p.fadeAt
   local base = (db and db.alpha or 100) / 100
@@ -544,12 +519,11 @@ local function fadeStep(p, now)
   local pt = p.pt or 'BOTTOM'; p.ring:ClearAllPoints(); p.ring:SetPoint(pt, p.anchor, pt, 0, dy)
   return done
 end
-fader:SetScript('OnUpdate', function()
+local function fadeAll()
   local now, any = GetTime(), false
   for p in pairs(fading) do if fadeStep(p, now) then fading[p] = nil; if not p.want then p.anchor:Hide() end else any = true end end   -- review #8
   if not any then fader:Hide() end
-end)
-fader:Hide()
+end
 local function setVis(p, show)
   show = show and true or false
   if p.want == show then return end
@@ -658,37 +632,6 @@ local function setOthers(on)
   end
 end
 
--- ---------- Blizzard's own debuff row: off while we show ours, old value kept so /omadoomed rings off puts it back ----------
-local CVARS = {
-  { name = 'nameplateEnemyNpcAuraDisplay', bit = Enum.NamePlateEnemyNpcAuraDisplay and Enum.NamePlateEnemyNpcAuraDisplay.Debuffs or 2 },
-  { name = 'nameplateEnemyPlayerAuraDisplay', bit = Enum.NamePlateEnemyPlayerAuraDisplay and Enum.NamePlateEnemyPlayerAuraDisplay.Debuffs or 2 },
-}
-local pendingBlizzard = nil
-local function blizzardRow(show)
-  if InCombatLockdown() then pendingBlizzard = show; return end   -- these are secure CVars: never set in combat
-  pendingBlizzard = nil
-  for _, cv in ipairs(CVARS) do
-    local ok, cur = pcall(C_CVar.GetCVar, cv.name)
-    if ok and cur ~= nil then
-      if show then
-        if db.saved[cv.name] ~= nil then pcall(C_CVar.SetCVar, cv.name, db.saved[cv.name]); db.saved[cv.name] = nil end
-      else
-        if db.saved[cv.name] == nil then db.saved[cv.name] = cur end
-        local okS, err = pcall(C_CVar.SetCVarBitfield, cv.name, cv.bit, false)
-        if not okS then log('could not turn off ' .. cv.name .. ': ' .. tostring(err)) end
-      end
-    end
-  end
-end
-local function blizzardState()
-  local out = {}
-  for _, cv in ipairs(CVARS) do
-    local ok, on = pcall(C_CVar.GetCVarBitfield, cv.name, cv.bit)
-    out[#out + 1] = (cv.name:find('Npc') and 'mobs ' or 'players ') .. (ok and (on and 'on' or 'off') or '?')
-  end
-  return table.concat(out, ', ')
-end
-
 -- ---------- /omadoomed rings test: a fake row on your target, plain frames, out of combat only ----------
 local test
 local TEST_ROW = {
@@ -794,56 +737,55 @@ local function startTest()
   say('test row on for 60 s: Corruption 11, Agony 19, Immolate looping its last 3 s, one other player\'s DoT.')
 end
 
--- ---------- events ----------
-local ev = CreateFrame('Frame')
-for _, e in ipairs({ 'PLAYER_LOGIN', 'NAME_PLATE_UNIT_ADDED', 'NAME_PLATE_UNIT_REMOVED', 'PLAYER_REGEN_ENABLED',
-  'PLAYER_REGEN_DISABLED', 'PLAYER_TARGET_CHANGED', 'SPELLS_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
-pcall(ev.RegisterUnitEvent, ev, 'UNIT_SPELLCAST_SUCCEEDED', 'player')
+-- ---------- events (registered at a warlock's login only) ----------
+local ev
 
 local function learn(spellID)
   -- every cast of a DoT teaches us its exact ID on Forever; filters update after combat
   if spellID == nil or secret(spellID) then return end
   local ok, name = pcall(function() return (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)) or (GetSpellInfo and GetSpellInfo(spellID)) end)
   if not ok or type(name) ~= 'string' then return end
-  for _, sp in ipairs(SPELLS) do
-    for _, n in ipairs(sp.names) do
-      if n == name then
-        db.learned[sp.key] = db.learned[sp.key] or {}
-        local known = false
-        for _, id in ipairs(sp.ids) do if id == spellID then known = true end end
-        if not known and not db.learned[sp.key][spellID] then
-          db.learned[sp.key][spellID] = true; log('learned ' .. name .. ' = ' .. spellID); refreshFilters()
-        end
-      end
-    end
+  local sp = Spells.ofName(name); if not sp then return end
+  db.learned[sp.key] = db.learned[sp.key] or {}
+  local known = false
+  for _, id in ipairs(sp.ids) do if id == spellID then known = true end end
+  if not known and not db.learned[sp.key][spellID] then
+    db.learned[sp.key][spellID] = true; log('learned ' .. name .. ' = ' .. spellID); refreshFilters()
   end
+  Spells.addID(spellID, sp.key)
 end
 
 local onEvent
-ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEvent, ...); if not ok then ns.err('rings event: ' .. tostring(err)) end end)
+-- a warlock's login (Core.lua): settings live in OmaDoomedDB.rings (defaults from Settings.lua)
+local function start()
+  db = ns.db.rings
+  BC = ns.blizzard
+  if db.othersAlpha then OTHERS_ALPHA = db.othersAlpha / 100; if db.othersAlpha == 0 then db.others = false end end
+  db.saved = db.saved or {}; db.learned = db.learned or {}
+  if not (C_UnitAuras and C_NamePlate and C_CurveUtil and C_StringUtil) then say('this client is missing the aura container APIs; the OmaDoomed rings are off.'); db = nil; return end
+  holder = CreateFrame('Frame', nil, UIParent); holder:Hide()
+  filler = CreateFrame('Frame')
+  fader = CreateFrame('Frame'); fader:SetScript('OnUpdate', fadeAll); fader:Hide()
+  ev = CreateFrame('Frame')
+  for _, e in ipairs({ 'NAME_PLATE_UNIT_ADDED', 'NAME_PLATE_UNIT_REMOVED', 'PLAYER_REGEN_ENABLED',
+    'PLAYER_REGEN_DISABLED', 'PLAYER_TARGET_CHANGED', 'SPELLS_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
+  pcall(ev.RegisterUnitEvent, ev, 'UNIT_SPELLCAST_SUCCEEDED', 'player')
+  ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEvent, ...); if not ok then ns.error('rings event: ' .. tostring(err)) end end)
+  ns.bus:On('TICK', ns.ringsPulse)
+  ns.bus:On('SETTING', function(key, store) if store == 'rings' then ns.ringsApply(key) end end)
+  probe(); buildGroups()
+  if db.enabled then BC.blizzardRow(false) end
+  fill(); attachAll()
+  if db.where ~= 'enemy' then C_Timer.After(1, function() makeFramePair(); if db.where == 'split' then ns.makeChanPair() end; visible() end) end
+  BC.squaresApply()
+end
+ns.starts[#ns.starts + 1] = start
 onEvent = (function(_, e, a1, _, a3)
-  if e ~= 'PLAYER_LOGIN' and not db then return end
-  if e == 'PLAYER_LOGIN' then
-    -- settings live in OmaDoomedDB.rings; the old separate OmaPlatesDB is moved in once
-    OmaDoomedDB = OmaDoomedDB or {}
-    if OmaPlatesDB and not OmaDoomedDB.rings then OmaDoomedDB.rings = OmaPlatesDB end
-    OmaPlatesDB = nil
-    OmaDoomedDB.rings = OmaDoomedDB.rings or {}
-    db = OmaDoomedDB.rings
-    if db.othersAlpha then OTHERS_ALPHA = db.othersAlpha / 100; if db.othersAlpha == 0 then db.others = false end end
-    if db.enabled == nil then db.enabled = true end
-    if db.others == nil then db.others = true end
-    db.saved = db.saved or {}; db.learned = db.learned or {}
-    if not (C_UnitAuras and C_NamePlate and C_CurveUtil and C_StringUtil) then say('this client is missing the aura container APIs; the OmaDoomed rings are off.'); db = nil; return end
-    probe(); buildGroups()
-    if db.enabled then blizzardRow(false) end
-    fill(); attachAll()
-    if db.where ~= 'enemy' then C_Timer.After(1, function() makeFramePair(); if db.where == 'split' then ns.makeChanPair() end; visible() end) end
-    ns.squaresApply()
-  elseif e == 'NAME_PLATE_UNIT_ADDED' then attach(a1)
+  if not db then return end
+  if e == 'NAME_PLATE_UNIT_ADDED' then attach(a1)
   elseif e == 'NAME_PLATE_UNIT_REMOVED' then release(a1)
   elseif e == 'PLAYER_TARGET_CHANGED' then
-    visible(); if ns.squaresApply then ns.squaresApply() end
+    visible(); BC.squaresApply()
     -- 2026-11-12 ("in haunt mode switching between targets rapidly shows the wrong or missing dots under frame
     -- and over head"): framePair and chanPair follow the unit 'target', and a container re-reads its auras only when
     -- it is shown (Blizzard_AuraContainer OnShow). Going from one enemy straight to another keeps them shown, so they
@@ -855,7 +797,6 @@ onEvent = (function(_, e, a1, _, a3)
     for u, p in pairs(active) do local plate = C_NamePlate.GetNamePlateForUnit(u, false); if plate then place(p.anchor, plate) end end
   elseif e == 'PLAYER_REGEN_DISABLED' then stopTest(); visible()
   elseif e == 'PLAYER_REGEN_ENABLED' then
-    if pendingBlizzard ~= nil then blizzardRow(pendingBlizzard) end
     if filtersDirty then refreshFilters() end
     fill(); attachAll()                                  -- plates that showed up in combat with no spare container
     if db.where ~= 'enemy' then makeFramePair() end
@@ -866,38 +807,6 @@ onEvent = (function(_, e, a1, _, a3)
   elseif e == 'UNIT_SPELLCAST_SUCCEEDED' then learn(a3)
   end
 end)
-
--- Blizzard's squares on the target frame live in TargetFrame...TargetFrameContentContextual.Auras, a
--- TargetFrameAuraContainer (Forever source: Blizzard_UnitFrame/Shared/TargetFrameAuraContainer.lua). Its filter string is
--- ignored: ShouldShowAuraAsDebuff decides, and on an enemy NPC it shows ONLY your (and your pet's) debuffs plus ones
--- the NPCs cast; other players' DoTs are never shown there (they show on our rings, small and dim). So on mobs
--- 'All but my DoTs' turns the debuff row off (SetMaxDebuffs 0, a public call) and keeps the mob's buffs. On a player
--- target Blizzard shows everyone's debuffs, so there the row stays whole.
-local function targetAuras()
-  local c = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentContextual
-  return c and c.Auras
-end
-local function squaresNow()
-  local au = targetAuras(); if not au or not db then return end
-  local mode = db.squares or 'notmine'
-  local onPlayer = UnitExists('target') and UnitIsPlayer('target')
-  local ok, err = pcall(function()
-    -- review #3: only touch Blizzard's container when the value really changes (fewer chances to taint it)
-    local md = (mode == 'hide' or (mode == 'notmine' and not onPlayer)) and 0 or (MAX_TARGET_DEBUFFS or 16)
-    local mb = mode == 'hide' and 0 or (MAX_TARGET_BUFFS or 32)
-    if au:GetMaxDebuffs() ~= md then au:SetMaxDebuffs(md) end
-    if au:GetMaxBuffs() ~= mb then au:SetMaxBuffs(mb) end
-  end)
-  if not ok then ns.err('squares: ' .. tostring(err)) end
-end
-local sqHooked
-function ns.squaresApply()
-  if not db then return end
-  if not sqHooked and TargetFrame and TargetFrame.ConfigureAuraContainer then
-    sqHooked = true; hooksecurefunc(TargetFrame, 'ConfigureAuraContainer', function() squaresNow() end)   -- Blizzard re-sets the limits on every new target
-  end
-  squaresNow()
-end
 
 function ns.ringsApply(key)
   if not db then return end
@@ -912,7 +821,7 @@ function ns.ringsApply(key)
     channelGroup(framePair, db.where ~= 'split')   -- out of combat only; otherwise after the fight (REGEN_ENABLED)
     visible()
   elseif key == 'which' then visible()
-  elseif key == 'squares' then if ns.squaresApply then ns.squaresApply() end
+  elseif key == 'squares' then BC.squaresApply()
   end
 end
 
@@ -921,11 +830,11 @@ function ns.ringsSlash(msg)
   if not db then return end
   local cmd, arg = (msg or ''):match('^(%S*)%s*(.-)$'); cmd = cmd:lower(); arg = arg:lower()
   if cmd == 'off' then
-    db.enabled = false; releaseAll(); blizzardRow(true); stopTest()
-    say('off: Blizzard\'s debuff row is back' .. (pendingBlizzard ~= nil and ' after this fight.' or '.'))
+    db.enabled = false; releaseAll(); BC.blizzardRow(true); stopTest()
+    say('off: Blizzard\'s debuff row is back' .. (BC.pending() and ' after this fight.' or '.'))
   elseif cmd == 'on' then
-    db.enabled = true; blizzardRow(false); fill(); attachAll()
-    say('on' .. (pendingBlizzard ~= nil and ' (Blizzard\'s row goes off after this fight).' or '.'))
+    db.enabled = true; BC.blizzardRow(false); fill(); attachAll()
+    say('on' .. (BC.pending() and ' (Blizzard\'s row goes off after this fight).' or '.'))
   elseif cmd == 'test' then
     if test and test:IsShown() then stopTest(); say('test off.') else startTest() end
   elseif cmd == 'others' and (arg == 'on' or arg == 'off') then
@@ -935,6 +844,6 @@ function ns.ringsSlash(msg)
     say(('%s. Rows on %d plates, %d spare.'):format(db.enabled and 'On' or 'Off', n, #free))
     say('Last 3 s: ' .. (GLYPH and 'ring turns gold and breathes, number breathes.' or 'ring font unavailable, so the number turns gold and breathes.'))
     say('Other players\' DoTs: ' .. ((db.others and othersOK) and 'on' or (othersOK and 'off' or 'not allowed by the game')) .. '.')
-    say('Blizzard\'s debuff row: ' .. blizzardState() .. '.')
+    say('Blizzard\'s debuff row: ' .. BC.state() .. '.')
   end
 end

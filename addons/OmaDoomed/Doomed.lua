@@ -9,17 +9,13 @@
 local ADDON, ns = ...
 local P = {}; ns.parts.doomed = P
 
-local COLOR = {   -- sheet 34 B 'shadow and fire' ("shadow and fire for sure"): deep pieces, bright only on the tick and the rings
-  ['Corruption'] = { 78 / 255, 40 / 255, 136 / 255 }, ['Curse of Agony'] = { 128 / 255, 30 / 255, 74 / 255 },
-  ['Bane of Agony'] = { 128 / 255, 30 / 255, 74 / 255 }, ['Immolate'] = { 160 / 255, 66 / 255, 22 / 255 },
-  ['Siphon Life'] = { 110 / 255, 20 / 255, 30 / 255 },
-}
-ns.doomedColor = COLOR                    -- the kill bar over every dotted mob uses the same colours (KillPlates.lua)
+local Spells, Anim, Secret = ns.spells, ns.core.Anim, ns.core.Secret
+-- colours, ring tones and beats: Spells.lua (by spell ID; a DoT's name, in any client language, finds its entry)
 local GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- gold means only 'ending soon' (last 3 s); at the green's strength like the other pieces
 local function LOWS() return (ns.db and ns.db.low) or 3 end   -- 'Ending soon' (settings): seconds of gold
-local function breath(x)              -- the rings' own breath (Rings.lua): 1 at the start, 0.3 halfway, 1 every 1.5 s
+local function breath(x)              -- the rings' own breath (Anim.breath): 1 at the start, 0.3 halfway, 1 every 1.5 s
   if ns.db and ns.db.lowlook == 'steady' then return 1 end
-  local ph = (LOWS() - x) / 1.5 % 1; return .3 + .7 * (math.cos(ph * 2 * math.pi) * .5 + .5)
+  return Anim.breath(x, LOWS(), 1.5, .3)
 end
 local OTHER = { .55, .45, .65 }
 local FILL = 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health'
@@ -249,7 +245,7 @@ local function setMark(m, p, maxv)
   end
 end
 
-local function colorOf(name) return COLOR[name] or OTHER end
+local function colorOf(name) local sp = Spells.dot(name); return sp and sp.deep or OTHER end
 
 -- sheet 30 (approved "Yes, build it", 2026-11-11). Every frame. dots: { {name, damage, expires} } nearest the bar's end
 -- first; maxv / hp may be hidden numbers (only handed to status bars). A tick spends part of its own DoT's piece: the
@@ -262,7 +258,7 @@ local cur                            -- the latest dots, maxv, hp (from update),
 -- slide carries on from where it was instead of skipping ahead
 local function aclock() return P.clock or GetTime() end
 P.pred = {}                          -- DoT name -> { est, at, k }: a tick shown on its beat, waiting for DoesItDie's number
-local BEAT = { ['Corruption'] = 3, ['Curse of Agony'] = 2, ['Bane of Agony'] = 2, ['Immolate'] = 3, ['Siphon Life'] = 3 }
+local function beatOf(name) local sp = Spells.dot(name); return sp and sp.beat or 3 end
 -- the health just changed: if a DoT is due to tick right now (its beat, within 0.25 s), start its bite this frame
 function P.onHealth()
   if not cur or test then return end
@@ -270,7 +266,7 @@ function P.onHealth()
   if IsInGroup and IsInGroup() then return end
   local now = GetTime()
   for _, d in ipairs(cur.dots) do
-    local beat = d.appliedAt and (BEAT[d.name] or 3)
+    local beat = d.appliedAt and beatOf(d.name)
     if beat and P.predApplied[d.name] ~= d.appliedAt then P.predApplied[d.name] = d.appliedAt; P.predK[d.name] = nil end   -- review #13: a recast starts the count again
     if beat and not d.provisional then
       local k = math.floor((now - d.appliedAt) / beat + .5)
@@ -281,7 +277,7 @@ function P.onHealth()
         local was = biteNow(d.name, aclock())
         P.bites[d.name] = { amt = was + est, at = aclock() }
         P.pred[d.name] = { est = est, at = now }
-        if ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', d.name) end
+        if ns.db.tick ~= 'plain' then ns.bus:Fire('TICK', 'target', d.name) end
       end
     end
   end
@@ -295,15 +291,8 @@ P.wasPre = {}
 P.slotOf = {}                -- DoT name -> the slot (textures and edges) it owns
 P.fullBy = {}                -- DoT name -> its full damage when fresh (for a first cast DoesItDie doesn't list yet)
 local EMPTY = { 30 / 255, 19 / 255, 10 / 255 }
-local function easeOut(x) x = math.max(0, math.min(1, x)); return 1 - (1 - x) ^ 3 end
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
-local RINGTONE = {   -- the rings' own colours (Rings.lua), for the tick
-  ['Corruption'] = { 176 / 255, 120 / 255, 1 }, ['Curse of Agony'] = { 240 / 255, 84 / 255, 150 / 255 }, ['Bane of Agony'] = { 240 / 255, 84 / 255, 150 / 255 },
-  ['Immolate'] = { 1, 138 / 255, 61 / 255 }, ['Siphon Life'] = { 214 / 255, 48 / 255, 72 / 255 },
-}
-ns.doomedTone = RINGTONE                  -- the precast stripes and motes over every dotted mob (KillPlates.lua)
-
-local RINGGOLD = { 1, 214 / 255, 110 / 255 }
+local function toneOf(name) local sp = Spells.dot(name); return sp and sp.color end   -- the ring's colour, for the tick
 
 biteNow = function(name, now)    -- what is still left of a bite (0 when done), and its flare 0..1
   local b = P.bites[name]; if not b then return 0, 0 end
@@ -311,11 +300,11 @@ biteNow = function(name, now)    -- what is still left of a bite (0 when done), 
   if a >= .7 then P.bites[name] = nil; return 0, 0 end
   -- 2026-11-11 'it flashes then almost jumps': the glide started at full speed the instant the light peaked. Now it
   -- starts from rest, is quickest midway and settles (smootherstep over 0.5 s); the light swells instead of flashing.
-  local k = math.max(0, math.min(1, a / .5)); k = k * k * k * (k * (k * 6 - 15) + 10)
+  local k = Anim.smootherstep(a / .5)
   local left = b.amt * (1 - k)
   -- 2026-11-11 'the ticks are a bit jumpy, plain is smooth': the light swells and settles on smooth curves and cools back
   -- into the piece's own colour (it used to start from, and cool to, a dark ember: a dip that read as a jump)
-  local function ss(v) v = math.max(0, math.min(1, v)); return v * v * (3 - 2 * v) end
+  local ss = Anim.smoothstep
   local flare = a < .16 and ss(a / .16) or 1 - ss((a - .16) / .5)
   return left, flare
 end
@@ -362,7 +351,7 @@ local function render()
       local lowNow = left and left <= LOWS()   -- gold through its last 3 s and on past zero while it glides out (it flipped back)
       local c = colorOf(d.name)
       if lowNow then local b = .6 + .4 * breath(left); c = { GOLD[1] * b, GOLD[2] * b, GOLD[3] * b } end
-      local tn = RINGTONE[d.name] or c
+      local tn = toneOf(d.name) or c
       local sp = mix(c, tn, .7)   -- the glow: its own colour, low (no white: warlock light)
       local function spark(al)
         if CreateColor then s.spark:SetGradient('HORIZONTAL', CreateColor(0, 0, 0, 1), CreateColor(sp[1] * al, sp[2] * al, sp[3] * al, 1)) end
@@ -400,7 +389,7 @@ local function render()
         local ll = P.landLook[d.name]
         if ll == 'charging' and la < .35 then s.cpr = 1; spark(.45 * (1 - la / .35) ^ 2) else s.cpr = nil; s.spark:Hide() end
         local k = 1   -- the other looks ease from dim to full colour as it lands (no snap)
-        if ll and ll ~= 'charging' and ll ~= 'smoulder' and la < .3 then local v = la / .3; k = .4 + .6 * v * v * (3 - 2 * v) end
+        if ll and ll ~= 'charging' and ll ~= 'smoulder' and la < .3 then k = .4 + .6 * Anim.smoothstep(la / .3) end
         s.base:SetVertexColor(full[1] * k, full[2] * k, full[3] * k)
         s.lift:SetVertexColor(c[1] * .7 * k, c[2] * .7 * k, c[3] * .7 * k)
       end
@@ -411,7 +400,7 @@ local function render()
       if bl > 0 then
         -- settings 'Tick light'. The bitten part keeps its piece's colour; the light (Ember, Cinders, Essence) washes up out
         -- of the piece across the seam into it (sheet 37: no hard cut, no band) and settles back into its own colour.
-        local tone = lowNow and { math.min(1, c[1] * 1.3), math.min(1, c[2] * 1.3), math.min(1, c[3] * 1.3) } or (RINGTONE[d.name] or c)
+        local tone = lowNow and { math.min(1, c[1] * 1.3), math.min(1, c[2] * 1.3), math.min(1, c[3] * 1.3) } or (toneOf(d.name) or c)
         local b = P.bites[d.name]
         s.biteK = (b and b.amt > 0) and math.min(1, bl / b.amt) or 0
         s.gtarget = before + bl; s.ghost:SetVertexColor(full[1] + c[1] * .7, full[2] + c[2] * .7, full[3] + c[3] * .7); s.ghost:Show()
@@ -492,10 +481,10 @@ local function draw(dots, maxv, hp)
       if remaining > .5 then
         -- review #5: only a DoT that was about to end really ticked its last; one removed early just slides out quietly
         local endsIn = P.exp and P.exp[name] and (P.exp[name] - now) or 0
-        local natural = endsIn < (BEAT[name] or 3) * 1.2
+        local natural = endsIn < beatOf(name) * 1.2
         local b = P.bites[name]
         if b then b.amt = b.amt + remaining; if not natural then b.quiet = true end
-        else P.bites[name] = { amt = remaining, at = aclock(), quiet = not natural }; if natural and ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', name) end end
+        else P.bites[name] = { amt = remaining, at = aclock(), quiet = not natural }; if natural and ns.db.tick ~= 'plain' then ns.bus:Fire('TICK', 'target', name) end end
       end
       P.pred[name] = nil; last[name] = 0
       if P.bites[name] and biteNow(name, aclock()) > 0 then
@@ -518,14 +507,14 @@ local function draw(dots, maxv, hp)
       else
         local was = biteNow(d.name, aclock())
         P.bites[d.name] = { amt = was + real, at = aclock() }
-        if ns.ringsPulse and ns.db.tick ~= 'plain' then pcall(ns.ringsPulse, 'target', d.name) end   -- its ring, same instant
+        if ns.db.tick ~= 'plain' then ns.bus:Fire('TICK', 'target', d.name) end   -- its ring, same instant
       end
     end
     last[d.name] = d.damage
   end
   for name, pr in pairs(P.pred) do if now - pr.at >= 1 then P.pred[name] = nil end end   -- not a tick after all
   cur = { dots = dots, maxv = maxv, hp = hp }
-  if ns.recordRow and not test then local nb = 0; for _ in pairs(P.bites) do nb = nb + 1 end; pcall(ns.recordRow, cur, nb > 0 and ('bites' .. nb) or nil) end   -- the 15 s bug-report record
+  if not test then local nb = 0; for _ in pairs(P.bites) do nb = nb + 1 end; ns.bus:Fire('ROW', cur, nb > 0 and ('bites' .. nb) or nil) end   -- the bug-report record (Report.lua)
 end
 
 local function update()
@@ -559,7 +548,7 @@ local function update()
   end
   if not UnitExists('target') or UnitIsDead('target') then cur = nil; return hide() end
   local raw, list, seenName = P.source('target'), {}, {}
-  for _, e in ipairs(raw) do if e.name and not seenName[e.name] then seenName[e.name] = true; list[#list + 1] = e end end   -- a copy (never sort the source's own table); one piece per name
+  for _, e in ipairs(raw) do if e.name and not seenName[e.name] then seenName[e.name] = true; list[#list + 1] = e; Spells.see(e.spellID, e.name) end end   -- a copy (never sort the source's own table); one piece per name
   table.sort(list, function(a, b) return (a.expiresAt or 0) < (b.expiresAt or 0) end)   -- runs out first = nearest the green
   local dots = {}
   local cName, _, _, cStart, cEnd = UnitCastingInfo('player')
@@ -574,7 +563,7 @@ local function update()
   -- review #4: a cast belongs to the mob you were targeting when it started (nameplate frames are never secret)
   local here = C_NamePlate.GetNamePlateForUnit('target', false) or false
   local sameMob = P.castPlate == nil or P.castPlate == here
-  if cName and COLOR[cName] and cStart and cEnd and P.fullBy[cName] and sameMob then
+  if cName and Spells.dot(cName) and cStart and cEnd and P.fullBy[cName] and sameMob then
     local listed = false; for _, d in ipairs(dots) do if d.name == cName then listed = true end end
     if not listed then dots[#dots + 1] = { name = cName, damage = P.fullBy[cName], expires = cEnd / 1000 + 30, provisional = true, castStart = cStart / 1000, castEnd = cEnd / 1000 } end
   end
@@ -586,7 +575,7 @@ local function update()
     elseif ld.plate == nil or ld.plate == here then dots[#dots + 1] = { name = ld.name, damage = ld.dmg, expires = ld.at + 30, landed = true } end
   end
   local ok, err = pcall(draw, dots, UnitHealthMax('target'), UnitHealth('target'))
-  if not ok then ns.err('draw: ' .. tostring(err)); P.off = true; hide() end   -- review #12: off for this session only
+  if not ok then ns.fail('draw: ' .. tostring(err), 'the kill bar'); P.off = true; hide() end   -- review #12: off for this session only
 end
 
 -- DoesItDie's own box and icon stay off while Doomed is on, and come back when it's off
@@ -640,11 +629,12 @@ function P.start()
   ev:RegisterUnitEvent('UNIT_SPELLCAST_SUCCEEDED', 'player'); ev:RegisterUnitEvent('UNIT_SPELLCAST_START', 'player')
   ev:RegisterEvent('PLAYER_TARGET_CHANGED'); ev:RegisterUnitEvent('UNIT_HEALTH', 'target'); ev:RegisterUnitEvent('UNIT_AURA', 'target')
   local onEv
-  ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEv, ...); if not ok then ns.err('bar event: ' .. tostring(err)) end end)
+  ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEv, ...); if not ok then ns.error('bar event: ' .. tostring(err)) end end)
   onEv = (function(_, e, unit, _, spellID)
     if e == 'UNIT_SPELLCAST_SUCCEEDED' then
-      local n = spellID and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
-      if n and COLOR[n] and P.fullBy[n] then P.landed = { name = n, at = GetTime(), dmg = P.fullBy[n], plate = P.castPlate } end
+      local n = spellID and Secret.readable(spellID) and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
+      if n then Spells.see(spellID, n) end
+      if n and Spells.dot(n) and P.fullBy[n] then P.landed = { name = n, at = GetTime(), dmg = P.fullBy[n], plate = P.castPlate } end
       return
     end
     if e == 'UNIT_SPELLCAST_START' then P.castPlate = C_NamePlate.GetNamePlateForUnit('target', false) or false; return end
@@ -653,13 +643,17 @@ function P.start()
   ev:SetScript('OnUpdate', function(_, dt)
     P.dt = math.min(dt, .05); P.clock = aclock() + math.min(dt, .05)
     acc = acc + dt
-    if P.dirty or acc >= .1 then acc = 0; P.dirty = false; update() end   -- review #6: once a frame at most, however busy
+    if P.dirty or acc >= .1 then   -- review #6: once a frame at most, however busy
+      acc = 0; P.dirty = false
+      local ok, err = pcall(update)
+      if not ok then ns.fail('update: ' .. tostring(err), 'the kill bar'); P.off = true; pcall(hide); cur = nil end
+    end
     local ok, err = pcall(render)
-    if not ok then ns.err('render: ' .. tostring(err)); P.off = true; hide(); cur = nil end
+    if not ok then ns.fail('render: ' .. tostring(err), 'the kill bar'); P.off = true; pcall(hide); cur = nil end
   end)
   ns.onTrackChanged = function() P.dirty = true end
   if didHere() and DoesItDie.RegisterCallback then DoesItDie.RegisterCallback(ADDON, function() P.dirty = true end) end
-  if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(0.5, function() local ok, err = pcall(compareNow); if not ok then ns.err('compare: ' .. tostring(err)) end end) end
+  if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(0.5, function() local ok, err = pcall(compareNow); if not ok then ns.error('compare: ' .. tostring(err)) end end) end
 end
 
 -- /omadoomed on | off    the kill bar part on or off
@@ -676,9 +670,5 @@ function P.slash(m)
   ns.say('/omadoomed on|off, options, report, report show, errors · /omadoomed rings on|off, others on|off')
 end
 
--- a setting changed on the Options page (Settings.lua): show it at once
-function ns.applySetting(key)
-  if key == 'doomed' then quiet(ns.db.doomed); update()
-  elseif ns.RING_DEFAULTS and ns.RING_DEFAULTS[key] ~= nil then if ns.ringsApply then ns.ringsApply(key) end
-  end   -- every other kill bar setting is read each frame
-end
+-- a setting changed on the Options page (Settings.lua): show it at once; every other kill bar setting is read each frame
+ns.bus:On('SETTING', function(key) if key == 'doomed' then quiet(ns.db.doomed); update() end end)

@@ -1,43 +1,68 @@
--- Bug reports (2026-11-11: "build the bug report button"). OmaDoomed always keeps the last 15 seconds of what
--- it drew (a small ring buffer, never saved on its own). One press, a key binding (Options > Key Bindings > OmaDoomed,
--- bind it to a controller button) or /omadoomed report, saves a report with those 15 seconds, the settings, recent
--- errors and the game version, and takes a screenshot. Nothing personal goes in: no character, realm, guild, target
+-- Bug reports. OmaDoomed always keeps the last 60 seconds of what the kill bar drew (a ring buffer of plain numbers,
+-- never saved on its own; a row identical to the one before it is not stored again). One press, a key binding
+-- (Options > Key Bindings > OmaDoomed, bind it to a controller button) or /omadoomed report, saves a report with those
+-- 60 seconds as text, the settings, recent errors and the game version, and takes a screenshot. Nothing personal goes in: no character, realm, guild, target
 -- names or chat. WoW writes saved files on /reload or logout, so the chat line says so.
 -- /omadoomed report show  opens the newest report, selected, ready for Ctrl+C.
 local ADDON, ns = ...
 
 local KEEP, MAXREPORTS = 60, 5   -- 60 s: long enough to open Options after seeing the bug
-local buf, head, size = {}, 0, 600      -- 60 s at 10 rows a second
+local size = 600                 -- 60 s at 10 rows a second
+local buf, head = {}, 0          -- rows are reused tables: { t, tEnd, n, extra, fps, name1, dmg1, flags1, name2, ... }
+local Secret = ns.core.Secret
+local P_, L_, E_ = 1, 2, 4       -- flags: casting, landed, ending
 
--- called by the kill bar 10 times a second with what it is about to draw
-function ns.recordRow(cur, extra)
-  local now = GetTime()
-  local parts = { string.format('%.1f', now) }
-  if cur and cur.dots then
-    for _, d in ipairs(cur.dots) do
-      local dmg = d.damage
-      if issecretvalue and issecretvalue(dmg) then dmg = '?' else dmg = string.format('%.0f', dmg or 0) end
-      parts[#parts + 1] = (d.name or '?'):sub(1, 4) .. '=' .. dmg .. (d.provisional and 'P' or '') .. (d.landed and 'L' or '') .. (d.ending and 'E' or '')
-    end
-  else parts[#parts + 1] = 'none' end
-  if extra then parts[#parts + 1] = extra end
-  parts[#parts + 1] = string.format('fps%.0f', GetFramerate and GetFramerate() or 0)
-  head = head % size + 1; buf[head] = table.concat(parts, ' ')
+local function flagsOf(d) return (d.provisional and P_ or 0) + (d.landed and L_ or 0) + (d.ending and E_ or 0) end
+local function dmgOf(d) local v = d.damage; if Secret.is(v) then return false end; return v or 0 end   -- false: hidden
+-- the same DoTs, damage and flags as the newest row (time and fps aside)
+local function sameAsLast(row, dots, extra)
+  if not row or row.extra ~= extra then return false end
+  if not dots then return row.n == -1 end
+  if row.n ~= #dots then return false end
+  for i, d in ipairs(dots) do
+    local k = 3 * i + 3
+    if row[k] ~= (d.name or '?') or row[k + 1] ~= dmgOf(d) or row[k + 2] ~= flagsOf(d) then return false end
+  end
+  return true
 end
 
+-- called by the kill bar (bus 'ROW') 10 times a second with what it is about to draw
+local function recordRow(cur, extra)
+  local now, dots = GetTime(), cur and cur.dots
+  local last = buf[head]
+  if sameAsLast(last, dots, extra) then last.tEnd = now; return end
+  head = head % size + 1
+  local row = buf[head]; if not row then row = {}; buf[head] = row end
+  row.t, row.tEnd, row.extra, row.fps = now, nil, extra, GetFramerate and GetFramerate() or 0
+  if dots then
+    row.n = #dots
+    for i, d in ipairs(dots) do local k = 3 * i + 3; row[k], row[k + 1], row[k + 2] = d.name or '?', dmgOf(d), flagsOf(d) end
+  else row.n = -1 end
+end
+ns.recordRow = recordRow
+ns.bus:On('ROW', recordRow)
+
+local function rowText(row)
+  local parts = { ('%.1f'):format(row.t) }
+  if row.n < 0 then parts[#parts + 1] = 'none' end
+  for i = 1, math.max(0, row.n) do
+    local k = 3 * i + 3
+    local dmg, fl = row[k + 1], row[k + 2]
+    parts[#parts + 1] = tostring(row[k]):sub(1, 4) .. '=' .. (dmg == false and '?' or ('%.0f'):format(dmg))
+      .. (fl % 2 >= 1 and 'P' or '') .. (fl % 4 >= 2 and 'L' or '') .. (fl >= 4 and 'E' or '')
+  end
+  if row.extra then parts[#parts + 1] = row.extra end
+  parts[#parts + 1] = ('fps%.0f'):format(row.fps)
+  if row.tEnd then parts[#parts + 1] = ('same to %.1f'):format(row.tEnd) end
+  return table.concat(parts, ' ')
+end
 local function lastRows()
   local out, now = {}, GetTime()
   for i = 1, size do
-    local row = buf[(head + i - 1) % size + 1]
-    if row then local t = tonumber(row:match('^(%S+)')); if t and now - t <= KEEP then out[#out + 1] = row end end
+    local row = buf[(head + i - 1) % size + 1]   -- oldest first
+    if row and now - (row.tEnd or row.t) <= KEEP then out[#out + 1] = rowText(row) end
   end
   return out
-end
-
-local function copySettings(t)
-  local o = {}
-  for k, v in pairs(t or {}) do local tv = type(v); if tv == 'boolean' or tv == 'number' or tv == 'string' then o[k] = v end end
-  return o
 end
 
 -- How heavy OmaDoomed is, next to a few well-known add-ons as a yardstick. Uses Blizzard's own add-on profiler
@@ -92,10 +117,12 @@ function ns.saveReport(how)
     game = ('%s (%s) %s'):format(tostring(version), tostring(build), tostring(iface)), locale = GetLocale and GetLocale() or '?',
     inCombat = InCombatLockdown() and true or false, inGroup = (IsInGroup and IsInGroup()) and true or false,
     doesItDie = (DoesItDie and DoesItDie.GetDoTs) and 'yes' or 'no',
-    bar = copySettings(db), rings = copySettings(db.rings),
+    bar = nil, rings = nil,
     errors = {}, rows = lastRows(), perf = ns.perf(),
     compare = db.compare and { checks = db.compare.checks, differ = db.compare.differ, log = { unpack(db.compare.log, 1, math.min(20, #db.compare.log)) } } or nil,
   }
+  local dump = ns.settings and ns.settings:Dump(db) or { main = {}, rings = {} }
+  r.bar, r.rings = dump.main, dump.rings or {}
   for i = 1, math.min(10, #(db.errs or {})) do r.errors[i] = db.errs[i] end
   db.reports = db.reports or {}
   table.insert(db.reports, 1, r); while #db.reports > MAXREPORTS do table.remove(db.reports) end
@@ -117,7 +144,7 @@ local function asText(r)
     for _, line in ipairs(r.compare.log or {}) do L[#L + 1] = '  ' .. line end
   end
   if r.perf then L[#L + 1] = ''; for _, line in ipairs(ns.perfLines(r.perf)) do L[#L + 1] = line end end
-  L[#L + 1] = ''; L[#L + 1] = 'last ' .. KEEP .. ' seconds (time, DoT=damage left, P casting, L landed, E ending, fps):'
+  L[#L + 1] = ''; L[#L + 1] = 'last ' .. KEEP .. ' seconds (time, DoT=damage left, P casting, L landed, E ending, fps; a row that repeats says how long):'
   for _, row in ipairs(r.rows) do L[#L + 1] = '  ' .. row end
   return table.concat(L, '\n')
 end

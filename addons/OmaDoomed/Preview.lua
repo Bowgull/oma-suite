@@ -8,15 +8,15 @@ local BAR_ATLAS = 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health'
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
 local GREEN = { .21, .59, .16 }
 local GOLD = { 206 / 255, 160 / 255, 44 / 255 }
-local COLOR = { c = { 78 / 255, 40 / 255, 136 / 255 }, a = { 128 / 255, 30 / 255, 74 / 255 }, i = { 160 / 255, 66 / 255, 22 / 255 } }
-local RING = { c = { 176 / 255, 120 / 255, 1 }, a = { 240 / 255, 84 / 255, 150 / 255 }, i = { 1, 138 / 255, 61 / 255 } }
+local SP, Anim = ns.spells.byKey, ns.core.Anim
+local COLOR = { c = SP.corruption.deep, a = SP.agony.deep, i = SP.immolate.deep }     -- pieces
+local RING = { c = SP.corruption.color, a = SP.agony.color, i = SP.immolate.color }    -- rings and tick light
 local NAME = { c = 'Corruption', a = 'Bane of Agony', i = 'Immolate' }
 local MAXHP, START = 198, 124      -- your DoTs finish this one, so the skull shows
 local H = 150                      -- the preview's height in the list
 
 local function mix(a, b, k) return { a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k } end
-local function ss(v) v = math.max(0, math.min(1, v)); return v * v * (3 - 2 * v) end
-local function sst(v) v = math.max(0, math.min(1, v)); return v * v * v * (v * (v * 6 - 15) + 10) end
+local ss, sst = Anim.smoothstep, Anim.smootherstep
 local function barTex(t)
   local a = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(BAR_ATLAS)
   if a and a.file then t:SetTexture(a.file); local l, r = a.leftTexCoord, a.rightTexCoord; t:SetTexCoord(l + (r - l) * .45, l + (r - l) * .55, a.topTexCoord, a.bottomTexCoord)
@@ -139,7 +139,7 @@ local function build(host)
     squares[i] = q
   end
   P.plan = plan(); t0 = GetTime()
-  P:SetScript('OnUpdate', function() local ok, err = pcall(ns.previewDraw); if not ok then P:SetScript('OnUpdate', nil); ns.err('preview: ' .. tostring(err)); print('|cffb48cffOmaDoomed:|r preview stopped: ' .. tostring(err)) end end)
+  P:SetScript('OnUpdate', function() local ok, err = pcall(ns.previewDraw); if not ok then P:SetScript('OnUpdate', nil); ns.fail('preview: ' .. tostring(err), 'the preview') end end)
   built = true
 end
 
@@ -156,7 +156,7 @@ function ns.previewDraw()
   if t > 26 then t0 = GetTime(); t = 0; P.plan = plan() end
   local low, steady = db.low or 3, db.lowlook == 'steady'
   local castLook, tickLook = db.cast or 'charging', db.tick or 'ember'
-  local function breath(x) if steady then return 1 end; local ph = (low - x) / 1.5 % 1; return .3 + .7 * (math.cos(ph * 2 * math.pi) * .5 + .5) end
+  local function breath(x) if steady then return 1 end; return Anim.breath(x, low, 1.5, .3) end
   -- the numbers
   local hp, pending = START, 0
   local live = {}

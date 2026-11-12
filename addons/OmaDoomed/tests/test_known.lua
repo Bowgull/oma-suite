@@ -1,5 +1,6 @@
--- Today's known-wrong behaviours, each written as a test of the RIGHT behaviour. They fail on today's code on
--- purpose; tests/run.lua lists each one with the plan phase that fixes it (KNOWN) and reports it as KNOWN FAIL.
+-- Known-wrong behaviours, each written as a test of the RIGHT behaviour. Those on tests/run.lua's KNOWN list fail
+-- on purpose until the plan phase named there; the rest (fixed ones and the English twins) pass. The non-warlock test
+-- moved to tests/test_foundations.lua when phase 2 fixed it.
 -- Tests here that are not on that list (the English twins) pass today and show the scenario itself is sound.
 local A = 'Creature-0-1-0-1-100-AAAA'
 local COLOR = { Corruption = { 78 / 255, 40 / 255, 136 / 255 } }
@@ -45,14 +46,7 @@ local function rings(W)
 end
 
 return {
-  -- phase 2: the add-on only runs for warlocks
-  ['rings stay off on a non-warlock'] = function(W, T)
-    local ns, F, UI = require('load').addon({ rings = true, class = 'MAGE' }); W.advance(3)
-    T.eq(#UI.aura.containers, 0, 'no aura containers built')
-    T.eq(W.cvars.nameplateEnemyNpcAuraDisplay, '7', "Blizzard's nameplate debuffs left alone")
-  end,
-
-  -- phase 3: spells by ID, not English names
+  -- spells by ID, not English names (phase 3 for the tracking; the kill bar colour passes since phase 2's Spells.lua)
   ['English client: Immolate is tracked'] = function(W, T) immolateTracked(W, T, nil, 'enUS') end,
   ['German client: Immolate (Feuerbrand) is tracked'] = function(W, T) immolateTracked(W, T, german(), 'deDE') end,
   ['English client: Corruption keeps its colour on the kill bar'] = function(W, T) corruptionColoured(W, T, nil, 'enUS') end,

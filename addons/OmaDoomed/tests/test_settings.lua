@@ -20,7 +20,7 @@ return {
     local c = byKey(UI)
     for _, k in ipairs(KEYS) do
       T.eq(c[k].kind, KINDS[k], k .. ' control')
-      local want = ns.DEFAULTS[k]; if want == nil then want = ns.RING_DEFAULTS[k] end
+      local want = ns.settings:Default(k)
       T.eq(c[k].setting.default, want, k .. ' default')
       T.eq(c[k].setting:GetValue(), want, k .. ' value on a fresh install')
       if UNDER_BAR[k] then T.ok(c[k].parentInit == c.doomed, k .. ' greys out with the kill bar') end
@@ -53,7 +53,9 @@ return {
     local frame = { SliderWithSteppers = { Slider = UI.obj('Slider') } }   -- a plain table: unknown fields read nil, as on a real frame
     frame.SliderWithSteppers.Slider._w = 200
     byKey(UI).size:InitFrame(frame)
-    T.ok(frame.omaNotch and frame.omaNotch:IsShown(), 'notch made and shown')
+    local n = ns.settings:NotchOf(frame)
+    T.ok(n and n:IsShown(), 'notch made and shown')
+    T.eq(rawget(frame, 'omaNotch'), nil, "nothing written onto Blizzard's frame")
     SlashCmdList.OMADOOMED('options')
     T.eq(UI.S.opened[1], ns.settingsCategory:GetID())
   end,

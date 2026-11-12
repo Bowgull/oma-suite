@@ -1,36 +1,64 @@
--- OmaDoomed (named 2026-11-11). Settings live in OmaDoomedDB; /omadoomed.
+-- OmaDoomed's start-up: saved data (OmaDoomedDB, upgraded by numbered steps, defaults from the settings table in
+-- Settings.lua), the log, the bus, /omadoomed. Warlocks only: on any other class nothing is built, no events are
+-- registered and no game setting is touched.
 local ADDON, ns = ...
+local Core = LibStub('OmaCore-1.0')
+ns.omaCoreBuild = nil
+ns.core = Core
 ns.say = function(m) print('|cffb48cffOmaDoomed:|r ' .. tostring(m)) end
-ns.parts = {}
+ns.parts = {}      -- kill bar parts with on/off and a slash (doomed, platebar)
+ns.starts = {}     -- start functions, run in file order at a warlock's login
+
 -- errors are kept (last 30, saved on /reload) instead of popping up: /omadoomed errors shows them
-function ns.err(m)
-  OmaDoomedDB = OmaDoomedDB or {}; OmaDoomedDB.errs = OmaDoomedDB.errs or {}
-  local e = OmaDoomedDB.errs; if e[1] and e[1]:sub(10) == m then return end
-  table.insert(e, 1, date('%H:%M:%S ') .. m); while #e > 30 do table.remove(e) end
+ns.log = Core.NewLog({ name = ADDON, store = function() return OmaDoomedDB end, say = ns.say, report = '/omadoomed report' })
+function ns.err(m) ns.log:Note(m) end              -- diagnostics
+function ns.error(m) ns.log:Error(m) end           -- a caught error; nothing stopped
+function ns.fail(m, part) ns.log:Fail(m, part) end -- a caught error that switched `part` off for the session
+ns.bus = Core.NewBus(function(event, err) ns.log:Error(tostring(event) .. ': ' .. tostring(err)) end)
+
+function ns.isWarlock()
+  local ok, class = pcall(function() return select(2, UnitClass('player')) end)
+  return ok and class == 'WARLOCK'
 end
-local DEFAULTS = { doomed = true }   -- the rest: Settings.lua (ns.DEFAULTS)
+
+local function slash()
+  local s = Core.NewSlash('OMADOOMED', '/omadoomed', function(m)
+    local p = ns.parts.doomed
+    if p and p.slash then return p.slash(m) end
+  end, function(err) ns.error('slash: ' .. tostring(err)) end)
+  s:Word('rings', function(rest) return ns.ringsSlash and ns.ringsSlash(rest) end)
+  s:Exact('report', function() return ns.saveReport and ns.saveReport('command') end)
+  s:Exact('report show', function() return ns.showReport and ns.showReport() end)
+  s:Exact('cpu', function() if ns.perf then for _, l in ipairs(ns.perfLines(ns.perf())) do print(l) end end end)
+  s:Exact('errors', function() local e = ns.log:List(); for i = math.min(8, #e), 1, -1 do print(e[i]) end end)
+  s:Exact('options', function() return ns.openSettings and ns.openSettings() end)
+  s:Exact('settings', function() return ns.openSettings and ns.openSettings() end)
+end
+
 local f = CreateFrame('Frame')
-f:RegisterEvent('PLAYER_LOGIN')
-f:SetScript('OnEvent', function()
-  OmaDoomedDB = OmaDoomedDB or {}
-  for k, v in pairs(DEFAULTS) do if OmaDoomedDB[k] == nil then OmaDoomedDB[k] = v end end
-  OmaDoomedDB.trace, OmaDoomedDB.traceErr, OmaDoomedDB.tffind, OmaDoomedDB.plateGeo = nil, nil, nil, nil   -- left by test builds' debug commands
-  if type(OmaDoomedDB.rings) == 'table' then OmaDoomedDB.rings.log = nil end
-  ns.db = OmaDoomedDB
-  for _, p in pairs(ns.parts) do pcall(p.start) end
+f:RegisterEvent('ADDON_LOADED')
+f:SetScript('OnEvent', function(self, event, name)
+  if event == 'ADDON_LOADED' then
+    if name ~= ADDON then return end
+    self:UnregisterEvent('ADDON_LOADED')
+    OmaDoomedDB = OmaDoomedDB or {}
+    if ns.settings then
+      ns.settings:Migrate(OmaDoomedDB, ns.MIGRATIONS or {}, ns.error)
+      ns.settings:Fill(OmaDoomedDB)
+    end
+    ns.db = OmaDoomedDB
+    if not ns.isWarlock() then return end
+    ns.warlock = true
+    slash()
+    if ns.buildSettings then
+      local ok, err = pcall(ns.buildSettings)
+      if not ok then ns.say('settings page failed: ' .. tostring(err)) end
+    end
+    self:RegisterEvent('PLAYER_LOGIN')
+  elseif event == 'PLAYER_LOGIN' then
+    self:UnregisterEvent('PLAYER_LOGIN')
+    if ns.spells then pcall(ns.spells.learnClientNames) end
+    for _, p in pairs(ns.parts) do local ok, err = pcall(p.start); if not ok then ns.error('start: ' .. tostring(err)) end end
+    for _, s in ipairs(ns.starts) do local ok, err = pcall(s); if not ok then ns.error('start: ' .. tostring(err)) end end
+  end
 end)
-SLASH_OMADOOMED1 = '/omadoomed'
-SlashCmdList.OMADOOMED = function(m)
-  m = (m or ''):lower()
-  local rest = m:match('^rings%s*(.*)$'); if rest then return ns.ringsSlash and ns.ringsSlash(rest) end
-  if m == 'report' then return ns.saveReport and ns.saveReport('command') end
-  if m == 'cpu' then if ns.perf then for _, l in ipairs(ns.perfLines(ns.perf())) do print(l) end end; return end
-  if m == 'report show' then return ns.showReport and ns.showReport() end
-  if m == 'errors' then for i = math.min(8, #(OmaDoomedDB.errs or {})), 1, -1 do print(OmaDoomedDB.errs[i]) end; return end
-  if m == 'options' or m == 'settings' then return ns.openSettings and ns.openSettings() end
-  m = 'doomed ' .. m
-  local p = ns.parts[m:match('^(%S+)')]
-  if p and p.slash then p.slash(m:match('^%S+%s*(.*)$')) return end
-  local on = {}; for k in pairs(ns.parts) do on[#on + 1] = k .. (ns.db[k] and ' on' or ' off') end
-  ns.say(table.concat(on, ', ') .. '. /omadoomed (on/off, test, test off) · /omadoomed rings (on/off, test, others on|off) · /omadoomed cpu')
-end

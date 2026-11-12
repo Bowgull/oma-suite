@@ -8,6 +8,8 @@
 -- health bar so nothing runs past its left end.
 local ADDON, ns = ...
 local K = {}; ns.parts.platebar = K
+local Spells, Anim, Secret = ns.spells, ns.core.Anim, ns.core.Secret
+local OTHER = { .55, .45, .65 }
 
 local MAX = 5
 local TEX = 'Interface\\TargetingFrame\\UI-StatusBar'
@@ -101,7 +103,7 @@ local function chargeStep()
   for b, c in pairs(charging) do
     local col = c.col
     if c.landAt then
-      local v = math.min(1, (now - c.landAt) / .3); local k = .45 + .55 * v * v * (3 - 2 * v)
+      local v = math.min(1, (now - c.landAt) / .3); local k = .45 + .55 * Anim.smoothstep(v)
       b:SetStatusBarColor(col[1] * k, col[2] * k, col[3] * k, 1)
       if v >= 1 then charging[b] = nil end
     else
@@ -142,12 +144,10 @@ local function paint(unit, plate)
   local set = piecesFor(hb); if not set then return hb end
   local w = hb:GetWidth()
   local maxv = UnitHealthMax(unit)
-  local color = ns.doomedColor or {}
   -- precast ("I don't see the precast" on these bars; "whatever look I chose from settings"):
   -- while you cast a DoT at this mob its piece shows your 'While you cast' look, as on the target frame
   local cName, _, _, cStart, cEnd = UnitCastingInfo('player')
   local look = ns.db.cast or 'charging'
-  local tone = ns.doomedTone or {}
   local sum = 0
   for i = 1, MAX do
     local b, ch, d = set[i], set.charge[i], list[i]
@@ -156,11 +156,12 @@ local function paint(unit, plate)
       sum = sum + d.damage
       b:SetWidth(w); b:SetMinMaxValues(0, maxv)
       if SMOOTH then b:SetValue(sum, SMOOTH) else b:SetValue(sum) end
-      local c = color[d.name] or { .55, .45, .65 }
+      local sp = Spells.dot(d.name)
+      local c = sp and sp.deep or OTHER
       local casting = d.provisional and cName == d.name and cStart and cEnd and cEnd > cStart
       local ov, st = set.ov[i], charging[b]
       if casting then
-        local tn = tone[d.name] or c
+        local tn = sp and sp.color or c
         if not (st and not st.landAt and st.name == d.name) then
           st = { name = d.name, col = c, look = look, hb = hb, ov = ov, ch = ch }
           charging[b] = st
@@ -195,9 +196,8 @@ local function refresh()
   for i = 1, 40 do
     local u = 'nameplate' .. i
     if UnitExists(u) then
-      local okE, can = pcall(UnitCanAttack, 'player', u)
       local plate = C_NamePlate.GetNamePlateForUnit(u, false)
-      if plate and okE and can == true and not UnitIsDead(u) then
+      if plate and Secret.isTrue(Secret.call(UnitCanAttack, 'player', u)) and not UnitIsDead(u) then
         local hb = paint(u, plate); if hb then seen[hb] = true end
       end
     end
@@ -207,7 +207,6 @@ end
 
 function K.start()
   if select(2, UnitClass('player')) ~= 'WARLOCK' then return end
-  if ns.db.platebar == nil then ns.db.platebar = true end
   local acc, off = 0, false
   local f = CreateFrame('Frame')
   f:SetScript('OnUpdate', function(_, dt)
@@ -216,6 +215,6 @@ function K.start()
     local ok, err = true, nil
     if acc >= .1 then acc = 0; ok, err = pcall(refresh) end
     if ok then ok, err = pcall(chargeStep) end
-    if not ok then ns.err('platebar: ' .. tostring(err)); off = true; for hb in pairs(shown) do pcall(clear, hb) end end   -- off for this session only
+    if not ok then ns.fail('platebar: ' .. tostring(err), 'the kill bar over enemies'); off = true; for hb in pairs(shown) do pcall(clear, hb) end end   -- off for this session only
   end)
 end

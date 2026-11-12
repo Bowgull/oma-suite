@@ -6,9 +6,18 @@
 ## Category: Buffs & Debuffs
 ## IconTexture: Interface\AddOns\OmaDoomed\Art\icon
 ## X-License: MIT
-## SavedVariables: OmaDoomedDB, OmaPlatesDB
+## SavedVariables: OmaDoomedDB
 ## OptionalDeps: DoesItDie
+Libs\LibStub\LibStub.lua
+Libs\OmaCore\OmaCore.lua
+Libs\OmaCore\Bus.lua
+Libs\OmaCore\Anim.lua
+Libs\OmaCore\Secret.lua
+Libs\OmaCore\Log.lua
+Libs\OmaCore\Settings.lua
+Libs\OmaCore\Slash.lua
 Core.lua
+Spells.lua
 Track\Shim.lua
 Track\Locale.lua
 Track\Locale_deDE.lua
@@ -23,6 +32,7 @@ Track\Wrack.lua
 Track\Forever.lua
 Doomed.lua
 KillPlates.lua
+BlizzardControls.lua
 Rings.lua
 Preview.lua
 Settings.lua
