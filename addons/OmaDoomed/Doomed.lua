@@ -40,7 +40,11 @@ local function barTex(t)
   local a = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(FILL)
   if a and a.file then
     t:SetTexture(a.file); local l, r = a.leftTexCoord, a.rightTexCoord
-    t:SetTexCoord(l + (r - l) * .45, l + (r - l) * .55, a.topTexCoord, a.bottomTexCoord)
+    -- 2026-11-13 ('do you not see this gap?'): the atlas fades out over its own top and bottom rows, so a piece's last
+    -- row let the red through and read as a gap above the frame's line. Only the solid middle band is used: every row
+    -- of a piece is full strength, like the bar's own fill.
+    local tp, bt = a.topTexCoord, a.bottomTexCoord
+    t:SetTexCoord(l + (r - l) * .45, l + (r - l) * .55, tp + (bt - tp) * .2, bt - (bt - tp) * .2)
   else t:SetTexture('Interface\\TargetingFrame\\UI-StatusBar') end
   t:SetDesaturated(true)
 end

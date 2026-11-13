@@ -188,6 +188,10 @@ return {
     for k = 1, 5 do T.ok((rawget(s.parts[k], '_masks') or {})[1] == hbMask, 'particle ' .. k .. ' carries it') end
     local function hasMask(t) for _, m in ipairs(rawget(t, '_masks') or {}) do if m == hbMask then return true end end end
     T.ok(hasMask(P.lost), 'the empty bar carries it')
+    -- 'do you not see this gap?': a piece uses only the solid middle band of the bar art, top to bottom
+    local tc = rawget(s.base, '_tc')
+    T.ok(tc and tc[3] > 0 and tc[4] < 1, "the piece skips the art's faded top and bottom rows")
+    T.near(tc[3], .2, 1e-9); T.near(tc[4], .8, 1e-9)
     noErrors(T)
   end,
 

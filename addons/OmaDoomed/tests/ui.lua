@@ -134,6 +134,7 @@ function M.SetText(self, t) rawset(self, '_text', t) end
 function M.GetText(self) return rawget(self, '_text') end
 function M.SetTexture(self, t, wh, wv, filter) rawset(self, '_texture', t); rawset(self, '_filter', filter) end
 function M.SetAtlas(self, a) rawset(self, '_atlas', a) end
+function M.SetTexCoord(self, l, r, t, b) rawset(self, '_tc', { l, r, t, b }) end
 function M.AddMaskTexture(self, m) local ms = rawget(self, '_masks') or {}; rawset(self, '_masks', ms); ms[#ms + 1] = m end
 function M.GetNumMaskTextures(self) return #(rawget(self, '_masks') or EMPTY) end
 function M.GetMaskTexture(self, i) return (rawget(self, '_masks') or EMPTY)[i] end
