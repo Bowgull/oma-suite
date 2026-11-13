@@ -238,10 +238,13 @@ end
 -- Flat (sheet 52 F): a hard black disc, the draining colour band, the icon; a white number with a thin outline.
 -- A ring's parts are fixed when it is built, so a change shows after a /reload.
 function R.flat() local d = R.db or (ns.db and ns.db.rings); return d ~= nil and d.look == 'flat' end
-R.NUM_K_LONG = 0.40
--- the number's share of the ring: over the mobs, and in the target-frame row (sheet 51 B)
-function R.numK(frame) if R.flat() then return 0.46 end; return frame and R.FRAME_NUM_K or 0.58 end
-R.NUM_K = 0.58
+-- Sheet 54 (approved 2026-11-13): the number must fit inside the icon area (at most ~80% of it) and stay readable.
+-- Measured on Joshua's screen a ring is 47 px over a mob and 33 px under the frame: 58% filled 95% of the icon area.
+-- DoT number: 46% over the mobs in both looks, 44% (Modern) / 46% (Classic) in the frame row. A minutes-long timer
+-- ("2m", curses) is 36% everywhere: the old scaled-down share left it 7 px tall under the frame.
+R.NUM_K_LONG = 0.36
+function R.numK(frame) if R.flat() then return 0.46 end; return frame and R.FRAME_NUM_K or 0.46 end
+R.NUM_K = 0.46
 local function numberOn(cd, b, size, k)
   -- the number lives in a child of the cooldown, so it always draws above the dark swipe; it never moves
   local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
@@ -263,15 +266,18 @@ local function mainOwn(b, k)
     local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(b)
   end
   local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_inner')
+  -- Classic: the icon stays full strength all the way down; the ring alone drains (in game the 50% dark sweep over
+  -- the icon made Classic duller than its sheet, Joshua 2026-11-13: "not as rich as youre showing it here")
+  if R.flat() then pcall(cd.SetDrawSwipe, cd, false) end
   local num = numberOn(cd, b, S, k)
   b:SetIcon(icon)
   b:SetDurationCooldown(cd)
   b:SetDurationText(num, textOpts(NUM_FMT, numCurve))
 end
-local function mainLong(b) mainOwn(b, R.NUM_K_LONG * R.numK() / 0.58) end   -- curses: minutes-long, so a smaller number
+local function mainLong(b) mainOwn(b, R.NUM_K_LONG) end   -- curses: minutes-long, so a smaller number
 -- the target-frame row's own numbers (sheet 51 B); a curse keeps its smaller share
 local function mainFrame(b) mainOwn(b, R.numK(true)) end
-local function mainFrameLong(b) mainOwn(b, R.numK(true) * R.NUM_K_LONG / 0.58) end
+local function mainFrameLong(b) mainOwn(b, R.NUM_K_LONG) end
 
 local function mainOthers(b)
   b:SetSize(OS, OS); pcall(b.EnableMouse, b, false); b:SetAlpha(R.OTHERS_ALPHA)

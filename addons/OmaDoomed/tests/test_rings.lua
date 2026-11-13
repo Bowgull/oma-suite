@@ -59,13 +59,14 @@ local function ringLook(look)
       for _, c in ipairs(UI.ringContainers()) do if c ~= frame then plateMain = UI.mainOf(c); break end end
       local fnum, pnum = numSize(UI, UI.group(fm, 'corruption').buttons[1]), numSize(UI, UI.group(plateMain, 'corruption').buttons[1])
       if look == 'rich' then
-        T.eq(fnum, math.floor(40 * .44 + .5), 'rich: frame row number 44% (sheet 51 B)'); T.eq(pnum, math.floor(40 * .58 + .5), 'rich: over the mobs 58%')
+        T.eq(fnum, math.floor(40 * .44 + .5), 'rich: frame row number 44% (sheet 51 B)'); T.eq(pnum, math.floor(40 * .46 + .5), 'rich: over the mobs 46% (sheet 54: 58% filled the icon)')
         T.ok(polish(UI) > 0, 'rich: the lit ring, bezel and number spot are there')
       else
         T.eq(fnum, math.floor(40 * .46 + .5), 'flat: 46% on the frame row'); T.eq(pnum, math.floor(40 * .46 + .5), 'flat: 46% over the mobs')
         T.eq(polish(UI), 0, 'flat: no shadow, gloss, bezel or number spot')
       end
-      T.ok(numSize(UI, UI.group(fm, 'curse').buttons[1]) < fnum, look .. ': the curse number is smaller still')
+      T.eq(numSize(UI, UI.group(fm, 'curse').buttons[1]), math.floor(40 * .36 + .5), look .. ': the curse number is 36% in the frame row too (sheet 54)')
+      T.eq(numSize(UI, UI.group(plateMain, 'curse').buttons[1]), math.floor(40 * .36 + .5), look .. ': and over the mobs')
       noErrors(T)
     end
   end
@@ -197,7 +198,7 @@ return {
     local curse = numSize(UI.group(main, 'curse').buttons[1])
     T.ok(dot and curse, 'both numbers found')
     T.ok(curse < dot, ('curse %s smaller than DoT %s'):format(tostring(curse), tostring(dot)))
-    T.near(curse / dot, .40 / .58, .08, 'about 70% of the DoT number')
+    T.eq(dot, math.floor(40 * .46 + .5), 'DoT number 46% of the ring (sheet 54)'); T.eq(curse, math.floor(40 * .36 + .5), 'curse number 36% (sheet 54)')
     T.eq(numSize(UI.group(main, 'channel').buttons[1]), dot, 'channels keep the big number')
     noErrors(T)
   end,

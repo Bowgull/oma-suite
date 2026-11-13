@@ -105,6 +105,7 @@ local function newRing()
   inner:SetAllPoints(f)
   pcall(inner.SetSwipeTexture, inner, ART .. 'swipe_inner', 1, 1, 1, 1); pcall(inner.SetDrawEdge, inner, false)
   pcall(inner.SetDrawBling, inner, false); pcall(inner.SetReverse, inner, true); pcall(inner.SetHideCountdownNumbers, inner, true)
+  if flat then pcall(inner.SetDrawSwipe, inner, false) end   -- Classic: no dark sweep over the icon
   local nf = CreateFrame('Frame', nil, inner); nf:SetAllPoints(f)
   local num = nf:CreateFontString(nil, 'OVERLAY')
   num:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', math.floor(SIZE * R.numK() + 0.5), flat and 'OUTLINE' or 'THICKOUTLINE')
