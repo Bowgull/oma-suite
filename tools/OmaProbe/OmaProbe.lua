@@ -206,6 +206,66 @@ local keyActs = {
     log('lockdown', tostring(C_ChatInfo.InChatMessagingLockdown()), 'combat', tostring(InCombatLockdown()), 'zone', GetZoneText())
   end,
 }
+-- Round 4: the pointer, driven by a pretend Xbox pad (scripts/wow/pad.py).
+--   Ctrl+Shift+F11: switch the game's pointer on, log where the mouse is
+--   Ctrl+Shift+F12: try to open the right-click menu for yourself (stand-in for "Player menu" on a target)
+--   pad D-pad up:    try to move the real mouse onto the test button (the D-pad rule)
+--   pad D-pad left:  try a simulated left click (the test button logs it if it lands)
+--   right stick:     count stick events, and try moving the mouse from a stick event once
+local target = CreateFrame('Button', 'OmaProbeTarget', UIParent, 'UIPanelButtonTemplate')
+target:SetSize(160, 40); target:SetPoint('CENTER', 300, 120); target:SetText('Pointer target')
+target:RegisterForClicks('AnyUp'); target:SetScript('OnClick', function(_, b) log('TARGET BUTTON CLICKED with', tostring(b)) end)
+target:SetScript('OnMouseDown', function(_, b) log('TARGET mouse down', tostring(b)) end)
+target:SetScript('OnEnter', function() log('TARGET BUTTON hovered') end)
+local function mouse() local x, y = GetCursorPosition(); return math.floor(x) .. ',' .. math.floor(y) .. ' px' end
+local function allowed() local t = {}; if C_LimitedInput and Enum.LimitedInputType then for k, v in pairs(Enum.LimitedInputType) do t[#t + 1] = k .. '=' .. tostring(C_LimitedInput.LimitedInputAllowed(v)) end end; return table.concat(t, ' ') end
+keyActs.F11 = function()
+  log('pad active', tostring(C_GamePad.GetActiveDeviceID()), 'CanGamePadControlCursor', tostring(CanGamePadControlCursor and CanGamePadControlCursor()))
+  try('SetGamePadCursorControl(true)', SetGamePadCursorControl, true)
+  log('cursor control on:', tostring(IsGamePadCursorControlEnabled()), 'mouse at', mouse())
+  C_Timer.After(2.5, function() log('after right-stick tilt: cursor control on:', tostring(IsGamePadCursorControlEnabled()), 'mouse at', mouse()) end)
+end
+keyActs.F8 = function() log('MOUSE at', mouse(), 'cursor control on', tostring(IsGamePadCursorControlEnabled())) end
+keyActs.F12 = function()
+  local opened = false
+  if UnitPopup_OpenMenu then opened = try('UnitPopup_OpenMenu SELF', UnitPopup_OpenMenu, 'SELF', { unit = 'player' }) end
+  C_Timer.After(0.3, function()
+    local m = Menu and Menu.GetManager and Menu.GetManager()
+    local open = m and m.GetOpenMenu and m:GetOpenMenu()
+    log('a menu is open:', tostring(open ~= nil))
+    C_Timer.After(1.5, function() if CloseMenus then pcall(CloseMenus) end; if m and m.CloseMenus then pcall(m.CloseMenus, m) end end)
+  end)
+end
+local padf = CreateFrame('Frame', nil, UIParent)
+padf:SetAllPoints(); padf:EnableMouse(false)
+if padf.SetPropagateGamePadInput then padf:SetPropagateGamePadInput(true) end
+if padf.EnableGamePadButton then padf:EnableGamePadButton(true) end
+if padf.EnableGamePadStick then padf:EnableGamePadStick(true) end
+local stickN, stickT, stickTried = 0, 0, false
+padf:SetScript('OnGamePadButtonDown', function(_, b)
+  log('pad button', b, 'allowed:', allowed())
+  if b == 'PADDUP' then
+    local x, y = target:GetCenter(); local s = target:GetEffectiveScale()
+    try('SetCursorPosition from D-pad (pixels)', SetCursorPosition, x * s, y * s)
+    C_Timer.After(0.2, function() log('mouse now at', mouse(), 'target centre', math.floor(x * s) .. ',' .. math.floor(y * s) .. ' px', 'over target', tostring(target:IsMouseOver())) end)
+  elseif b == 'PADDLEFT' then
+    try('SimulateMouseClick from D-pad', SimulateMouseClick, 'LeftButton')
+  elseif b == 'PADDRIGHT' then
+    try('SimulateMouseDown from D-pad', SimulateMouseDown, 'LeftButton')
+  elseif b == 'PADDDOWN' then
+    try('SimulateMouseUp from D-pad', SimulateMouseUp, 'LeftButton')
+  end
+end)
+padf:SetScript('OnGamePadStick', function(_, stick, x, y, len)
+  stickN = stickN + 1
+  local now = GetTime(); if now - stickT > 1 then if stickN > 1 then log('stick events in the last second:', stickN, 'last stick', tostring(stick)) end; stickN, stickT = 0, now end
+  if not stickTried and len and len > 0.5 then
+    stickTried = true
+    log('stick event, allowed:', allowed())
+    try('SetCursorPosition from stick', SetCursorPosition, 200, 200); C_Timer.After(0.1, function() log('mouse after stick move', mouse()) end)
+  end
+end)
+
 local binder = CreateFrame('Frame')
 binder:RegisterEvent('PLAYER_ENTERING_WORLD')
 binder:SetScript('OnEvent', function()
