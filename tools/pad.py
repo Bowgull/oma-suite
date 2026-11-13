@@ -7,6 +7,7 @@ Usage:  python -I pad.py step step ...
   wait:2.5            wait seconds
   btn:DPAD_UP         tap a pad button (A, B, X, Y, LB, RB, BACK, START, LS, RS, DPAD_UP/DOWN/LEFT/RIGHT)
   rt / lt             tap a trigger
+  chord:LB:RS         hold the first button and tap the second
   rstick:1:0:1.5      hold the right stick at x, y (-1..1) for seconds, then centre it
   lstick:0:1:1.0      same for the left stick
   key:F11             Ctrl+Shift+F11 on the keyboard (WoW must be in front)
@@ -83,6 +84,12 @@ def main(steps):
             time.sleep(float(p[1]))
         elif p[0] == 'btn':
             pad.press_button(button=BUTTONS[p[1]]); pad.update(); time.sleep(0.12)
+            pad.release_button(button=BUTTONS[p[1]]); pad.update(); time.sleep(0.2)
+        elif p[0] == 'chord':
+            # hold the first button, tap the second (e.g. chord:LB:RS)
+            pad.press_button(button=BUTTONS[p[1]]); pad.update(); time.sleep(0.15)
+            pad.press_button(button=BUTTONS[p[2]]); pad.update(); time.sleep(0.12)
+            pad.release_button(button=BUTTONS[p[2]]); pad.update(); time.sleep(0.1)
             pad.release_button(button=BUTTONS[p[1]]); pad.update(); time.sleep(0.2)
         elif p[0] in ('rt', 'lt'):
             (pad.right_trigger_float if p[0] == 'rt' else pad.left_trigger_float)(value_float=1.0); pad.update(); time.sleep(0.12)
