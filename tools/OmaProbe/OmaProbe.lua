@@ -212,9 +212,11 @@ local keyActs = {
 --   pad D-pad up:    try to move the real mouse onto the test button (the D-pad rule)
 --   pad D-pad left:  try a simulated left click (the test button logs it if it lands)
 --   right stick:     count stick events, and try moving the mouse from a stick event once
+local padf
 local target = CreateFrame('Button', 'OmaProbeTarget', UIParent, 'UIPanelButtonTemplate')
 target:SetSize(160, 40); target:SetPoint('CENTER', 300, 120); target:SetText('Pointer target')
 target:RegisterForClicks('AnyUp'); target:SetScript('OnClick', function(_, b) log('TARGET BUTTON CLICKED with', tostring(b)) end)
+target:SetScript('OnLeave', function() log('TARGET BUTTON left') end)
 target:SetScript('OnMouseDown', function(_, b) log('TARGET mouse down', tostring(b)) end)
 target:SetScript('OnEnter', function() log('TARGET BUTTON hovered') end)
 local function mouse() local x, y = GetCursorPosition(); return math.floor(x) .. ',' .. math.floor(y) .. ' px' end
@@ -225,6 +227,7 @@ keyActs.F11 = function()
   log('cursor control on:', tostring(IsGamePadCursorControlEnabled()), 'mouse at', mouse())
   C_Timer.After(2.5, function() log('after right-stick tilt: cursor control on:', tostring(IsGamePadCursorControlEnabled()), 'mouse at', mouse()) end)
 end
+keyActs.F5 = function() padf:EnableGamePadButton(false); log('pad listener off: buttons go to bindings now', 'propagate fn', tostring(padf.SetPropagateGamePadInput ~= nil)) end
 keyActs.F8 = function() log('MOUSE at', mouse(), 'cursor control on', tostring(IsGamePadCursorControlEnabled())) end
 keyActs.F12 = function()
   local opened = false
@@ -236,7 +239,7 @@ keyActs.F12 = function()
     C_Timer.After(1.5, function() if CloseMenus then pcall(CloseMenus) end; if m and m.CloseMenus then pcall(m.CloseMenus, m) end end)
   end)
 end
-local padf = CreateFrame('Frame', nil, UIParent)
+padf = CreateFrame('Frame', nil, UIParent)
 padf:SetAllPoints(); padf:EnableMouse(false)
 if padf.SetPropagateGamePadInput then padf:SetPropagateGamePadInput(true) end
 if padf.EnableGamePadButton then padf:EnableGamePadButton(true) end
@@ -278,6 +281,22 @@ binder:SetScript('OnEvent', function()
     SetOverrideBindingClick(binder, true, 'CTRL-SHIFT-' .. key, b:GetName(), 'LeftButton')
   end
   log('key bindings set: CTRL-SHIFT-F1..F4, F7, F9, F10')
+  -- Round 5: ConsolePort's way of clicking. A hidden secure button of type "click" points at the target; the pad
+  -- button is bound to it, so the press reaches the target as a real hardware click, with no hover needed.
+  --   A  -> left click on our test button       X -> right click on our test button
+  --   Y  -> left click on a Blizzard button (the character micro button: opens the character window)
+  local function secureClick(name, key, clickTarget, mouseButton)
+    local s = CreateFrame('Button', name, UIParent, 'SecureActionButtonTemplate')
+    s:RegisterForClicks('AnyUp', 'AnyDown')
+    s:SetAttribute('type', 'click'); s:SetAttribute('clickbutton', clickTarget)
+    s:HookScript('OnClick', function(_, b, down) if not down then log('secure click fired:', name, 'as', tostring(b)) end end)
+    SetOverrideBindingClick(binder, true, key, name, mouseButton)
+    log('bound', key, '->', name, mouseButton, 'target', tostring(clickTarget and clickTarget:GetName()))
+  end
+  secureClick('OmaProbeClickA', 'PAD1', OmaProbeTarget, 'LeftButton')
+  secureClick('OmaProbeClickX', 'PAD3', OmaProbeTarget, 'RightButton')
+  secureClick('OmaProbeClickY', 'PAD4', CharacterMicroButton, 'LeftButton')
+  hooksecurefunc(CharacterFrame, 'Show', function() log('Blizzard character window opened') end)
 end)
 
 SLASH_OMAPROBE1 = '/omaprobe'

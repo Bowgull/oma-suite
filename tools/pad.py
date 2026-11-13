@@ -11,6 +11,7 @@ Usage:  python -I pad.py step step ...
   lstick:0:1:1.0      same for the left stick
   key:F11             Ctrl+Shift+F11 on the keyboard (WoW must be in front)
   front               bring the WoW window to the front
+  wiggle              move the real mouse 1 pixel and back (wakes WoW's hover)
 The pad exists only while the script runs; it disappears when the script ends.
 """
 import ctypes, sys, time
@@ -92,6 +93,9 @@ def main(steps):
             f(x_value_float=0.0, y_value_float=0.0); pad.update(); time.sleep(0.2)
         elif p[0] == 'key':
             print('key', p[1], 'front', front(), 'sent', chord(p[1]), flush=True)
+        elif p[0] == 'wiggle':
+            # one real mouse move of 1 pixel and back (MOUSEEVENTF_MOVE, relative)
+            user32.mouse_event(0x0001, 1, 0, 0, 0); time.sleep(0.05); user32.mouse_event(0x0001, -1, 0, 0, 0); time.sleep(0.2)
         elif p[0] == 'front':
             print('front', front(), flush=True)
         print('done', s, flush=True)

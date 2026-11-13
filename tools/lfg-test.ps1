@@ -58,7 +58,7 @@ for ($i = 0; $i -lt $plan.Count; $i += 2) {
 }
 if (-not $SkipPointer) {
   L '3b. pointer tests with the pretend pad'
-  $py = & python -I "$root\scripts\wow\pad.py" wait:3 front key:F10 key:F11 wait:0.5 btn:DPAD_UP wait:0.5 key:F8 btn:DPAD_LEFT wait:1 btn:DPAD_RIGHT wait:0.4 btn:DPAD_DOWN wait:1 btn:DPAD_UP wait:0.5 rt wait:1 key:F8 2>&1
+  $py = & python -I "$root\scripts\wow\pad.py" wait:3 front key:F10 key:F11 wait:0.5 btn:DPAD_UP wait:0.6 btn:DPAD_LEFT wait:0.8 wiggle wait:0.6 btn:DPAD_LEFT wait:0.8 btn:A wait:0.8 btn:X wait:0.8 btn:Y wait:1.2 key:F8 2>&1
   $py | ForEach-Object { L "   pad: $_" }
 }
 
