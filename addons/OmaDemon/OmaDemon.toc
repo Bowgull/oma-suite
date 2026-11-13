@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: OmaDemon
-## IconTexture: Interface\AddOns\OmaDemonrt\icon
-## Notes: Your demon, readable from across the room: its portrait and the screen edge glow soul purple when it's low, and your soul shards sit under it as five gems. Settings: /omademon
+## IconTexture: Interface\AddOns\OmaDemon\art\icon
+## Notes: Your demon, readable from across the room: its portrait and the screen edge glow when it's low, your soul shards sit under it as gems, and your Soulstone, summons, Healthstones and armor are looked after. Settings: /omademon
 ## SavedVariables: OmaDemonDB
 
 Libs\LibStub\LibStub.lua
