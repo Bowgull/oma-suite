@@ -22,7 +22,7 @@ local BC                            -- BlizzardControls.lua: Blizzard's nameplat
 local S, log = R.S, R.log
 local function say(m) print('|cffb48cffOmaDoomed:|r ' .. m) end
 local secret = Secret.is
-local framePair, chanPair           -- the rows that follow your target: on its frame, and its channel over the mob
+local framePair, chanPair           -- the rows that follow your target: on its frame, and its channel and curses over the mob
 
 -- ---------- the pool ----------
 local holder                        -- parent of every spare row (made at start)
@@ -201,9 +201,13 @@ visible = function()
   end
 end
 ns.ringsVisible = visible
+-- in Haunt these groups stay over your target's nameplate (chanPair), off its frame row: your channel (sheet 41) and
+-- your curses (2026-11-13, Joshua: "in haunt mode this is always on")
+local OVERHEAD = { channel = true, curse = true }
+R.OVERHEAD = OVERHEAD
 local function channelGroup(p, on)
   if not p or InCombatLockdown() then return end
-  pcall(p.ring.SetAuraGroupEnabled, p.ring, 'channel', on); pcall(p.main.SetAuraGroupEnabled, p.main, 'channel', on)
+  for key in pairs(OVERHEAD) do pcall(p.ring.SetAuraGroupEnabled, p.ring, key, on); pcall(p.main.SetAuraGroupEnabled, p.main, key, on) end
 end
 local function makeFramePair()
   if framePair or InCombatLockdown() or not TargetFrame then return end
@@ -222,19 +226,19 @@ local function makeFramePair()
   for _, c in ipairs({ p.ring, p.main }) do
     c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, (S + R.FRAME_SPACE) * R.FRAME_ROW + 0.01)
   end
-  channelGroup(p, db.where ~= 'split')   -- in Haunt your channel stays over the mob (chanPair), not on the frame
+  channelGroup(p, db.where ~= 'split')   -- in Haunt your channel and curses stay over the mob (chanPair), not on the frame
   p.ring:SetUnit('target'); p.main:SetUnit('target')
   look(p); visible()
 end
 
 -- sheet 41 ("channels I'd also want to see above the enemy in Haunt mode"): in Haunt your target's rings sit on its
--- frame, which took your Drain Life off the mob too. chanPair is one more row, channel group only, unit 'target',
--- that rides your target's plate. Moving our own frames between plates is allowed in combat.
+-- frame, which took your Drain Life off the mob too. chanPair is one more row, the channel and curse groups only
+-- (OVERHEAD), unit 'target', that rides your target's plate. Moving our own frames between plates is allowed in combat.
 local function makeChanPair()
   if chanPair or InCombatLockdown() then return end
   local p = newPair(); if not p then return end
   chanPair = p; R.chanPair = p
-  for _, g in ipairs(R.GROUPS) do if g.key ~= 'channel' then pcall(p.ring.SetAuraGroupEnabled, p.ring, g.key, false); pcall(p.main.SetAuraGroupEnabled, p.main, g.key, false) end end
+  for _, g in ipairs(R.GROUPS) do if not OVERHEAD[g.key] then pcall(p.ring.SetAuraGroupEnabled, p.ring, g.key, false); pcall(p.main.SetAuraGroupEnabled, p.main, g.key, false) end end
   p.ring:SetUnit('target'); p.main:SetUnit('target')
   look(p)
 end

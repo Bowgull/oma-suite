@@ -320,7 +320,7 @@ local function ringOthers(b)
 end
 
 -- group order is layout order: the four DoTs (fixed order, one group each so each can carry its own colour), the
--- curses and the channels (each their own colour too, and Haunt moves the channel group on its own), your other
+-- curses and the channels (each their own colour too, and Haunt keeps the channel and curse groups over the mob), your other
 -- debuffs (neutral ring), then other players' DoTs to the right. Within a group: oldest first.
 R.GROUPS = {}
 function R.buildGroups()

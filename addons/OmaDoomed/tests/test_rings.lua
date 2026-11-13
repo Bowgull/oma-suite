@@ -120,6 +120,32 @@ return {
     T.ok(UI.under(chan, UI.plate.nameplate2), 'the channel row moved to the new plate')
     noErrors(T)
   end,
+  -- 2026-11-13, Joshua: "in haunt mode this is always on": your curse stays over the mob like your channel
+  ['Haunt: your curse and your channel stay over the mob; the frame row has your DoTs only'] = function(W, T)
+    local ns, F, UI = setup(W, { where = 'split' })
+    F.mob('nameplate1', A, 'Kobold', 300).auras = { 172, 702, 689 }   -- Corruption, Curse of Weakness, Drain Life
+    W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1')
+    F.target(A); W.combat = true; W.advance(.5)
+    local frame, chan = hauntRows(UI)
+    T.ok(frame and chan, 'both target rows exist')
+    T.ok(UI.isVisible(chan) and UI.under(chan, UI.plate.nameplate1), "the over-the-mob row rides the target's plate")
+    local over, onFrame = UI.showing(UI.mainOf(chan)), UI.showing(UI.mainOf(frame))
+    T.eq(#over.curse, 1, 'Curse of Weakness over the mob'); T.eq(#over.channel, 1, 'Drain Life over the mob')
+    T.eq(#(over.corruption or {}), 0, 'no DoT over the mob in Haunt')
+    T.eq(#onFrame.curse, 0, 'no curse on the frame row'); T.eq(#onFrame.channel, 0, 'no channel on the frame row')
+    T.eq(#onFrame.corruption, 1, 'Corruption on the frame row')
+    noErrors(T)
+  end,
+  ['not Haunt: the curse is on the frame row with the rest'] = function(W, T)
+    local ns, F, UI = setup(W, { where = 'frame' })
+    F.mob('nameplate1', A, 'Kobold', 300).auras = { 172, 702 }
+    W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1')
+    F.target(A); W.combat = true; W.advance(.5)
+    local frame, chan = hauntRows(UI)
+    T.ok(frame, 'the frame row exists'); T.ok(not (chan and UI.isVisible(chan)), 'no over-the-mob row outside Haunt')
+    T.eq(#UI.showing(UI.mainOf(frame)).curse, 1, 'Curse of Weakness on the frame row')
+    noErrors(T)
+  end,
   ["Blizzard's nameplate debuffs: off while the rings are on, put back by /omadoomed rings off"] = function(W, T)
     local ns, F, UI = setup(W)
     T.eq(C_CVar.GetCVarBitfield('nameplateEnemyNpcAuraDisplay', 2), false, 'mobs: off')
