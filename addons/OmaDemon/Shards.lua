@@ -8,7 +8,7 @@ local function sheet() local d = ns.shardsDB(); return ARTDIR .. (SHEETS[d.gemLo
 local allTex = {}
 local CHIME = 'Interface\\AddOns\\OmaDemon\\shards\\snd\\five.ogg'
 local PX = 1                                                              -- the row frame is scaled so that 1 unit = 1 TV pixel (see place)
-local W, H, STEP = 40 * PX, 48 * PX, 48 * PX                              -- one cell drawn at 1x (gem 36x44 inside a 40x48 cell)
+local W, H, STEP = 40 * PX, 48 * PX, 34 * PX   -- 2026-11-13 sheet 46 B: tighter, so the row spans the pet frame                              -- one cell drawn at 1x (gem 36x44 inside a 40x48 cell)
 local CELL = {                                                            -- left, right, top, bottom in the sheet
   lit = { 0, 80, 0, 96 }, empty = { 80, 160, 0, 96 }, amber = { 160, 240, 0, 96 }, dark = { 240, 320, 0, 96 },
   glow = { 320, 416, 0, 112 }, flash = { 0, 96, 96, 192 }, spark = { 104, 120, 96, 112 } }
@@ -115,7 +115,12 @@ local function place()
   -- The art is drawn in pixels of a 1080p screen at WoW's default UI scale. The row now scales with the UI like
   -- Blizzard's own frames (it used to be pinned to physical pixels, so on a smaller UI scale the gems dwarfed the
   -- pet frame). Same size as before at 1080p and the default UI scale.
-  root:SetScale(768 / 1080 * ((db and db.size) or 100) / 100)
+  -- 2026-11-13 (sheet 46 B, Joshua: "b for soul shard"): one gem unit = one pet frame unit, so the gems grow and
+  -- shrink with the pet frame (Edit Mode size, the couch layout). At 100% they're ~1.8x the old size on the Shadow.
+  local pf = _G.PetFrame
+  local rel = 1
+  if pf and pf.GetEffectiveScale and UIParent:GetEffectiveScale() > 0 then rel = pf:GetEffectiveScale() / UIParent:GetEffectiveScale() end
+  root:SetScale(rel * ((db and db.size) or 100) / 100)
   -- 2026-11-10 (Joshua: follow the pet frame; no pet = slide up under you). Measured with /omademon shards probe: the row's
   -- old spot (232,237 TV px) is the pet portrait's bottom-left (235,237) less 3 px. So: pinned to PetPortrait while
   -- the pet is out (it moves when the pet frame moves); with no pet, up where the pet frame's top is (157 px), just
@@ -386,5 +391,7 @@ table.insert(ns.onSetting, function(key, store)
   if key == 'zeroHint' and last then refreshZero(last) end
   if key == 'gemLook' or key == 'size' or key == 'hideOOC' then ns.shardsPreview(4) end
 end)
+-- the pet frame's size changes (Edit Mode): follow it. Our own frame only; theirs untouched.
+if _G.PetFrame and hooksecurefunc then hooksecurefunc(_G.PetFrame, 'SetScale', function() place() end) end
 local lookEv = CreateFrame('Frame'); lookEv:RegisterEvent('PLAYER_LOGIN')
 lookEv:SetScript('OnEvent', function() setLook() end)
