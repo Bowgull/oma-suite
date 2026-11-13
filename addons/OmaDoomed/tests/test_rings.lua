@@ -34,7 +34,7 @@ return {
     local ring = UI.ringContainers()[1]
     T.ok(ring, 'a pair was built')
     local keys = {}; for _, g in ipairs(ring.groups) do keys[#keys + 1] = g.key end
-    T.eq(table.concat(keys, ','), 'corruption,agony,immolate,siphon,curse,channel,mine,others', 'groups in layout order')
+    T.eq(table.concat(keys, ','), 'cc,corruption,agony,immolate,siphon,curse,channel,mine,others', 'groups in layout order')
     T.eq(#UI.mainOf(ring).groups, #ring.groups, 'ring and main have the same groups, so buttons line up')
     noErrors(T)
   end,

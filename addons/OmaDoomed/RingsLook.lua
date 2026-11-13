@@ -317,6 +317,8 @@ local function ringOwn(color, curve, key)
       local a2 = g:CreateAnimation('Alpha'); a2:SetFromAlpha(.4); a2:SetToAlpha(0); a2:SetDuration(.45); a2:SetOrder(2); a2:SetSmoothing('IN')
       b.omPulse = g; pulseRings[b] = key
     end
+    -- crowd control: the plate's ring is the exact one; CrowdControl.lua learns from it when a hold ends early
+    if key == 'cc' and ns.ccPlateHook then pcall(ns.ccPlateHook, b) end
   end
 end
 
@@ -326,7 +328,7 @@ local function ringOthers(b)
   local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. 'backing_flat'); back:SetAllPoints(b)
 end
 
--- group order is layout order: the four DoTs (fixed order, one group each so each can carry its own colour), the
+-- group order is layout order: crowd control first (sheet 48), the four DoTs (fixed order, one group each so each can carry its own colour), the
 -- curses and the channels (each their own colour too, and Haunt keeps the channel and curse groups over the mob), your other
 -- debuffs (neutral ring), then other players' DoTs to the right. Within a group: oldest first.
 R.GROUPS = {}
