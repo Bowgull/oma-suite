@@ -115,12 +115,13 @@ local function place()
   -- The art is drawn in pixels of a 1080p screen at WoW's default UI scale. The row now scales with the UI like
   -- Blizzard's own frames (it used to be pinned to physical pixels, so on a smaller UI scale the gems dwarfed the
   -- pet frame). Same size as before at 1080p and the default UI scale.
-  -- 2026-11-13 (sheet 46 B, Joshua: "b for soul shard"): one gem unit = one pet frame unit, so the gems grow and
+  -- 2026-11-13 (sheet 46 B, Joshua: "b for soul shard"): gem size is tied to the pet frame's scale, so the gems grow and
   -- shrink with the pet frame (Edit Mode size, the couch layout). At 100% they're ~1.8x the old size on the Shadow.
   local pf = _G.PetFrame
   local rel = 1
   if pf and pf.GetEffectiveScale and UIParent:GetEffectiveScale() > 0 then rel = pf:GetEffectiveScale() / UIParent:GetEffectiveScale() end
-  root:SetScale(rel * ((db and db.size) or 100) / 100)
+  -- .55: tuned on the Shadow 2026-11-13 with Joshua (.65 was "still a bit big, only slightly"); ~40 px crystals there
+  root:SetScale(.55 * rel * ((db and db.size) or 100) / 100)
   -- 2026-11-10 (Joshua: follow the pet frame; no pet = slide up under you). Measured with /omademon shards probe: the row's
   -- old spot (232,237 TV px) is the pet portrait's bottom-left (235,237) less 3 px. So: pinned to PetPortrait while
   -- the pet is out (it moves when the pet frame moves); with no pet, up where the pet frame's top is (157 px), just
