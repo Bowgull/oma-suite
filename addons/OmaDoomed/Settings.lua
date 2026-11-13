@@ -22,10 +22,10 @@ ns.settings = Core.NewSettings({
       tip = 'A skull and bones on the portrait ring when your DoTs alone will finish the enemy.' },
     { key = 'cast', default = 'charging', control = 'dropdown', label = 'While you cast', parent = BAR,
       choices = { { 'charging', 'Charging' }, { 'smoulder', 'Smoulder' }, { 'stripes', 'Drifting stripes' }, { 'motes', 'Motes' }, { 'plain', 'Plain' } },
-      tip = "Charging: the piece fills with your cast bar, an ember at its front. Smoulder: its colour rises out of the dark. Drifting stripes: stripes sliding toward the green. Motes: small pixels drifting through it. Plain: a dim piece that turns solid when the spell lands." },
+      tip = "How a DoT's piece looks while you cast it:\n|cffffd100Charging:|r fills with your cast bar, an ember at its front.\n|cffffd100Smoulder:|r its colour rises out of the dark.\n|cffffd100Drifting stripes:|r stripes slide toward the green.\n|cffffd100Motes:|r small pixels drift through it.\n|cffffd100Plain:|r dim, then solid when the spell lands." },
     { key = 'tick', default = 'ember', control = 'dropdown', label = 'Tick light', parent = BAR,
       choices = { { 'ember', 'Ember' }, { 'cinders', 'Cinders' }, { 'essence', 'Essence' }, { 'plain', 'Plain' } },
-      tip = "Ember: the bitten part glows in its own colour and settles. Cinders: the same glow, and small embers lift off it. Essence: a soft curl of shadow haze rises from it. Plain: it just slides shut." },
+      tip = "What happens when a DoT ticks:\n|cffffd100Ember:|r the bitten part glows in its own colour and settles.\n|cffffd100Cinders:|r the same glow, and small embers lift off it.\n|cffffd100Essence:|r a soft curl of shadow haze rises from it.\n|cffffd100Plain:|r it just slides shut." },
     { key = 'low', default = 3, control = 'slider', label = 'Ending soon', parent = BAR, min = 2, max = 5, step = 1,
       format = function(v) return ('%d s'):format(v) end,
       tip = "In a DoT's last seconds its piece on your target's kill bar, and its ring, turn gold." },
@@ -43,10 +43,15 @@ ns.settings = Core.NewSettings({
       tip = "Your DoTs as rings over enemies. Off: Blizzard's own debuff icons come back on nameplates, and on the target frame unless Blizzard's squares is set to Hide." },
     { key = 'which', store = R, default = 'all', control = 'dropdown', label = 'Which enemies',
       choices = { { 'all', 'Every enemy' }, { 'target', 'Only your target' }, { 'combat', 'Only in combat' } },
-      tip = "Rings on every enemy, only your target, or only while you're fighting." },
-    { key = 'othersAlpha', store = R, default = 55, control = 'slider', label = "Other players' DoTs", min = 0, max = 100, step = 5,
-      format = function(v) return v == 0 and 'Hidden' or ('%d%%'):format(v) end,
-      tip = "How solid other warlocks' DoT rings are (theirs only, not every debuff). 0 hides them; another strength shows after a /reload." },
+      tip = "Which enemies get rings:\n|cffffd100Every enemy:|r every enemy you DoT.\n|cffffd100Only your target:|r just the one you target.\n|cffffd100Only in combat:|r every enemy, only while you're fighting." },
+    -- 2026-11-13 (Joshua: "a toggle to show other enemies Dots like this or just track it regularly with the blizz default"):
+    -- one toggle replaces 'Blizzard's squares'. As rings: theirs are faint rings, Blizzard's debuff squares on mobs go.
+    -- Blizzard default: OmaDoomed draws only yours; Blizzard's squares stay as Blizzard draws them.
+    { key = 'othersMode', store = R, default = 'rings', control = 'dropdown', label = "Other players' DoTs",
+      choices = { { 'rings', 'As rings' }, { 'blizzard', 'Blizzard default' } },
+      tip = "Other players' DoTs on the enemies you fight:\n|cffffd100As rings:|r faint rings beside yours, and Blizzard's debuff squares on mobs are hidden.\n|cffffd100Blizzard default:|r OmaDoomed shows only your DoTs; Blizzard's own squares stay just as Blizzard draws them." },
+    { key = 'othersAlpha', store = R, default = 55, control = 'slider', label = "Their rings' strength", min = 10, max = 100, step = 5, format = pct,
+      tip = "How solid other players' rings are, when they show as rings. A new strength shows after a /reload." },
     { key = 'others', store = R, default = true },    -- /omadoomed rings others on|off
     { key = 'cc', store = R, default = true, control = 'check', label = 'Crowd-control timers',
       tip = "Your Fear, Banish, Howl of Terror and your Sayaad's Seduction as a teal ring over the mob. When it isn't your target or is off screen, the ring stands beside your target frame instead, so you always see how long is left." },
@@ -54,21 +59,18 @@ ns.settings = Core.NewSettings({
     { header = 'Where the rings go' },
     { key = 'where', store = R, default = 'enemy', control = 'dropdown', label = 'Where the rings show',
       choices = { { 'enemy', 'Above enemies' }, { 'frame', 'Target frame' }, { 'split', 'Haunt' } },
-      tip = "Above enemies: rings over every enemy's head. Target frame: only on your target's frame. Haunt: over every enemy you're not targeting; the one you target shows its rings on its frame, with your curse, your channel and your crowd control still over its head." },
+      tip = "Where your rings show:\n|cffffd100Above enemies:|r over every enemy's head.\n|cffffd100Target frame:|r only on your target's frame.\n|cffffd100Haunt:|r over every enemy you're not targeting. Your target's rings sit on its frame; your curse, channel and crowd control stay over its head." },
 
     { header = 'Ring look' },
     { key = 'look', store = R, default = 'rich', control = 'dropdown', label = 'Ring look',
       choices = { { 'rich', 'Modern' }, { 'flat', 'Classic' } },   -- Joshua 2026-11-13: "The 2 ring settings are modern and classic"
-      tip = "Modern: a lit ring with a bezel and a bold number. Classic: a plain ring, the spell's icon clear, a thin number. Shows after a /reload: type /reload, or pick Reload UI in the game menu (Esc, or Menu on a controller)." },
+      tip = "How your rings look:\n|cffffd100Modern:|r a lit ring with a bezel and a bold number.\n|cffffd100Classic:|r a plain ring, the spell's icon clear, a thin number.\nShows after a /reload (type /reload, or Reload UI in the game menu: Esc, or Menu on a controller)." },
     { key = 'size', store = R, default = 40, control = 'slider', label = 'Ring size', min = 28, max = 60, step = 2, format = tostring,
       tip = "How big your rings are. 40 is Blizzard's own size." },
     { key = 'alpha', store = R, default = 100, control = 'slider', label = 'Ring opacity', min = 20, max = 100, step = 5, format = pct,
       tip = 'How solid your own rings are.' },
 
-    { header = "Blizzard's squares" },
-    { key = 'squares', store = R, default = 'notmine', control = 'dropdown', label = "Blizzard's squares",
-      choices = { { 'notmine', 'All but my DoTs' }, { 'all', 'All' }, { 'hide', 'Hide' } },
-      tip = "Blizzard's own buff and debuff squares on the target frame. All but my DoTs: on mobs the debuff squares go, stuns and the mob's own debuffs too (Blizzard can't hide only yours; the rings show yours), and buffs stay. On players everything stays." },
+    { key = 'squares', store = R, default = 'notmine' },   -- set by othersMode (As rings: notmine; Blizzard default: all)
 
     { header = 'Help' },
     { button = 'Show', name = 'Preview window', click = function() if ns.previewOpen then ns.previewOpen(true) end end,
@@ -114,6 +116,16 @@ ns.MIGRATIONS = {
       local n = #db.errs
       if n > 20 then local t = {}; for i = n - 19, n do t[#t + 1] = db.errs[i] end; db.errs = t end
     end
+  end,
+  -- 4: 'Blizzard's squares' and the strength slider's 0 become one toggle (2026-11-13): squares All, theirs hidden,
+  -- or strength 0 mean Blizzard default; anything else stays As rings
+  function(db)
+    local r = db.rings; if type(r) ~= 'table' then return end
+    if r.othersMode == nil then
+      r.othersMode = (r.squares == 'all' or r.others == false or r.othersAlpha == 0) and 'blizzard' or 'rings'
+    end
+    r.squares = r.othersMode == 'blizzard' and 'all' or 'notmine'
+    if r.othersAlpha == 0 then r.othersAlpha = 55 end
   end,
 }
 

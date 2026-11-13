@@ -334,6 +334,7 @@ local function start()
   R.db = db
   BC = ns.blizzard
   if db.othersAlpha then R.OTHERS_ALPHA = db.othersAlpha / 100; if db.othersAlpha == 0 then db.others = false end end
+  if db.othersMode == 'blizzard' then db.others = false; db.squares = 'all' elseif db.othersMode == 'rings' then db.others = true; db.squares = 'notmine' end
   db.saved = db.saved or {}; db.learned = db.learned or {}
   if not (C_UnitAuras and C_NamePlate and C_CurveUtil and C_StringUtil) then say('this client is missing the aura container APIs; the OmaDoomed rings are off.'); db = nil; R.db = nil; return end
   holder = CreateFrame('Frame', nil, UIParent); holder:Hide()
@@ -398,7 +399,7 @@ function ns.ringsApply(key)
   elseif key == 'size' or key == 'alpha' then for _, p in ipairs(pairsAll) do look(p) end; visible()
   elseif key == 'othersAlpha' then
     R.OTHERS_ALPHA = (db.othersAlpha or 55) / 100
-    setOthers((db.othersAlpha or 55) > 0)
+    setOthers(db.othersMode ~= 'blizzard' and (db.othersAlpha or 55) > 0)
     -- a slider sends every step: say it once
     if not toldReload then toldReload = true; say("other players' rings: a new strength shows after a /reload (0 hides them at once).") end
   elseif key == 'where' then
@@ -408,6 +409,9 @@ function ns.ringsApply(key)
     visible()
   elseif key == 'which' then visible()
   elseif key == 'squares' then BC.squaresApply()
+  elseif key == 'othersMode' then
+    db.squares = db.othersMode == 'blizzard' and 'all' or 'notmine'; BC.squaresApply()
+    setOthers(db.othersMode ~= 'blizzard')
   end
 end
 

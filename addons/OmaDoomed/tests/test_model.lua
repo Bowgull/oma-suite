@@ -134,7 +134,7 @@ return {
   ['saved data 2: the engine choice, the side-by-side log, Does It Die\'s look and the trace lines are dropped'] = function(W, T)
     require('load').addon({ before = function() OmaDoomedDB = { v = 1, engine = 'did', compare = { checks = 3, log = {} },
       didSaved = { m = true }, cast = 'motes', track = { log = { 'x' }, ticks = { [172] = 15 } } } end })
-    T.eq(OmaDoomedDB.v, 3); T.eq(OmaDoomedDB.engine, nil); T.eq(OmaDoomedDB.compare, nil); T.eq(OmaDoomedDB.didSaved, nil)
+    T.eq(OmaDoomedDB.v, 4); T.eq(OmaDoomedDB.engine, nil); T.eq(OmaDoomedDB.compare, nil); T.eq(OmaDoomedDB.didSaved, nil)
     T.eq(OmaDoomedDB.cast, 'motes', 'settings kept')
     T.eq(#OmaDoomedDB.track.log, 0, 'old trace lines gone')
   end,

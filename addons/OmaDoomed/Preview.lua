@@ -17,7 +17,8 @@ local look, ask = K.new(), {}
 local RING = { c = SP.corruption.color, a = SP.agony.color, i = SP.immolate.color }    -- rings and tick light
 local NAME = { c = 'Corruption', a = 'Bane of Agony', i = 'Immolate' }
 local MAXHP, START = 198, 124      -- your DoTs finish this one, so the skull shows
-local H = 190                      -- the scene's height inside the window
+local H = 420                      -- the scene's height inside the window (stacked: the enemy above, your target frame below)
+local PLATE_K, FRAME_K = 1.5, 1.6  -- how much bigger than life the enemy and the target frame are drawn
 local WIN_W, WIN_H = 470, H + 52    -- the window: narrow enough to sit beside Options on a 1080p screen
 
 local ss, sst = Anim.smoothstep, Anim.smootherstep
@@ -68,8 +69,19 @@ end
 local function build(host)
   P = CreateFrame('Frame', nil, host); P:SetHeight(H)
   local bg = P:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(); bg:SetColorTexture(.05, .04, .035, .92)
-  local tag = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag:SetPoint('BOTTOMLEFT', 8, 6); tag:SetText('Over the enemy'); P.leftTag = tag
-  local tag2 = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag2:SetPoint('BOTTOMRIGHT', -8, 6); tag2:SetText('Your target frame')
+  -- 2026-11-13 (Joshua: "can we get something behind the black screen"): Blizzard's own warlock artwork behind the
+  -- scene (the talent screen's backdrop), darkened so the pieces still read. The first atlas the client has wins.
+  local art = P:CreateTexture(nil, 'BACKGROUND', nil, 1); art:SetAllPoints()
+  local found = false
+  for _, name in ipairs({ 'talents-background-warlock', 'talents-background-warlock-affliction', 'spec-background-warlock' }) do
+    local ok = pcall(art.SetAtlas, art, name, false)
+    if ok and art.GetAtlas and art:GetAtlas() == name then found = true; break end
+  end
+  if found then art:SetVertexColor(.72, .66, .72)
+    local wash = P:CreateTexture(nil, 'BACKGROUND', nil, 2); wash:SetAllPoints(); wash:SetColorTexture(0, 0, 0, .25)
+  else art:Hide() end
+  local tag = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag:SetPoint('TOPLEFT', 8, -6); tag:SetText('Over the enemy'); P.leftTag = tag
+  local tag2 = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag2:SetPoint('TOPLEFT', 8, -190); tag2:SetText('Your target frame')
 
   -- the enemy in the world: Forever's own nameplate, built the way Blizzard builds it (wow-ui-source, forever branch:
   -- Blizzard_NamePlates.xml, Blizzard_NamePlateUnitFrame.lua, Camelot/Blizzard_NamePlateLevelFrame.xml and
@@ -78,7 +90,7 @@ local function build(host)
   -- 5 px to its right, the nameplate font above, and UI-HUD-CoolDownManager-Selected-yellow round it when it's your
   -- target. Each atlas falls back to a plain stand-in if the client doesn't have it.
   local function atlasOK(tex, name) local ok = pcall(tex.SetAtlas, tex, name, false); return ok and tex.GetAtlas and tex:GetAtlas() == name end
-  P.plate = CreateFrame('Frame', nil, P); P.plate:SetSize(170, 62); P.plate:SetPoint('TOPLEFT', P, 'TOPLEFT', 6, -80)
+  P.plate = CreateFrame('Frame', nil, P); P.plate:SetSize(170, 62); P.plate:SetScale(PLATE_K); P.plate:SetPoint('TOP', P, 'TOP', 0, -84 / PLATE_K)
   local hb = CreateFrame('StatusBar', nil, P.plate); hb:SetSize(126, 16); hb:SetPoint('BOTTOMLEFT', P.plate, 'BOTTOMLEFT', 4, 8)
   local fillTex = hb:CreateTexture(nil, 'ARTWORK')
   if not atlasOK(fillTex, 'UI-HUD-CoolDownManager-Bar') then fillTex:SetTexture('Interface\\TargetingFrame\\UI-StatusBar') end
@@ -100,7 +112,7 @@ local function build(host)
 
   -- the target frame stand-in: fixed sizes of our own. Nothing is read off the live TargetFrame (2026-11-13 BugSack:
   -- its sizes come back as hidden values on Forever, and SetSize refuses them). The redesigned preview replaces this.
-  frame = CreateFrame('Frame', nil, P); frame:SetSize(232, 100); frame:SetScale(1.2); frame:SetPoint('TOPRIGHT', P, 'TOPRIGHT', -6 / 1.2, -30 / 1.2)
+  frame = CreateFrame('Frame', nil, P); frame:SetSize(232, 100); frame:SetScale(FRAME_K); frame:SetPoint('TOP', P, 'TOP', 0, -196 / FRAME_K)
   local pt = frame:CreateTexture(nil, 'BACKGROUND'); pt:SetSize(58, 58); pt:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -26, -19)
   pt:SetTexture('Interface\\Icons\\Ability_Hunter_Pet_Wolf')
   local pm = frame:CreateMaskTexture(); pm:SetTexture('Interface\\CharacterFrame\\TempPortraitAlphaMask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); pm:SetAllPoints(pt); pt:AddMaskTexture(pm)
@@ -144,8 +156,10 @@ local function build(host)
   local sqIcons = { icon('Bane of Agony'), icon('Immolate'), icon('Corruption'), icon('Corruption'), 'Interface\\Icons\\Spell_Frost_Stun' }
   for i = 1, 5 do
     local q = CreateFrame('Frame', nil, frame); q:SetSize(20, 20)
-    local b = q:CreateTexture(nil, 'BACKGROUND'); b:SetAllPoints(); b:SetColorTexture(.7, 0, 0)
-    local ic = q:CreateTexture(nil, 'ARTWORK'); ic:SetPoint('TOPLEFT', 1, -1); ic:SetPoint('BOTTOMRIGHT', -1, 1); ic:SetTexCoord(.07, .93, .07, .93); ic:SetTexture(sqIcons[i])
+    -- Blizzard's own debuff square: the icon with UI-Debuff-Overlays' border (the same file and corner TargetFrame uses)
+    local ic = q:CreateTexture(nil, 'ARTWORK'); ic:SetAllPoints(); ic:SetTexture(sqIcons[i])
+    local bd = q:CreateTexture(nil, 'OVERLAY'); bd:SetPoint('TOPLEFT', -1, 1); bd:SetPoint('BOTTOMRIGHT', 1, -1)
+    bd:SetTexture('Interface/Buffs/UI-Debuff-Overlays'); bd:SetTexCoord(.296875, .5703125, 0, .515625); bd:SetVertexColor(.8, 0, 0)
     squares[i] = q
   end
   P.plan = plan(); t0 = GetTime()
@@ -240,7 +254,8 @@ function ns.previewDraw()
   -- the skull
   P.skull:SetShown(db.doomed ~= false and db.skull ~= false and greenHp <= 0)
   -- rings
-  local where, size, alpha, oa = rdb.where or 'enemy', (rdb.size or 40), (rdb.alpha or 100) / 100, (rdb.othersAlpha or 55) / 100
+  local where, size, alpha = rdb.where or 'enemy', (rdb.size or 40), (rdb.alpha or 100) / 100
+  local oa = rdb.othersMode == 'blizzard' and 0 or (rdb.othersAlpha or 55) / 100   -- Blizzard default: OmaDoomed draws only yours
   if P.leftTag then P.leftTag:SetText(where == 'split' and 'Another enemy you DoT' or 'Over the enemy') end
   if P.plateSel and P.plateSel.GetAtlas and P.plateSel:GetAtlas() then P.plateSel:SetShown(where ~= 'split') end
   for home = 1, 2 do
@@ -272,9 +287,13 @@ function ns.previewDraw()
         if d then w.cd:SetCooldown(GetTime() - (d.dur - d.timeLeft), d.dur) else w.cd:SetCooldown(GetTime() - 6, 15) end
         w:SetAlpha(other and oa or alpha)
         w:ClearAllPoints()
-        if home == 1 then w:SetPoint('BOTTOMLEFT', P.plate, 'TOP', -60 + n, other and 0 or -6)
+        -- every ring is centred on its row's line (the smaller one too), and the row starts on the bar's left edge
+        if home == 1 then w:SetPoint('CENTER', P.plate, 'TOP', -60 + n + z / 2, 6 + size / 2)
         else local fz = z * ns.rings.FRAME_SCALE; w:SetSize(fz, fz); w.ic:SetSize(fz * .756, fz * .756); w.num:SetFont(STANDARD_TEXT_FONT, math.floor(fz * ns.rings.numK(true) + .5), ol)   -- sheets 51 B, 52 F
-          w:SetPoint('TOPLEFT', frame, 'BOTTOMLEFT', (bar.x or 20) + n, -5) end   -- sheet 42 B: under the frame, 40 px
+          -- under the frame: Blizzard's squares first, the rings in a row beneath them (sheet 42 B)
+          local sqH = 0
+          local rowH = size * ns.rings.FRAME_SCALE
+          w:SetPoint('CENTER', frame, 'BOTTOMLEFT', (bar.x or 20) + n + fz / 2, -(4 + sqH + rowH / 2)) end
         n = n + (home == 2 and z * ns.rings.FRAME_SCALE + 4 or z + 3)
         w:Show()
       else w:Hide() end
@@ -287,8 +306,8 @@ function ns.previewDraw()
     local q = squares[i]
     local mine = i <= 3
     local d = mine and live[i]
-    local on = mode ~= 'hide' and (not mine or (mode == 'all' and d and not d.casting and d.timeLeft > 0))
-    if on then q:ClearAllPoints(); q:SetPoint('TOPLEFT', frame, 'TOPLEFT', (bar.x or 20) + n, bar.y - bar.h - 30); n = n + 22; q:Show() else q:Hide() end
+    local on = false   -- 2026-11-13: Blizzard's squares are left out of the preview
+    if on then q:ClearAllPoints(); q:SetPoint('TOPLEFT', frame, 'BOTTOMLEFT', (bar.x or 20) + n, -4); n = n + 22; q:Show() else q:Hide() end
   end
 end
 
@@ -297,22 +316,24 @@ local win, tucked, hl, watch
 local GROUP = {   -- which part of the scene each setting lights (keys from Settings.lua)
   doomed = 'tf', skull = 'tf', cast = 'tf', tick = 'tf', low = 'tf', lowlook = 'tf', targetPath = 'tf',
   platebar = 'np', enabled = 'np', which = 'np', othersAlpha = 'np', cc = 'np',
-  where = 'where', look = 'rings', size = 'rings', alpha = 'rings', squares = 'sq',
+  where = 'where', look = 'rings', size = 'rings', alpha = 'rings', othersMode = 'np',
 }
-local HEADER = { ['Your target frame'] = 'tf', ['Over enemies'] = 'np', ['Where the rings go'] = 'where', ['Ring look'] = 'rings', ["Blizzard's squares"] = 'sq' }
+local HEADER = { ['Your target frame'] = 'tf', ['Over enemies'] = 'np', ['Where the rings go'] = 'where', ['Ring look'] = 'rings' }
 
 local function makeHighlight()
-  hl = CreateFrame('Frame', nil, P); hl:SetFrameLevel(P:GetFrameLevel() + 30); hl:Hide()
+  -- 2026-11-13 (Joshua: "it defeats the purpose of LOOKING at it if it obscures it"): nothing is drawn over the part you
+  -- point at. Everything else dims (on a layer above the whole scene), and a thin quiet line marks the edge.
+  local shade = CreateFrame('Frame', nil, P); shade:SetAllPoints(P); shade:SetFrameLevel(P:GetFrameLevel() + 40)
+  hl = CreateFrame('Frame', nil, P); hl:SetFrameLevel(P:GetFrameLevel() + 41); hl:Hide()
   hl.edges = {}
-  for i = 1, 4 do local t = hl:CreateTexture(nil, 'OVERLAY'); t:SetColorTexture(1, .82, 0, .9); hl.edges[i] = t end
+  for i = 1, 4 do local t = hl:CreateTexture(nil, 'OVERLAY'); t:SetColorTexture(1, .9, .7, .35); hl.edges[i] = t end
   local e = hl.edges
-  e[1]:SetPoint('TOPLEFT'); e[1]:SetPoint('TOPRIGHT'); e[1]:SetHeight(2)
-  e[2]:SetPoint('BOTTOMLEFT'); e[2]:SetPoint('BOTTOMRIGHT'); e[2]:SetHeight(2)
-  e[3]:SetPoint('TOPLEFT'); e[3]:SetPoint('BOTTOMLEFT'); e[3]:SetWidth(2)
-  e[4]:SetPoint('TOPRIGHT'); e[4]:SetPoint('BOTTOMRIGHT'); e[4]:SetWidth(2)
-  hl.glow = hl:CreateTexture(nil, 'BACKGROUND'); hl.glow:SetAllPoints(); hl.glow:SetColorTexture(1, .82, 0, .08)
-  hl.dim = {}   -- the rest of the scene dims a little
-  for i = 1, 4 do local t = P:CreateTexture(nil, 'OVERLAY', nil, 7); t:SetColorTexture(0, 0, 0, .4); t:Hide(); hl.dim[i] = t end
+  e[1]:SetPoint('TOPLEFT'); e[1]:SetPoint('TOPRIGHT'); e[1]:SetHeight(1)
+  e[2]:SetPoint('BOTTOMLEFT'); e[2]:SetPoint('BOTTOMRIGHT'); e[2]:SetHeight(1)
+  e[3]:SetPoint('TOPLEFT'); e[3]:SetPoint('BOTTOMLEFT'); e[3]:SetWidth(1)
+  e[4]:SetPoint('TOPRIGHT'); e[4]:SetPoint('BOTTOMRIGHT'); e[4]:SetWidth(1)
+  hl.dim = {}   -- the rest of the scene dims; the focus itself is left exactly as it is
+  for i = 1, 4 do local t = shade:CreateTexture(nil, 'OVERLAY'); t:SetColorTexture(0, 0, 0, .55); t:Hide(); hl.dim[i] = t end
 end
 local function lightUp(g)
   if not hl then return end
@@ -321,8 +342,7 @@ local function lightUp(g)
   if g == 'tf' then hl:SetPoint('TOPLEFT', frame, 'TOPLEFT', 16, -14); hl:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -6, 8)
   elseif g == 'np' then hl:SetPoint('TOPLEFT', P.plate, 'TOPLEFT', -2, 44); hl:SetPoint('BOTTOMRIGHT', P.plate, 'BOTTOMRIGHT', 10, -10)
   elseif g == 'where' then hl:SetPoint('TOPLEFT', P, 'TOPLEFT', 6, -6); hl:SetPoint('BOTTOMRIGHT', P, 'BOTTOMRIGHT', -6, 22)
-  elseif g == 'rings' then hl:SetPoint('TOPLEFT', P.plate, 'TOPLEFT', -2, 44); hl:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -6, -30)
-  elseif g == 'sq' then hl:SetPoint('TOPLEFT', frame, 'BOTTOMLEFT', 16, -26); hl:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -6, -54) end
+  elseif g == 'rings' then hl:SetPoint('TOPLEFT', P, 'TOPLEFT', 6, -6); hl:SetPoint('BOTTOMRIGHT', P, 'BOTTOMRIGHT', -6, 6) end
   hl:Show()
   local L, T, R, B = hl:GetLeft(), hl:GetTop(), hl:GetRight(), hl:GetBottom()
   local pl, pt, pr, pb = P:GetLeft(), P:GetTop(), P:GetRight(), P:GetBottom()

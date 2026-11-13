@@ -1,8 +1,8 @@
 -- The Options page (Settings.lua) on the strict fake Settings API: every control is built from Blizzard's own
 -- controls with its default, and a change reaches the add-on at once.
-local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'platebar', 'enabled', 'which', 'othersAlpha', 'cc', 'where', 'look', 'size', 'alpha', 'squares' }
+local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'platebar', 'enabled', 'which', 'othersMode', 'othersAlpha', 'cc', 'where', 'look', 'size', 'alpha' }
 local KINDS = { look = 'dropdown', doomed = 'checkbox', skull = 'checkbox', cast = 'dropdown', tick = 'dropdown', low = 'slider', lowlook = 'dropdown', platebar = 'checkbox', enabled = 'checkbox',
-  where = 'dropdown', squares = 'dropdown', which = 'dropdown', size = 'slider', alpha = 'slider', othersAlpha = 'slider', cc = 'checkbox' }
+  where = 'dropdown', othersMode = 'dropdown', which = 'dropdown', size = 'slider', alpha = 'slider', othersAlpha = 'slider', cc = 'checkbox' }
 local UNDER_BAR = { skull = true, cast = true, tick = true, low = true, lowlook = true, platebar = true }
 
 local function setup(W, opts)
@@ -29,7 +29,7 @@ return {
     T.eq(cat.name, 'OmaDoomed'); T.eq(cat.parent.name, 'Oma')
     T.eq(UI.S.addOnCategories[1], cat.parent, 'the Oma parent registered at login')
     local kinds = {}; for _, i in ipairs(cat.layout.inits) do kinds[#kinds + 1] = i.kind == 'header' and ('header:' .. i.text) or i.kind end
-    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,button,header:Over enemies,checkbox,checkbox,dropdown,slider,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Blizzard's squares,dropdown,header:Help,button,button,button",
+    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,button,header:Over enemies,checkbox,checkbox,dropdown,dropdown,slider,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Help,button,button,button",
       'grouped by place on screen (sheet 60): headers, controls, Pick, the preview button and the two report buttons')
   end,
   ['saved values are kept, not reset to defaults'] = function(W, T)
@@ -106,6 +106,15 @@ return {
   end,
 
   -- release tidy-up (migration 3): the shape of a real saved file from the Shadow, 2026-11-13
+  ['upgrade: Blizzard squares All becomes Blizzard default, anything else As rings (migration 4)'] = function(W, T)
+    local ns = setup(W, { before = function() OmaDoomedDB = { v = 3, rings = { squares = 'all' } } end })
+    T.eq(OmaDoomedDB.rings.othersMode, 'blizzard'); T.eq(OmaDoomedDB.rings.squares, 'all')
+  end,
+  ['upgrade: default squares stay As rings (migration 4)'] = function(W, T)
+    local ns = setup(W, { before = function() OmaDoomedDB = { v = 3, rings = { squares = 'notmine', othersAlpha = 40 } } end })
+    T.eq(OmaDoomedDB.rings.othersMode, 'rings'); T.eq(OmaDoomedDB.rings.squares, 'notmine'); T.eq(OmaDoomedDB.rings.othersAlpha, 40)
+  end,
+
   ['upgrade: debug leftovers and Does It Die look settings are removed, learned ticks and settings kept'] = function(W, T)
     local errs = {}; for i = 1, 30 do errs[i] = 'old error ' .. i end
     local ns, F, UI = setup(W, { before = function()
@@ -115,7 +124,7 @@ return {
           plateFillOpacity = 40, skullIcon = 'cross', focusOutlineColor = 'gold', nameplateMode = 'markerIcon', waitFirstTick = 'off' } }
     end })
     local db = OmaDoomedDB
-    T.eq(db.v, 3, 'saved-data version 3')
+    T.eq(db.v, 4, 'saved-data version 4')
     T.eq(db.tfdump, nil, 'the target-frame debug dump is gone'); T.eq(db.plateGeo, nil)
     T.eq(#db.errs, 20, 'the error list keeps its newest 20'); T.eq(db.errs[20], 'old error 30'); T.eq(db.errs[1], 'old error 11')
     T.eq(db.track.ticks[172], 16.3, 'learned tick sizes kept'); T.eq(db.track.tickWeights[172], 29); T.eq(db.track.omaRatio.Corruption, 1.09)
