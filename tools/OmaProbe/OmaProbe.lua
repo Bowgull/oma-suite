@@ -177,12 +177,34 @@ local function listMulti(tag)
     if ok and e then log(tag, 'entry acts', type(e.activityIDs) == 'table' and table.concat(e.activityIDs, ',') or '?', 'playstyle', tostring(e.generalPlaystyle)) end
   end)
 end
+-- Round 3: which listing shape fails? Each key lists one shape, then checks at 1.5 s and 4 s.
+local function state(tag)
+  local ok, has = pcall(C_LFGList.HasActiveEntryInfo)
+  local e = ok and has and C_LFGList.GetActiveEntryInfo() or nil
+  log(tag, 'listed', tostring(has), e and ('acts ' .. (type(e.activityIDs) == 'table' and table.concat(e.activityIDs, ',') or '?') .. ' playstyle ' .. tostring(e.generalPlaystyle)) or '')
+end
+local function listShape(tag, n, withStyle)
+  local all, a = twoActs(), {}
+  for i = 1, math.min(n, #all) do a[i] = all[i] end
+  local data = { activityIDs = a, newPlayerFriendly = false }
+  if withStyle then data.generalPlaystyle = playstyle() end
+  log(tag, 'CreateListing acts', table.concat(a, ','), 'playstyle', tostring(data.generalPlaystyle), 'already listed', tostring(C_LFGList.HasActiveEntryInfo()))
+  try(tag .. ' CreateListing', C_LFGList.CreateListing, data)
+  C_Timer.After(1.5, function() state(tag .. ' +1.5s') end)
+  C_Timer.After(4, function() state(tag .. ' +4s') end)
+end
 local keyActs = {
+  F1 = function() listShape('A one dungeon, no style', 1, false) end,
+  F2 = function() listShape('B one dungeon, style', 1, true) end,
+  F3 = function() listShape('C two dungeons, no style', 2, false) end,
+  F4 = function() listShape('D two dungeons, style', 2, true) end,
+  F9 = function() try('KEY RemoveListing', C_LFGList.RemoveListing); C_Timer.After(2, function() state('after unlist') end) end,
   F7 = function() try('KEY Search', C_LFGList.Search, 2, 0, 0, nil, false, nil, C_LFGList.GetAvailableActivities(2) or {}) end,
-  F8 = function() listMulti('KEY') end,
-  F9 = function() try('KEY RemoveListing', C_LFGList.RemoveListing); C_Timer.After(1.5, function() try('KEY HasActiveEntry', C_LFGList.HasActiveEntryInfo) end) end,
-  F6 = function() log('TIMER search in 3 s (no press when it runs)'); C_Timer.After(3, function() try('TIMER Search', C_LFGList.Search, 2, 0, 0, nil, false, nil, C_LFGList.GetAvailableActivities(2) or {}) end) end,
-  F5 = function() log('TIMER list in 3 s (no press when it runs)'); C_Timer.After(3, function() listMulti('TIMER') end) end,
+  F10 = function()
+    state('STATE')
+    local r = C_LFGListRoles and C_LFGListRoles.GetRoles(); if r then log('roles T/H/D', tostring(r.tank), tostring(r.healer), tostring(r.dps)) end
+    log('lockdown', tostring(C_ChatInfo.InChatMessagingLockdown()), 'combat', tostring(InCombatLockdown()), 'zone', GetZoneText())
+  end,
 }
 local binder = CreateFrame('Frame')
 binder:RegisterEvent('PLAYER_ENTERING_WORLD')
@@ -195,7 +217,7 @@ binder:SetScript('OnEvent', function()
     b:SetScript('OnClick', function() log('-- key CTRL-SHIFT-' .. key); local ok, e = pcall(fn); if not ok then log('ERROR', e) end end)
     SetOverrideBindingClick(binder, true, 'CTRL-SHIFT-' .. key, b:GetName(), 'LeftButton')
   end
-  log('key bindings set: CTRL-SHIFT-F5..F9')
+  log('key bindings set: CTRL-SHIFT-F1..F4, F7, F9, F10')
 end)
 
 SLASH_OMAPROBE1 = '/omaprobe'
