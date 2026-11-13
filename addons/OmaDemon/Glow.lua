@@ -51,81 +51,96 @@ local edgeBreathe = edgeTex:CreateAnimationGroup(); edgeBreathe:SetLooping('BOUN
 local eb = alpha(edgeBreathe, .15, 1, HALF)
 local ALARM_MIN, ALARM_MAX, CALM_MIN, CALM_MAX = .15, 1.0, .15, .5
 
--- Heartbeat: two beats and a rest on the same tempo (one beat pair every 2 x 0.5236 s)
-local heart = edgeTex:CreateAnimationGroup(); heart:SetLooping('REPEAT')
-alpha(heart, .15, 1, .07, 1, 'OUT'); alpha(heart, 1, .45, .17, 2, 'IN_OUT'); alpha(heart, .45, .85, .07, 3, 'OUT'); alpha(heart, .85, .15, .737, 4, 'IN')
-
--- Wisps and Essence: small pools of textures that drift in off the edge and fade
-local function pool(n, tex, blend, size)
-  local out = {}
-  for i = 1, n do
-    local t = edge:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. tex); t:SetBlendMode(blend); t:SetSize(size, size); t:Hide()
-    local g = t:CreateAnimationGroup()
-    local mv = g:CreateAnimation('Translation'); mv:SetOrder(1); mv:SetSmoothing('OUT')
-    local fin = alpha(g, 0, 1, .2, 1); local fout = alpha(g, 1, 0, 1, 1); fout:SetStartDelay(.2)
-    g:SetScript('OnFinished', function() t:Hide() end)
-    out[i] = { t = t, g = g, mv = mv, fin = fin, fout = fout }
+-- The looks (sheet 50 v6, 2026-11-13): Default is the band alone. The others are the same band with a few white
+-- textures tinted in the Warning colour's ramp (deep / colour / hot), all breathing with it; nothing flashes.
+--   fel    the band's inner edge shaped into still, uneven flame tongues (three ramp steps)
+--   smoke  soft billows with gaps rising slowly through the band (a tile scrolled up under the band mask)
+--   drain  thin strands of light flowing along each side toward the demon's frame, top-left (a tile per side)
+-- mat holds them and breathes in step with the band (its own copy of the band's alpha animation).
+local LOOKS = { default = true, fel = true, smoke = true, drain = true }
+local mat = CreateFrame('Frame', nil, edge); mat:SetAllPoints()
+local matBreathe = mat:CreateAnimationGroup(); matBreathe:SetLooping('BOUNCE')
+local mb = alpha(matBreathe, .15, 1, HALF)
+local function matTex(name, mask, sub)
+  local t = mat:CreateTexture(nil, 'BACKGROUND', nil, sub or 1); t:SetTexture(ART .. name); t:SetAllPoints(); t:Hide()
+  if mask and mat.CreateMaskTexture then
+    local m = mat:CreateMaskTexture(); m:SetTexture(ART .. mask); m:SetAllPoints(); t:AddMaskTexture(m)
   end
-  return out
+  return t
 end
-local wisps, hazes = pool(14, 'wisp', 'ADD', 20), pool(16, 'haze', 'BLEND', 200)
-local function launch(list, life, speed, peak)
-  for _, p in ipairs(list) do
-    if not p.g:IsPlaying() then
-      local W, H = UIParent:GetWidth(), UIParent:GetHeight()
-      local r = math.random() * (2 * W + 2 * H); local x, y, nx, ny
-      if r < W then x, y, nx, ny = r, 6, 0, 1 elseif r < 2 * W then x, y, nx, ny = r - W, H - 6, 0, -1
-      elseif r < 2 * W + H then x, y, nx, ny = 6, r - 2 * W, 1, 0 else x, y, nx, ny = W - 6, r - 2 * W - H, -1, 0 end
-      local sp = speed * (.7 + math.random() * .6)
-      p.t:ClearAllPoints(); p.t:SetPoint('CENTER', UIParent, 'BOTTOMLEFT', x + nx * 14, y + ny * 14)
-      p.mv:SetOffset(nx * sp * life + (math.random() - .5) * 20, ny * sp * life + 18 + math.random() * 22)
-      p.mv:SetDuration(life); p.fin:SetToAlpha(peak); p.fout:SetFromAlpha(peak); p.fout:SetDuration(life - .2)
-      p.t:Show(); p.g:Play(); return true
+local function tile(t) pcall(t.SetHorizTile, t, true); pcall(t.SetVertTile, t, true); return t end
+local fel = { inner = matTex('fel_inner'), mid = matTex('fel_mid', nil, 2), hot = matTex('fel_hot', nil, 3) }
+fel.hot:SetBlendMode('ADD')
+local smoke = { body = tile(matTex('smoke', 'mask_band')), hot = tile(matTex('smoke', 'edgerim', 2)) }
+smoke.hot:SetBlendMode('ADD')
+local drain = {}
+for _, side in ipairs({ 't', 'b', 'l', 'r' }) do
+  local h = tile(matTex('strands', 'mask_' .. side, 2)); h:SetBlendMode('ADD')
+  drain[side] = { tile(matTex('strands', 'mask_' .. side)), h }
+end
+local allLookTex = { fel.inner, fel.mid, fel.hot, smoke.body, smoke.hot }
+for _, p in pairs(drain) do allLookTex[#allLookTex + 1] = p[1]; allLookTex[#allLookTex + 1] = p[2] end
+local scroll = 0
+-- the tiles move: smoke rises (its texcoords slide down), strands run along each side toward the top-left
+local function scrollLooks(dt, L)
+  scroll = scroll + dt
+  local W, H = UIParent:GetWidth(), UIParent:GetHeight()
+  if L == 'smoke' then
+    local u0, v0 = math.sin(scroll * .25) * .02, scroll * .012
+    local uw, vh = W / 512 / 1.4, H / 512 / 1.4
+    smoke.body:SetTexCoord(u0, u0 + uw, v0, v0 + vh); smoke.hot:SetTexCoord(u0, u0 + uw, v0, v0 + vh)
+  elseif L == 'drain' then
+    local d = scroll * .028
+    for _, side in ipairs({ 't', 'b' }) do        -- along x, leftward
+      local off = side == 'b' and .37 or 0
+      for _, t in ipairs(drain[side]) do t:SetTexCoord(d + off, d + off + W / 1024, 0, H / 256) end
+    end
+    for _, side in ipairs({ 'l', 'r' }) do        -- rotated: the texture's x runs up the screen
+      local off = side == 'r' and .61 or 0
+      local u0, u1, v1 = d + off, d + off + H / 1024, W / 256
+      for _, t in ipairs(drain[side]) do t:SetTexCoord(u1, 0, u0, 0, u1, v1, u0, v1) end
     end
   end
 end
-
--- Soul fire: two flame strips along the bottom and both sides, cross-fading out of step so they flicker
-local fire = CreateFrame('Frame', nil, edge); fire:SetAllPoints(); fire:Hide()
-local FLAME_H = 92
-local function flameStrip(tex, side)
-  local t = fire:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. tex); t:SetBlendMode('ADD')
-  if side == 'bottom' then t:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT'); t:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMRIGHT'); t:SetHeight(FLAME_H)
-  elseif side == 'left' then t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT'); t:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT'); t:SetWidth(FLAME_H * .8)
-    t:SetTexCoord(0, 1, 1, 1, 0, 0, 1, 0)              -- the strip's base runs down the left edge
-  else t:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT'); t:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMRIGHT'); t:SetWidth(FLAME_H * .8)
-    t:SetTexCoord(0, 0, 1, 0, 0, 1, 1, 1) end            -- and down the right edge
-  return t
-end
-local flames = {}
-for _, side in ipairs({ 'bottom', 'left', 'right' }) do
-  for k, tex in ipairs({ 'flames1', 'flames2' }) do
-    local t = flameStrip(tex, side)
-    local g = t:CreateAnimationGroup(); g:SetLooping('BOUNCE')
-    if k == 1 then alpha(g, .55, 1, .37, 1, 'IN_OUT') else alpha(g, 1, .35, .53, 1, 'IN_OUT') end
-    flames[#flames + 1] = { t = t, g = g }
+-- the ramp per Warning colour: deep inside, the colour, hot at the rim
+local RAMP = {
+  default = { { .24, .07, .44 }, { .65, .36, 1 }, { .93, .82, 1 } },
+  fel = { { .06, .33, .04 }, { .38, .91, .25 }, { .89, 1, .66 } },
+  ember = { { .46, .09, .02 }, { 1, .48, .12 }, { 1, .89, .58 } },
+}
+local function styleLook(L)
+  for _, t in ipairs(allLookTex) do t:Hide() end
+  local ramp = RAMP[ns.glowDB().colour or 'default'] or RAMP.default
+  local deep, main, hot = ramp[1], ramp[2], ramp[3]
+  if L == 'fel' then
+    fel.inner:SetVertexColor(deep[1], deep[2], deep[3], .85); fel.mid:SetVertexColor(main[1], main[2], main[3], .9)
+    fel.hot:SetVertexColor(hot[1], hot[2], hot[3], .6); fel.inner:Show(); fel.mid:Show(); fel.hot:Show()
+  elseif L == 'smoke' then
+    smoke.body:SetVertexColor(main[1], main[2], main[3], .85); smoke.hot:SetVertexColor(hot[1], hot[2], hot[3], .5)
+    smoke.body:Show(); smoke.hot:Show()
+  elseif L == 'drain' then
+    for _, p in pairs(drain) do
+      p[1]:SetVertexColor(main[1], main[2], main[3], .9); p[2]:SetVertexColor(hot[1], hot[2], hot[3], .4); p[1]:Show(); p[2]:Show()
+    end
   end
+  -- under a look the plain band is quieter, so the look's own shape reads
+  edgeTex:SetAlpha(L == 'default' and 1 or .45)
 end
 
 local litAt          -- when the edge last lit (only known while the gate's alpha is readable)
-local function look() local d = ns.glowDB(); return d.edge ~= false and (d.look or 'default') or 'off' end
-local beatAcc, hazeAcc, startedAt = 0, 0, 0
+local function look() local d = ns.glowDB(); if d.edge == false then return 'off' end; return LOOKS[d.look] and d.look or 'default' end
 -- Ring and edge always start together so they breathe as one. Reduced motion: both hold steady at their calm top.
 local function edgeMotion()
   local L, reduced = look(), ns.reduced()
-  edgeBreathe:Stop(); heart:Stop(); breathe:Stop(); sweep:Stop()
-  fire:SetShown(L == 'fire'); for _, f in ipairs(flames) do f.g:Stop() end
+  edgeBreathe:Stop(); matBreathe:Stop(); breathe:Stop(); sweep:Stop()
   edge:SetShown(L ~= 'off'); glow:SetShown(ns.glowDB().ring ~= false)
+  styleLook(L); mat:SetShown(L ~= 'off' and L ~= 'default')
   if reduced then
-    edgeTex:SetAlpha(CALM_MAX); bloom:SetAlpha(RING_CALM)
-    for _, f in ipairs(flames) do f.t:SetAlpha(.6) end
+    edgeTex:SetAlpha(CALM_MAX * (L == 'default' and 1 or .45)); mat:SetAlpha(CALM_MAX); bloom:SetAlpha(RING_CALM)
   else
-    edgeTex:SetAlpha(1); bloom:SetAlpha(1)
-    if L == 'heart' then heart:Play() else edgeBreathe:Play() end
-    if L == 'fire' then for _, f in ipairs(flames) do f.g:Play() end end
-    breathe:Play(); sweep:Play()
+    mat:SetAlpha(1); bloom:SetAlpha(1)
+    edgeBreathe:Play(); matBreathe:Play(); breathe:Play(); sweep:Play()
   end
-  startedAt, beatAcc, hazeAcc = GetTime(), 0, 0
 end
 ns.glowMotion = edgeMotion
 -- Blizzard's settle: full alarm for 2 s after lighting, then ease to the calm range over 1 s.
@@ -136,25 +151,11 @@ end
 local function edgeSettle()
   local k, L = settleK(), look()
   eb:SetFromAlpha(ALARM_MIN + (CALM_MIN - ALARM_MIN) * k); eb:SetToAlpha(ALARM_MAX + (CALM_MAX - ALARM_MAX) * k)
+  mb:SetFromAlpha(ALARM_MIN + (CALM_MIN - ALARM_MIN) * k); mb:SetToAlpha(ALARM_MAX + (CALM_MAX - ALARM_MAX) * k)
   b:SetToAlpha(RING_ALARM + (RING_CALM - RING_ALARM) * k)
   local strength = (ns.glowDB().strength or 100) / 100
-  -- Default and Wisps/Essence settle through the bounce range; Heartbeat and Soul fire through the edge's own strength
-  local mul = (L == 'heart') and (1 - .45 * k) or (L == 'fire' and .75 or (L == 'essence' and .85 or 1))
-  edge:SetAlpha(strength * mul)
+  edge:SetAlpha(strength)
 end
--- particles for Wisps and Essence, spawned on the breath's beat (they're only seen while the health gate is open)
-local function particles(dt)
-  local L = look(); if ns.reduced() or (L ~= 'wisps' and L ~= 'essence') then return end
-  local early = (GetTime() - startedAt) < 2
-  if L == 'wisps' then
-    beatAcc = beatAcc + dt
-    if beatAcc >= 2 * HALF then beatAcc = beatAcc - 2 * HALF; for _ = 1, early and 8 or 4 do launch(wisps, 1.6, 45, 1) end end
-  else
-    hazeAcc = hazeAcc + dt * (early and 8 or 4.5)
-    while hazeAcc >= 1 do hazeAcc = hazeAcc - 1; launch(hazes, 3.4, 22, .5) end
-  end
-end
-
 -- Health % may come back as 0..1 or 0..100 (the docs only say "percentage"), and in combat we can't look.
 -- One curve that is right for both: 0..1 -> lit under low, dark from high up to 1 (full health);
 -- above 1 it can only be the 0..100 scale (anything under 1% there is a dead demon anyway): lit to low, dark from high.
@@ -178,7 +179,7 @@ local function update()
   local now = GetTime()
   local testing = now >= testAt and now < testUntil
   local shown = (UnitExists('pet') and not dead and portrait and PetFrame and PetFrame:IsVisible()) or (testing and portrait)
-  if not shown then root:Hide(); edgeBreathe:Stop(); heart:Stop(); breathe:Stop(); sweep:Stop(); litAt = nil; return end
+  if not shown then root:Hide(); edgeBreathe:Stop(); matBreathe:Stop(); breathe:Stop(); sweep:Stop(); litAt = nil; return end
   if not root:IsShown() then
     -- r = the gold ring's centre radius, which is what the art is drawn around (mockup: band 34-38 px, r 36).
     -- PetPortrait is only the picture inside the ring: measured in game 2026-11-10, its half-width lands at
@@ -216,22 +217,13 @@ function ns.previewWarning()
 end
 
 -- Warning colour (2026-11-13, sheet 46: Default soul purple, Fel green, Hellfire ember). The ring and edge have their
--- own art per colour (make_art.py); the drifting looks' art is purple, so it's greyed and tinted instead.
+-- own art per colour (make_art.py); the looks are white art tinted with the colour's ramp (styleLook).
 local COLOUR = { default = '', fel = '-fel', ember = '-ember' }
-local TINT = { fel = { .45, 1, .3 }, ember = { 1, .55, .18 } }
 local function applyColour()
-  local c = ns.glowDB().colour or 'default'
-  local sfx = COLOUR[c] or ''
+  local sfx = COLOUR[ns.glowDB().colour or 'default'] or ''
   bloom:SetTexture(ART .. 'bloom' .. sfx); rim:SetTexture(ART .. 'rim' .. sfx); sheen:SetTexture(ART .. 'sheen' .. sfx)
   edgeTex:SetTexture(ART .. 'edge' .. sfx)
-  local tint = TINT[c]
-  local function paint(t)
-    t:SetDesaturated(tint ~= nil)
-    if tint then t:SetVertexColor(tint[1], tint[2], tint[3]) else t:SetVertexColor(1, 1, 1) end
-  end
-  for _, p in ipairs(wisps) do paint(p.t) end
-  for _, p in ipairs(hazes) do paint(p.t) end
-  for _, f in ipairs(flames) do paint(f.t) end
+  styleLook(look())
 end
 ns.applyWarningColour = applyColour
 
@@ -266,7 +258,7 @@ end
 local acc = 0
 ev:SetScript('OnUpdate', function(_, dt)
   acc = acc + dt
-  if root:IsShown() then particles(dt) end
+  if root:IsShown() and not ns.reduced() then local L = look(); if L == 'smoke' or L == 'drain' then scrollLooks(dt, L) end end
   if acc >= .1 then acc = 0; update() end
 end)
 

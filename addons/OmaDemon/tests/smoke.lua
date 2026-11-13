@@ -38,11 +38,13 @@ for _, it in ipairs(ns.settings.items) do
     check(true, it.key)
   end
 end
-for _, L in ipairs({ 'default', 'heart', 'wisps', 'essence', 'fire' }) do
+for _, L in ipairs({ 'default', 'fel', 'smoke', 'drain' }) do
   OmaDemonDB.glow.look = L; for _, fn in ipairs(ns.onSetting) do fn('look', 'glow') end
   W.advance(3); check(true, 'look ' .. L)
 end
 ns.previewWarning(); W.advance(1); check(true, 'preview')
+OmaDemonDB.glow.look = 'wisps'; for _, fn in ipairs(ns.onSetting) do fn('look', 'glow') end; W.advance(1); check(true, 'an old saved look (wisps) falls back to default')
+OmaDemonDB.glow.look = 'default'
 OmaDemonDB.shards.pin = false; for _, fn in ipairs(ns.onSetting) do fn('pin', 'shards') end
 check(OmaDemonDB.shards.pin == false, 'unpinned (the fake has no layout, so no spot to keep)')
 ns.moveGems(); check(_G.OmaDemonGemMover:IsShown(), 'move box shows'); _G.OmaDemonNudgeUp:Click(); ns.endMove()
