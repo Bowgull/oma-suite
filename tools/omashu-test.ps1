@@ -8,13 +8,13 @@
 #      ready check, leave + remove + make leader (a made-up name), a raid mark on yourself (then cleared)
 #   5. quits WoW normally so both add-ons' logs are saved, prints them, removes OmaProbe and its saved file
 # Nobody real is invited, added or whispered. Log: C:\Omashu\logs\omashu-test.txt
-param([int]$LoadSeconds = 80)
+param([int]$LoadSeconds = 80, [switch]$Attach)   # -Attach: WoW is already in the world with OmaProbe loaded; just run the keys
 $ErrorActionPreference = 'Stop'
 $wow = "${env:ProgramFiles(x86)}\World of Warcraft\_forever_"
 $addon = "$wow\Interface\AddOns\OmaProbe"
 $log = 'C:\Omashu\logs\omashu-test.txt'; Set-Content $log ''
-function L($m) { $s = "{0:HH:mm:ss} {1}" -f (Get-Date), $m; Add-Content $log $s }
-if (Get-Process Wow -ErrorAction SilentlyContinue) { L 'WoW is already running: not starting a test.'; exit 1 }
+function L($m) { $s = "{0:HH:mm:ss} {1}" -f (Get-Date), $m; for ($t = 0; $t -lt 5; $t++) { try { Add-Content $log $s -ErrorAction Stop; return } catch { Start-Sleep -Milliseconds 300 } } }   # a reader holding the file must not end the run (2026-11-13)
+if (-not $Attach -and (Get-Process Wow -ErrorAction SilentlyContinue)) { L 'WoW is already running: not starting a test.'; exit 1 }
 
 Add-Type @"
 using System; using System.Runtime.InteropServices;
@@ -30,9 +30,11 @@ public class LT {
  public static bool Key(ushort vk, ushort sc) { IN[] a = { Make(vk,sc,0), Make(vk,sc,2) }; return SendInput(2, a, Marshal.SizeOf(typeof(IN))) == 2; }
 }
 "@
-function Front($p) { [LT]::keybd_event(0x12,0,0,[UIntPtr]::Zero); [LT]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; [LT]::keybd_event(0x12,0,2,[UIntPtr]::Zero); Start-Sleep -Milliseconds 400; return ([LT]::GetForegroundWindow() -eq $p.MainWindowHandle) }
-$K = @{ F10 = @(0x79,0x44); '1' = @(0x31,0x02); '2' = @(0x32,0x03); '3' = @(0x33,0x04); '4' = @(0x34,0x05); '5' = @(0x35,0x06); '6' = @(0x36,0x07); '7' = @(0x37,0x08) }
+function Front1($p) { [LT]::keybd_event(0x12,0,0,[UIntPtr]::Zero); [LT]::SetForegroundWindow($p.MainWindowHandle) | Out-Null; [LT]::keybd_event(0x12,0,2,[UIntPtr]::Zero); Start-Sleep -Milliseconds 400; return ([LT]::GetForegroundWindow() -eq $p.MainWindowHandle) }
+function Front($p) { for ($t = 0; $t -lt 4; $t++) { if (Front1 $p) { return $true }; Start-Sleep -Milliseconds 700 }; return $false }
+$KEYS = @{ F10 = @(0x79,0x44); '1' = @(0x31,0x02); '2' = @(0x32,0x03); '3' = @(0x33,0x04); '4' = @(0x34,0x05); '5' = @(0x35,0x06); '6' = @(0x36,0x07); '7' = @(0x37,0x08) }
 
+if ($Attach) { $p = Get-Process Wow | Select-Object -First 1; L "attached to Wow.exe $($p.Id)" } else {
 L "1. installing OmaProbe into $addon"
 New-Item -ItemType Directory -Force $addon | Out-Null
 Copy-Item 'C:\Omashu\stage\OmaProbe\OmaProbe.toc', 'C:\Omashu\stage\OmaProbe\OmaProbe.lua' $addon -Force
@@ -45,11 +47,12 @@ Start-Sleep 100
 $p.Refresh()
 if (Front $p) { [LT]::Key(0x0D, 0x1C) | Out-Null; L '   pressed Enter on the character screen' } else { L '   could not bring WoW to the front' }
 Start-Sleep $LoadSeconds
+}
 
 L '3. party tests'
 $plan = @('F10',4, '1',5, '2',5, '3',4, '4',5, '5',4, '6',5, '7',4, 'F10',3)
 for ($i = 0; $i -lt $plan.Count; $i += 2) {
-  $k = $plan[$i]; $ok = (Front $p) -and [LT]::Chord([uint16]$K[$k][0], [uint16]$K[$k][1])
+  $k = $plan[$i]; $ok = (Front $p) -and [LT]::Chord([uint16]$KEYS[$k][0], [uint16]$KEYS[$k][1])
   L "   Ctrl+Shift+$k sent=$ok"; Start-Sleep $plan[$i + 1]
 }
 
