@@ -53,7 +53,7 @@ ns.settings = Core.NewSettings({
     { key = 'pin', store = S, default = true, control = 'check', label = 'Pin to pet', parent = 'gems',
       tip = "The gems sit centred under your demon's frame and follow it. Turn off to place them yourself with Move gems." },
     { button = 'Move', name = 'Move gems', click = function() if ns.moveGems then ns.moveGems() end end,
-      tip = 'Drag the gem row anywhere on screen, or nudge it with the D-pad or arrow keys. A or Enter when it is where you want it. Turn off Pin to pet first.' },
+      tip = 'Drag the gem row with the mouse, or nudge it with the arrow keys or D-pad. Enter or A when it is where you want it. Turn off Pin to pet first.' },
     { key = 'hideOOC', store = S, default = false, control = 'check', label = 'Hide out of combat', parent = 'gems',
       tip = "The gems only show while you're fighting." },
     { key = 'breathe', store = S, default = true, control = 'check', label = 'Breathe when full', parent = 'gems',

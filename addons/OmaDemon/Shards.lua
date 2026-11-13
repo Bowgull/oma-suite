@@ -334,7 +334,7 @@ for _, e in ipairs({ { 'TOPLEFT', 'TOPRIGHT', 0, 2 }, { 'BOTTOMLEFT', 'BOTTOMRIG
   t:SetPoint(e[1]); t:SetPoint(e[2]); if e[3] > 0 then t:SetWidth(e[3]) else t:SetHeight(e[4]) end
 end
 local label = mover:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight'); label:SetPoint('TOPLEFT', mover, 'BOTTOMLEFT', 0, -6)
-label:SetText('Soul shard gems: drag, or D-pad to nudge. A or Enter when done.')
+label:SetText('Soul shard gems: drag with the mouse, or nudge with the arrow keys or D-pad. Enter or A when done.')
 local function savePos()
   local x, y = root:GetCenter(); if not (x and y) then return end
   local k = root:GetEffectiveScale() / UIParent:GetEffectiveScale()
