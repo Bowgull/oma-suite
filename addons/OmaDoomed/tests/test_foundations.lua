@@ -82,8 +82,8 @@ return {
   ['spells: every rank, both colours and the beat, the same numbers as before'] = function(W, T)
     local ns = require('load').addon()
     local S = ns.spells
-    local deep = { corruption = { 78, 40, 136 }, agony = { 128, 30, 74 }, immolate = { 160, 66, 22 }, siphon = { 110, 20, 30 } }
-    local ring = { corruption = 'b078ff', agony = 'f05496', immolate = 'ff8a3d', siphon = 'd63048', curse = '96ce54', channel = 'ece2c6' }
+    local deep = { corruption = { 41, 40, 136 }, agony = { 128, 30, 97 }, immolate = { 160, 66, 22 }, siphon = { 110, 20, 22 } }
+    local ring = { corruption = '7d7bff', agony = 'ff4fc8', immolate = 'ff8a3d', siphon = 'e8363a', curse = '96ce54', channel = 'ece2c6' }
     for key, c in pairs(deep) do for i = 1, 3 do T.eq(S.byKey[key].deep[i], c[i] / 255, key .. ' piece colour') end end
     for key, h in pairs(ring) do for i = 1, 3 do T.eq(S.byKey[key].color[i], tonumber(h:sub(2 * i - 1, 2 * i), 16) / 255, key .. ' ring colour') end end
     T.eq(S.byKey.agony.beat, 2); T.eq(S.byKey.corruption.beat, 3); T.eq(S.byKey.immolate.beat, 3); T.eq(S.byKey.siphon.beat, 3)

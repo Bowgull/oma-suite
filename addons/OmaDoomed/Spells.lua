@@ -10,18 +10,20 @@ local function hex(h) return { tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3
 
 -- deep: the kill bar piece (sheet 34 B, deep pieces); color: the ring and the tick light (sheet 25); beat: seconds
 -- between ticks. Order is the rings' group order. Only kind 'dot' feeds the kill bar.
+-- 2026-11-13, sheet 55 B ("B, wider"): Corruption cooler (blue-violet), Agony hot fuchsia, Siphon Life true blood red, so
+-- no two DoTs sit within 25 degrees of hue (Agony and Siphon Life were 16 apart). Each deep is its ring's hue, darkened.
 local LIST = {
   -- crowd control: spectral teal, first in the row (sheet 48, approved 2026-11-13). Fear R1-3, Banish R1-2, Howl of
   -- Terror R1-2, Seduction (the Sayaad's; its aura counts as yours). Death Coil and Subjugate Demon left out.
   { key = 'cc', kind = 'cc', names = { 'Fear', 'Banish', 'Howl of Terror', 'Seduction' }, color = hex('5fd8c8'),
     ids = { 5782, 6213, 6215, 710, 18647, 5484, 17928, 6358 } },
-  { key = 'corruption', kind = 'dot', beat = 3, names = { 'Corruption' }, deep = rgb(78, 40, 136), color = hex('b078ff'),
+  { key = 'corruption', kind = 'dot', beat = 3, names = { 'Corruption' }, deep = rgb(41, 40, 136), color = hex('7d7bff'),
     ids = { 172, 6222, 6223, 7648, 11671, 11672, 25311, 27216 } },
-  { key = 'agony', kind = 'dot', beat = 2, names = { 'Bane of Agony', 'Curse of Agony' }, deep = rgb(128, 30, 74), color = hex('f05496'),
+  { key = 'agony', kind = 'dot', beat = 2, names = { 'Bane of Agony', 'Curse of Agony' }, deep = rgb(128, 30, 97), color = hex('ff4fc8'),
     ids = { 980, 1014, 6217, 11711, 11712, 11713, 27218 } },
   { key = 'immolate', kind = 'dot', beat = 3, names = { 'Immolate' }, deep = rgb(160, 66, 22), color = hex('ff8a3d'),
     ids = { 348, 707, 1094, 2941, 11665, 11667, 11668, 25309, 27215 } },
-  { key = 'siphon', kind = 'dot', beat = 3, names = { 'Siphon Life' }, deep = rgb(110, 20, 30), color = hex('d63048'),
+  { key = 'siphon', kind = 'dot', beat = 3, names = { 'Siphon Life' }, deep = rgb(110, 20, 22), color = hex('e8363a'),
     ids = { 18265, 18879, 18880, 18881, 27264, 30911 } },
   -- curses that do no damage: their own ring (sheet 41)
   { key = 'curse', kind = 'curse', names = { 'Curse of Weakness', 'Curse of Tongues', 'Curse of the Elements', 'Curse of Exhaustion',

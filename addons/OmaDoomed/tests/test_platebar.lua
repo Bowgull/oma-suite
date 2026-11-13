@@ -67,7 +67,7 @@ return {
     T.eq(made[2].rec.value, 70, 'piece 2: Corruption + Immolate')
     T.eq(made[1].rec.max, 300, 'scaled to max health')
     -- phase 5: the plate pieces take the target bar's landed strength (x1.15, KillBarStyle), the one approved change
-    T.near(col(made[1]), 78 / 255 * 1.15, 1e-6, "Corruption's kill bar colour, as on the target bar")
+    T.near(col(made[1]), 41 / 255 * 1.15, 1e-6, "Corruption's kill bar colour, as on the target bar")
   end,
   ['in combat the max health is handed over hidden, never read'] = function(W, T)
     local ns, F, DOTS, made = setup(W)

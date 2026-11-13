@@ -6,8 +6,8 @@
 local A, B = 'Creature-0-1-0-1-100-AAAA', 'Creature-0-1-0-1-101-BBBB'
 local FRAME = 1 / 30
 local COLOR = {   -- Doomed.lua's piece colours (sheet 34 B)
-  Corruption = { 78 / 255, 40 / 255, 136 / 255 }, Immolate = { 160 / 255, 66 / 255, 22 / 255 },
-  ['Bane of Agony'] = { 128 / 255, 30 / 255, 74 / 255 },
+  Corruption = { 41 / 255, 40 / 255, 136 / 255 }, Immolate = { 160 / 255, 66 / 255, 22 / 255 },
+  ['Bane of Agony'] = { 128 / 255, 30 / 255, 97 / 255 },
 }
 local GOLD = { 206 / 255, 160 / 255, 44 / 255 }
 local function full(c) return { math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15) } end
