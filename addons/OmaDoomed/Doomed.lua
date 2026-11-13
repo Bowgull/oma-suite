@@ -108,7 +108,12 @@ local function build()
   if CreateColor and not C0 then C0, C45, GA, GB = CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, .45), CreateColor(0, 0, 0, 1), CreateColor(0, 0, 0, 1) end
   -- clipped to the bar, minus the see-through margin Blizzard's texture has at its left end (measured: 5 screen px);
   -- another add-on's bar has its own margin: none
-  clip = CreateFrame('Frame', nil, hb); clip:SetPoint('TOPLEFT', hb, 'TOPLEFT', P.blizz and px(5, hb) or 0, 0); clip:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')
+  -- 2026-11-13: when the green carries its own masks they already give the pieces its exact shape, so no margin: on
+  -- BetterBlizzFrames' bar the 5 px margin left a strip of red at the bar's left end the pieces could never cover
+  P.masks = greenMasks(fill)
+  local margin = (P.blizz and #P.masks == 0) and px(5, hb) or 0
+  clip = CreateFrame('Frame', nil, hb); clip:SetPoint('TOPLEFT', hb, 'TOPLEFT', margin, 0); clip:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT')
+  P.margin = margin
   if P.blizz then clip:SetFrameLevel(hb:GetFrameLevel() + 1)
   else   -- its own layer (strata first: a strata change resets the level)
     local strata, level = ns.plates.layerOf(hb)
@@ -158,7 +163,6 @@ local function build()
   local art = CreateFrame('Frame', nil, clip); art:SetAllPoints(clip); art:SetFrameLevel(clip:GetFrameLevel() + 2)
   -- the health bar's own shape, as a mask: anything striped stays inside it (2026-11-11: the stripes ran onto the
   -- name banner and the mana bar)
-  P.masks = greenMasks(fill)
   if #P.masks > 0 then P.barMask = nil
   elseif art.CreateMaskTexture then
     P.barMask = art:CreateMaskTexture(); P.barMask:SetAllPoints(hb)

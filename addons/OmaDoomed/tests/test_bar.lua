@@ -178,6 +178,7 @@ return {
     local hbMask = TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBarMask
     T.eq(#P.masks, 1, 'found the one mask on the green'); T.eq(P.masks[1], hbMask, "it is Blizzard's HealthBarMask")
     T.eq(P.barMask, nil, 'no box-shaped mask of our own')
+    T.eq(P.margin, 0, 'no left margin: the mask is the shape (a margin left a red strip on BetterBlizzFrames)')
     local s = slot(M, 'Corruption')
     for _, k in ipairs({ 'base', 'lift', 'creaseL', 'creaseR', 'ghost', 'spillC', 'pre', 'cbase', 'clift', 'spark', 'wash', 'motes' }) do
       local ms = rawget(s[k], '_masks') or {}
@@ -201,6 +202,7 @@ return {
     W.advance(1, FRAME)
     local P = ns.parts.doomed
     T.eq(#P.masks, 0, 'no mask on the green'); T.ok(P.barMask ~= nil, 'our own bar-shaped mask instead')
+    T.ok(P.margin > 0, "Blizzard's bar without a mask keeps its 5 px left margin")
     T.eq((rawget(slot(M, 'Corruption').base, '_masks') or {})[1], P.barMask, 'the piece uses it')
     noErrors(T)
   end,
