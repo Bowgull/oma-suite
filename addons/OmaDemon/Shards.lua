@@ -243,7 +243,8 @@ end)
 -- ---------- /omademon shards: test and options ----------
 ns.shardsSlash = function(msg)
   local cmd, arg = msg:match('^(%S*)%s*(.-)$'); cmd = cmd:lower()
-  if cmd == 'test' then
+  if cmd == 'deltest' then return ns.shardDelTest and ns.shardDelTest()
+  elseif cmd == 'test' then
     arg = arg:lower()
     if arg == 'gain' then db.fake = (last or 0) + 1 elseif arg == 'spend' then db.fake = math.max(0, (last or 0) - 1)
     elseif arg == 'zero' then db.fake = 0 elseif arg == 'full' then db.fake = 5 elseif arg == 'seven' then db.fake = 7

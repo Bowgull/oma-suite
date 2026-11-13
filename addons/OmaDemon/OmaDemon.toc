@@ -17,3 +17,4 @@ Glow.lua
 Shards.lua
 Stones.lua
 Armor.lua
+ShardTrim.lua
