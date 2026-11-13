@@ -29,10 +29,13 @@ local S = 25 * 1.6
 R.S = S
 R.PER_ROW = 6
 R.FRAME_ROW = 5                     -- target frame row (Haunt / Target frame): 5 rings fit under the bars, before the level badge
-R.FRAME_SCALE = 0.56                -- sheet 42 B: 40 px under the frame
-R.FRAME_GAP = 6                     -- between the bars' bottom edge and the rings (~5 px)
-R.FRAME_SPACE = 3                   -- between rings in the row
-R.FRAME_LEFT = 7                    -- the first ring's edge lines up with the frame's brass border
+-- sheet 51 B (approved 2026-11-13, "B"): the target-frame row at 28 px with a smaller number, so the icon shows
+-- round it and the numbers no longer run together. All in the row's own scaled units (x FRAME_SCALE = screen px).
+R.FRAME_SCALE = 0.70                -- 28 px under the frame (was 0.56: 22 px)
+R.FRAME_GAP = 5                     -- between the bars' bottom edge and the rings (~3.5 px, as before)
+R.FRAME_SPACE = 5.7                 -- between rings in the row: 4 px (5 x 28 + 4 x 4 = 156 of the bar's 157)
+R.FRAME_LEFT = 5.6                  -- the first ring's edge lines up with the frame's brass border (~4 px, as before)
+R.FRAME_NUM_K = 0.44                -- the number's height as a share of the ring in this row (0.58 over the mobs)
 local OS = S * 0.6                  -- other players' DoTs: 60% size
 R.OS = OS
 R.OTHERS_ALPHA = 0.55               -- and 55% alpha (settings 'Other players' DoTs' sets it when the rings load)
@@ -254,6 +257,9 @@ local function mainOwn(b, k)
   b:SetDurationText(num, textOpts(NUM_FMT, numCurve))
 end
 local function mainLong(b) mainOwn(b, R.NUM_K_LONG) end   -- curses: minutes-long, so a smaller number
+-- the target-frame row's own numbers (sheet 51 B); a curse keeps its smaller share
+local function mainFrame(b) mainOwn(b, R.FRAME_NUM_K) end
+local function mainFrameLong(b) mainOwn(b, R.FRAME_NUM_K * R.NUM_K_LONG / R.NUM_K) end
 
 local function mainOthers(b)
   b:SetSize(OS, OS); pcall(b.EnableMouse, b, false); b:SetAlpha(R.OTHERS_ALPHA)
@@ -330,9 +336,10 @@ R.GROUPS = {}
 function R.buildGroups()
   local G = {}
   for _, sp in ipairs(SPELLS) do
-    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = sp.kind == 'curse' and mainLong or mainOwn, ring = ringOwn(sp.color, ringCurves[sp.key], sp.key) }
+    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = sp.kind == 'curse' and mainLong or mainOwn,
+      mainFrame = sp.kind == 'curse' and mainFrameLong or mainFrame, ring = ringOwn(sp.color, ringCurves[sp.key], sp.key) }
   end
-  G[#G + 1] = { key = 'mine', filter = OWN, max = 6, main = mainOwn, ring = ringOwn(DARK_BRASS, mineRingCurve) }
+  G[#G + 1] = { key = 'mine', filter = OWN, max = 6, main = mainOwn, mainFrame = mainFrame, ring = ringOwn(DARK_BRASS, mineRingCurve) }
   G[#G + 1] = { key = 'others', filter = OTHERS, max = 3,   -- a pack's rings crowded the next plate
     main = mainOthers, ring = ringOthers, layout = { groupSpacing = OTHERS_GAP } }
   R.GROUPS = G

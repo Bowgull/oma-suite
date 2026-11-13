@@ -37,7 +37,7 @@ local function setupContainer(c, kind, gap)   -- gap: space between rings (the t
   for _, g in ipairs(R.GROUPS) do
     if g.key ~= 'others' or R.othersOK then
       local ok, err = pcall(c.AddAuraGroup, c, g.key, g.filter, {
-        initializeFrame = g[kind], candidateFilters = R.filtersFor(g.key), sortMethod = SORT,
+        initializeFrame = (gap and kind == 'main' and g.mainFrame) or g[kind], candidateFilters = R.filtersFor(g.key), sortMethod = SORT,
         maxFrameCount = g.max, layout = g.layout or (gap and { groupSpacing = gap }) or nil })
       if not ok then
         log(kind .. ' group ' .. g.key .. ' failed: ' .. tostring(err))

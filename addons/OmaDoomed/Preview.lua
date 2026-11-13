@@ -231,9 +231,9 @@ function ns.previewDraw()
         w:SetAlpha(other and oa or alpha)
         w:ClearAllPoints()
         if home == 1 then w:SetPoint('BOTTOMLEFT', P.plate, 'TOP', -60 + n, other and 0 or -6)
-        else w:SetSize(z * .56, z * .56); w.ic:SetSize(z * .56 * .756, z * .56 * .756); w.num:SetFont(STANDARD_TEXT_FONT, math.floor(z * .56 * .58 + .5), 'THICKOUTLINE')
+        else local fz = z * ns.rings.FRAME_SCALE; w:SetSize(fz, fz); w.ic:SetSize(fz * .756, fz * .756); w.num:SetFont(STANDARD_TEXT_FONT, math.floor(fz * ns.rings.FRAME_NUM_K + .5), 'THICKOUTLINE')   -- sheet 51 B
           w:SetPoint('TOPLEFT', frame, 'BOTTOMLEFT', (bar.x or 20) + n, -5) end   -- sheet 42 B: under the frame, 40 px
-        n = n + (home == 2 and z * .56 + 3 or z + 3)
+        n = n + (home == 2 and z * ns.rings.FRAME_SCALE + 4 or z + 3)
         w:Show()
       else w:Hide() end
     end

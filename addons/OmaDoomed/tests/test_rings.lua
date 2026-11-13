@@ -155,6 +155,30 @@ return {
     T.eq(numSize(UI.group(main, 'channel').buttons[1]), dot, 'channels keep the big number')
     noErrors(T)
   end,
+  -- sheet 51 B (approved "B"): the target-frame row is 28 px with a smaller number
+  ['target-frame row: 28 px rings, 4 px apart, number 44% of the ring; rows over mobs unchanged'] = function(W, T)
+    local ns, F, UI = setup(W, { where = 'frame' })
+    F.mob('nameplate1', A, 'Kobold', 300).auras = { 172 }
+    W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
+    local R = ns.rings or ns.parts.rings
+    local frame = hauntRows(UI)
+    T.ok(frame, 'the frame row exists')
+    T.near(40 * R.FRAME_SCALE, 28, .01, '28 px ring'); T.near(R.FRAME_SPACE * R.FRAME_SCALE, 4, .05, '4 px between rings')
+    T.ok(5 * 28 + 4 * R.FRAME_SPACE * R.FRAME_SCALE <= 157, 'five fit under the health bar')
+    local function numSize(b)
+      for _, e in ipairs(UI.fontSizes) do
+        local o = e[1]
+        for _ = 1, 4 do o = type(o) == 'table' and rawget(o, '_parent') or nil; if o == b then return e[2] end end
+      end
+    end
+    local fm = UI.mainOf(frame)
+    T.eq(numSize(UI.group(fm, 'corruption').buttons[1]), math.floor(40 * .44 + .5), 'frame row number: 44% of the ring')
+    T.ok(numSize(UI.group(fm, 'curse').buttons[1]) < numSize(UI.group(fm, 'corruption').buttons[1]), 'its curse number is smaller still')
+    local plateMain
+    for _, c in ipairs(UI.ringContainers()) do if c ~= frame then plateMain = UI.mainOf(c); break end end
+    T.eq(numSize(UI.group(plateMain, 'corruption').buttons[1]), math.floor(40 * .58 + .5), 'over the mobs: unchanged')
+    noErrors(T)
+  end,
   ['not Haunt: the curse is on the frame row with the rest'] = function(W, T)
     local ns, F, UI = setup(W, { where = 'frame' })
     F.mob('nameplate1', A, 'Kobold', 300).auras = { 172, 702 }
