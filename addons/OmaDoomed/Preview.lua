@@ -1,5 +1,5 @@
--- The live preview at the top of OmaDoomed's Options page (sheet 37): a copy of the target frame built from the game's
--- own frame art (read off the real TargetFrame), an enemy nameplate, the rings and Blizzard's squares, running the
+-- The live preview at the top of OmaDoomed's Options page (sheet 37): a target frame stand-in of fixed sizes (nothing
+-- read off the real TargetFrame), an enemy nameplate, the rings and Blizzard's squares, running the
 -- test fight. It reads the settings every frame, so any change shows at once. Nothing here touches your real target.
 local ADDON, ns = ...
 
@@ -69,40 +69,15 @@ local function build(host)
   P.plateFill = P.plate:CreateTexture(nil, 'ARTWORK', nil, 1); P.plateFill:SetColorTexture(.78, .12, .06); P.plateFill:SetPoint('TOPLEFT', pb); P.plateFill:SetPoint('BOTTOMLEFT', pb); P.plateFill:SetWidth(120)
   P.nameText = nm
 
-  -- the copy of the target frame, from the real one's own art and measurements
+  -- the target frame stand-in: fixed sizes of our own. Nothing is read off the live TargetFrame (2026-11-13 BugSack:
+  -- its sizes come back as hidden values on Forever, and SetSize refuses them). The redesigned preview replaces this.
   frame = CreateFrame('Frame', nil, P); frame:SetSize(232, 100); frame:SetPoint('TOPRIGHT', P, 'TOPRIGHT', -10, -34)
-  local tf = TargetFrame
-  local cont = tf and tf.TargetFrameContainer
-  local hb = tf and ((tf.TargetFrameContent and tf.TargetFrameContent.TargetFrameContentMain and tf.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer and tf.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar) or tf.healthbar)
-  local fx, fy, fw, fh
-  if tf and tf:GetLeft() then fx, fy, fw, fh = tf:GetLeft(), tf:GetTop(), tf:GetWidth(), tf:GetHeight() end
-  local function copyRegion(src, layer)
-    if not (src and fx and src.GetLeft and src:GetLeft()) then return end
-    local t = frame:CreateTexture(nil, layer or 'ARTWORK')
-    local at = src.GetAtlas and src:GetAtlas()
-    if at then t:SetAtlas(at) else local tx = src.GetTexture and src:GetTexture(); if tx then t:SetTexture(tx) end; if src.GetTexCoord then t:SetTexCoord(src:GetTexCoord()) end end
-    t:SetSize(src:GetWidth(), src:GetHeight()); t:SetPoint('TOPLEFT', frame, 'TOPLEFT', src:GetLeft() - fx, src:GetTop() - fy)
-    return t
-  end
-  if fx then
-    frame:SetSize(fw, fh)
-    copyRegion(cont and cont.FrameTexture, 'BORDER')
-    local mb = tf.TargetFrameContent and tf.TargetFrameContent.TargetFrameContentMain and tf.TargetFrameContent.TargetFrameContentMain.ManaBar
-    if mb and mb.GetStatusBarTexture then copyRegion(mb:GetStatusBarTexture(), 'ARTWORK') end
-    local por = cont and cont.Portrait
-    if por and por:GetLeft() then
-      local pt = frame:CreateTexture(nil, 'BACKGROUND'); pt:SetSize(por:GetWidth(), por:GetHeight()); pt:SetPoint('TOPLEFT', frame, 'TOPLEFT', por:GetLeft() - fx, por:GetTop() - fy)
-      pt:SetTexture('Interface\\Icons\\Ability_Hunter_Pet_Wolf'); local pm = frame:CreateMaskTexture(); pm:SetTexture('Interface\\CharacterFrame\\TempPortraitAlphaMask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); pm:SetAllPoints(pt); pt:AddMaskTexture(pm)
-      P.portrait = pt
-    end
-    local nmSrc = tf.TargetFrameContent and tf.TargetFrameContent.TargetFrameContentMain and tf.TargetFrameContent.TargetFrameContentMain.Name
-    if nmSrc and nmSrc:GetLeft() then
-      local fs = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall'); fs:SetPoint('TOPLEFT', frame, 'TOPLEFT', nmSrc:GetLeft() - fx, nmSrc:GetTop() - fy); fs:SetSize(nmSrc:GetWidth(), nmSrc:GetHeight()); fs:SetText('Cursed Darkhound')
-    end
-    if hb and hb:GetLeft() then bar.x, bar.y, bar.w, bar.h = hb:GetLeft() - fx, hb:GetTop() - fy, hb:GetWidth(), hb:GetHeight() end
-    frame:SetScale(math.min(1.3, 100 / fh))
-  end
-  if not bar.w then bar.x, bar.y, bar.w, bar.h = 20, -40, 124, 18 end   -- no target frame to copy: a plain bar
+  local pt = frame:CreateTexture(nil, 'BACKGROUND'); pt:SetSize(58, 58); pt:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -26, -19)
+  pt:SetTexture('Interface\\Icons\\Ability_Hunter_Pet_Wolf')
+  local pm = frame:CreateMaskTexture(); pm:SetTexture('Interface\\CharacterFrame\\TempPortraitAlphaMask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); pm:SetAllPoints(pt); pt:AddMaskTexture(pm)
+  P.portrait = pt
+  local fs = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall'); fs:SetPoint('BOTTOMLEFT', frame, 'TOPLEFT', 24, -40); fs:SetText('Cursed Darkhound')
+  bar.x, bar.y, bar.w, bar.h = 24, -42, 124, 18
 
   -- the bar: empty, green, a piece per DoT (base + lift), its bite wash, particles, creases, cast looks
   local empty = frame:CreateTexture(nil, 'ARTWORK', nil, 0); barTex(empty); empty:SetVertexColor(.14, .09, .05)
@@ -280,15 +255,17 @@ function ns.previewInitializer()
   if not Settings.CreateElementInitializer then return nil end
   local init = Settings.CreateElementInitializer('SettingsListElementTemplate', {})
   init.GetExtent = function() return H + 12 end
+  -- Blizzard pools these rows: we only parent our own frame to one, never hook or tag it, and never let the default
+  -- Resetter run (it calls the row's Release, which needs cbrHandles that this plain template never makes: the
+  -- 2026-11-13 BugSack error when switching Options categories)
   init.InitFrame = function(self, row)
     if not built then build(row) end
     P:SetParent(row); P:ClearAllPoints(); P:SetPoint('TOPLEFT', row, 'TOPLEFT', 30, -6); P:SetPoint('RIGHT', row, 'RIGHT', -30, 0); P:Show()
     P.row, P.init = row, self
-    if not row.omaPreviewHook then
-      row.omaPreviewHook = true
-      row:HookScript('OnHide', function() if P and P.row == row then P:Hide() end end)
-    end
     t0 = GetTime(); P.plan = plan()
+  end
+  init.Resetter = function(self, row)
+    if P and P.row == row then P:Hide(); P:ClearAllPoints(); P:SetParent(UIParent); P.row = nil end
   end
   return init
 end

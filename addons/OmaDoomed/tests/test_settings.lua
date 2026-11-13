@@ -76,4 +76,44 @@ return {
     T.eq(n, 1, 'the hello said once')
     T.ok(OmaDoomedDB.told and OmaDoomedDB.told.hello1, 'remembered for the account')
   end,
+
+  -- 2026-11-13 BugSack: 'Blizzard_SettingControls.lua:382: attempt to index field 'cbrHandles' (a nil value)' in
+  -- Release when switching categories, and 'Preview.lua:84 copyRegion: SetSize (Secret values...)'
+  ['preview: a pooled row is shown and recycled with no error, and nothing is written or hooked onto it'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local init = ns.settingsCategory.layout.inits[1]
+    T.eq(init.kind, 'element', 'the preview is the first row')
+    local row = UI.S.row()
+    local before = {}; for k in pairs(row) do before[k] = true end
+    UI.S.show(init, row)
+    T.ok(UI.isVisible(row) and #UI.kids(row) == 1, 'our preview sits in the row')
+    local ok, err = pcall(ns.previewDraw); T.ok(ok, 'draws: ' .. tostring(err))
+    for k in pairs(row) do if not before[k] and k ~= '_kids' then T.ok(false, 'wrote ' .. tostring(k) .. ' onto the row') end end
+    T.eq(row.scripts.OnHide, nil, 'no script hooked on the row')
+    local okR, errR = pcall(UI.S.recycle, init, row)
+    T.ok(okR, 'recycling the row: ' .. tostring(errR))
+    local P = UI.kids(row)[1]
+    T.ok(P == nil or not P:IsShown(), 'the preview went away with the row')
+    -- the same pooled row reused for us again
+    T.ok(pcall(UI.S.show, init, UI.S.row()), 'shown again in another pooled row')
+    T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
+  end,
+
+  ['preview: never reads the live target frame (its sizes are hidden on Forever)'] = function(W, T)
+    local ns, F, UI = setup(W)
+    -- every size and position on the real target frame comes back hidden
+    local touched = {}
+    local function hide(o, depth)
+      if type(o) ~= 'table' or depth > 6 then return end
+      for _, m in ipairs({ 'GetWidth', 'GetHeight', 'GetLeft', 'GetTop', 'GetSize' }) do
+        rawset(o, m, function() touched[#touched + 1] = m; return W.secret(100), W.secret(100) end)
+      end
+      for _, k in ipairs(UI.kids(o)) do hide(k, depth + 1) end
+    end
+    hide(TargetFrame, 0)
+    local init = ns.settingsCategory.layout.inits[1]
+    local ok, err = pcall(UI.S.show, init, UI.S.row()); T.ok(ok, 'builds: ' .. tostring(err))
+    local okD, errD = pcall(ns.previewDraw); T.ok(okD, 'draws: ' .. tostring(errD))
+    T.eq(#touched, 0, 'no size or position read off TargetFrame: ' .. table.concat(touched, ','))
+  end,
 }

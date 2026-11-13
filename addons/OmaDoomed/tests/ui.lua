@@ -95,9 +95,11 @@ function M.SetValue(self, v) rawset(self, '_value', v) end
 function M.GetValue(self) return rawget(self, '_value') or 0 end
 function M.SetMinMaxValues(self, lo, hi) rawset(self, '_min', lo); rawset(self, '_max', hi) end
 function M.GetMinMaxValues(self) return rawget(self, '_min') or 0, rawget(self, '_max') or 1 end
-function M.SetWidth(self, w) rawset(self, '_w', w) end
-function M.SetHeight(self, h) rawset(self, '_h', h) end
-function M.SetSize(self, w, h) rawset(self, '_w', w); rawset(self, '_h', h) end
+-- a hidden (secret) size is refused, as in the game outside Blizzard's own untainted code
+local function plain(v, what) if issecretvalue and issecretvalue(v) then error(what .. ': Secret values are only allowed during untainted execution', 3) end end
+function M.SetWidth(self, w) plain(w, 'SetWidth'); rawset(self, '_w', w) end
+function M.SetHeight(self, h) plain(h, 'SetHeight'); rawset(self, '_h', h) end
+function M.SetSize(self, w, h) plain(w, 'SetSize'); plain(h, 'SetSize'); rawset(self, '_w', w); rawset(self, '_h', h) end
 function M.GetWidth(self) return rawget(self, '_w') or 0 end
 function M.GetHeight(self) return rawget(self, '_h') or 0 end
 function M.GetSize(self) return rawget(self, '_w') or 0, rawget(self, '_h') or 0 end
@@ -538,13 +540,26 @@ function UI.settings()
     end,
     CreateElementInitializer = function(template, data)
       if type(template) ~= 'string' then bad('CreateElementInitializer wants a template name') end
-      return initializer('element', { template = template, data = data })
+      local init = initializer('element', { template = template, data = data })
+      -- Blizzard's default (ScrollBoxFactoryInitializerMixin:Resetter): the row's own Release, which on
+      -- SettingsListElementTemplate indexes cbrHandles, made only by the derived templates' OnLoad
+      function init:Resetter(frame) if frame.Release then frame:Release(self) end end
+      return init
     end,
     OpenToCategory = function(id)
       if type(id) ~= 'number' then bad('OpenToCategory wants a category ID') end
       S.opened[#S.opened + 1] = id
     end,
   }
+  -- a pooled SettingsListElementTemplate row, as Blizzard makes it: no cbrHandles; Release errors without it
+  function S.row()
+    local r = obj('SettingsListElementRow')
+    r.Release = function(self) local h = rawget(self, 'cbrHandles'); h:Unregister(); rawset(self, 'data', nil) end
+    return r
+  end
+  -- the list showing, then recycling, a row for an initializer (Blizzard_SettingsList.lua: InitFrame, then Resetter)
+  function S.show(init, row) init:InitFrame(row); return row end
+  function S.recycle(init, row) init:Resetter(row) end
   Settings.CreateDropDown = nil   -- the old spelling is gone on Forever; the add-on must use CreateDropdown
   MinimalSliderWithSteppersMixin = { Label = { Left = 'Left', Right = 'Right', Top = 'Top', Min = 'Min', Max = 'Max' } }
   SettingsSliderControlMixin = { Init = function() end }
