@@ -49,7 +49,8 @@ end
 
 local ev = CreateFrame('Frame')
 for _, e in ipairs({ 'ADDON_ACTION_BLOCKED', 'ADDON_ACTION_FORBIDDEN', 'MACRO_ACTION_BLOCKED', 'MACRO_ACTION_FORBIDDEN', 'LFG_LIST_SEARCH_RESULTS_RECEIVED',
-  'LFG_LIST_SEARCH_FAILED', 'LFG_LIST_ACTIVE_ENTRY_UPDATE', 'LFG_LIST_ROLE_UPDATE', 'CHAT_MSG_WHISPER', 'CHAT_MSG_WHISPER_INFORM', 'UI_ERROR_MESSAGE', 'PLAYER_LOGIN' }) do pcall(ev.RegisterEvent, ev, e) end
+  'LFG_LIST_SEARCH_FAILED', 'LFG_LIST_ACTIVE_ENTRY_UPDATE', 'LFG_LIST_ROLE_UPDATE', 'CHAT_MSG_WHISPER', 'CHAT_MSG_WHISPER_INFORM', 'UI_ERROR_MESSAGE', 'PLAYER_LOGIN',
+  'CHAT_MSG_SYSTEM', 'GROUP_ROSTER_UPDATE', 'PARTY_INVITE_REQUEST', 'INSPECT_READY', 'AUTOFOLLOW_BEGIN', 'AUTOFOLLOW_END', 'READY_CHECK', 'RAID_TARGET_UPDATE' }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript('OnEvent', function(_, e, a, b2, c)
   if e == 'PLAYER_LOGIN' then
     log('OmaProbe loaded. build', (select(4, GetBuildInfo())), 'gamepadUI', tostring(InputUtil and InputUtil.IsGamepadUIEnabled and InputUtil.IsGamepadUIEnabled()))
@@ -212,6 +213,17 @@ local keyActs = {
 --   pad D-pad up:    try to move the real mouse onto the test button (the D-pad rule)
 --   pad D-pad left:  try a simulated left click (the test button logs it if it lands)
 --   right stick:     count stick events, and try moving the mouse from a stick event once
+-- Round 6 (2026-11-13): the Party tab's actions, each from one key press sent the way the phone would. A made-up
+-- name is used, so nobody real is invited or added; WoW answers "not found", which proves the call got through.
+-- ADDON_ACTION_BLOCKED / FORBIDDEN in the log would mean WoW keeps that call from add-ons.
+local FAKE = 'Zzqxomatest'
+keyActs['1'] = function() try('PARTY InviteUnit fake', C_PartyInfo.InviteUnit, FAKE) end
+keyActs['2'] = function() try('PARTY AddFriend fake', C_FriendList.AddFriend, FAKE) end
+keyActs['3'] = function() try('PARTY FollowUnit player', FollowUnit, 'player') end
+keyActs['4'] = function() try('PARTY InspectUnit player', InspectUnit, 'player'); C_Timer.After(1.5, function() if InspectFrame and InspectFrame:IsShown() then log('inspect window open'); pcall(HideUIPanel, InspectFrame) else log('inspect window not open') end end) end
+keyActs['5'] = function() try('PARTY DoReadyCheck', DoReadyCheck) end
+keyActs['6'] = function() try('PARTY LeaveParty', C_PartyInfo.LeaveParty); try('PARTY UninviteUnit fake', UninviteUnit, FAKE); try('PARTY PromoteToLeader fake', PromoteToLeader, FAKE) end
+keyActs['7'] = function() try('PARTY SetRaidTarget star on me', SetRaidTarget, 'player', 1); C_Timer.After(1, function() log('mark on me now', tostring(GetRaidTargetIndex('player'))); pcall(SetRaidTarget, 'player', 0) end) end
 local padf
 local target = CreateFrame('Button', 'OmaProbeTarget', UIParent, 'UIPanelButtonTemplate')
 target:SetSize(160, 40); target:SetPoint('CENTER', 300, 120); target:SetText('Pointer target')
@@ -280,7 +292,7 @@ binder:SetScript('OnEvent', function()
     b:SetScript('OnClick', function() log('-- key CTRL-SHIFT-' .. key); local ok, e = pcall(fn); if not ok then log('ERROR', e) end end)
     SetOverrideBindingClick(binder, true, 'CTRL-SHIFT-' .. key, b:GetName(), 'LeftButton')
   end
-  log('key bindings set: CTRL-SHIFT-F1..F4, F7, F9, F10')
+  log('key bindings set: CTRL-SHIFT-F1..F12, 1..7')
   -- Round 5: ConsolePort's way of clicking. A hidden secure button of type "click" points at the target; the pad
   -- button is bound to it, so the press reaches the target as a real hardware click, with no hover needed.
   --   A  -> left click on our test button       X -> right click on our test button
