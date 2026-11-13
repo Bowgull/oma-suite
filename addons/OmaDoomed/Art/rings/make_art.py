@@ -179,15 +179,17 @@ def ring_bold_hard(x, y, d):
 # The outer line is drawn with the ring; the inner one is drawn above the brass bezel (which overlaps the band's
 # inner edge), so the band sits in a black channel as on the sheet.
 def ring_edge(x, y, d):
-    return (0, 0, 0, ring_cov(d, BOLD_R + BOLD_W / 2 + PX1 * .35, PX1 * 1.1))
+    # 2026-11-13 (Joshua: the lines looked "broken and stippled"): 1.6 px wide at 40 px, so the smaller target-frame
+    # rings (~28 px) still get a whole pixel; the edge that touches the band stays where it was
+    return (0, 0, 0, ring_cov(d, BOLD_R + BOLD_W / 2 + PX1 * .6, PX1 * 1.6))
 
 
 def ring_edge_in(x, y, d):
-    return (0, 0, 0, ring_cov(d, BOLD_R - BOLD_W / 2 - PX1 * .3, PX1 * 1.0))
+    return (0, 0, 0, ring_cov(d, BOLD_R - BOLD_W / 2 - PX1 * .6, PX1 * 1.6))
 
 
 def ring_edge_in_thin(x, y, d):
-    return (0, 0, 0, ring_cov(d, RING_R - RING_W / 2 - PX1 * .3, PX1 * 1.0))
+    return (0, 0, 0, ring_cov(d, RING_R - RING_W / 2 - PX1 * .6, PX1 * 1.6))
 
 
 def swipe_track_bold(x, y, d):

@@ -58,8 +58,8 @@ local function ringWidget(parent)
   local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(w)
   local bez = top:CreateTexture(nil, 'ARTWORK'); bez:SetTexture(ART .. 'rings\\bezel'); bez:SetAllPoints()
   -- sheet 55: Modern's colour band sits in a black channel (outside line, and the inside line over the bezel)
-  local edge = top:CreateTexture(nil, 'ARTWORK', nil, 1); edge:SetTexture(ART .. 'rings\\ring_edge'); edge:SetAllPoints()
-  local edgeIn = top:CreateTexture(nil, 'ARTWORK', nil, 2); edgeIn:SetTexture(ART .. 'rings\\ring_edge_in'); edgeIn:SetAllPoints()
+  local edge = top:CreateTexture(nil, 'ARTWORK', nil, 1); edge:SetTexture(ART .. 'rings\\ring_edge', nil, nil, 'TRILINEAR'); edge:SetAllPoints()
+  local edgeIn = top:CreateTexture(nil, 'ARTWORK', nil, 2); edgeIn:SetTexture(ART .. 'rings\\ring_edge_in', nil, nil, 'TRILINEAR'); edgeIn:SetAllPoints()
   local num = top:CreateFontString(nil, 'OVERLAY'); num:SetFont(STANDARD_TEXT_FONT, 16, 'OUTLINE'); num:SetPoint('CENTER')
   w.ic, w.ring, w.glow, w.cd, w.num, w.light, w.spot, w.shadow, w.bez, w.back = ic, ring, glow, cd, num, light, spot, shadow, bez, back
   w.edge, w.edgeIn = edge, edgeIn

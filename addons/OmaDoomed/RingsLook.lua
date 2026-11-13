@@ -284,7 +284,7 @@ local function mainOwn(b, k, key)
     local spot = b:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot'); spot:SetAllPoints(b)
     local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(b)
     -- sheet 55: the band's inside edge, over the bezel's outer rim
-    local edge = b:CreateTexture(nil, 'ARTWORK', nil, 3); edge:SetTexture(ART .. (R.GLYPH and 'ring_edge_in_thin' or 'ring_edge_in')); edge:SetAllPoints(b)
+    local edge = b:CreateTexture(nil, 'ARTWORK', nil, 3); edge:SetTexture(ART .. (R.GLYPH and 'ring_edge_in_thin' or 'ring_edge_in'), nil, nil, 'TRILINEAR'); edge:SetAllPoints(b)
   end
   local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_inner')
   -- Classic: the icon stays full strength all the way down; the ring alone drains (in game the 50% dark sweep over
@@ -360,7 +360,7 @@ local function ringOwn(color, curve, key, light)
     local top
     if not flat then
       top = CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
-      local edge = top:CreateTexture(nil, 'OVERLAY'); edge:SetTexture(ART .. 'ring_edge'); edge:SetAllPoints(b)
+      local edge = top:CreateTexture(nil, 'OVERLAY'); edge:SetTexture(ART .. 'ring_edge', nil, nil, 'TRILINEAR'); edge:SetAllPoints(b)
     end
     -- sheet 58 C: in the last seconds the WHOLE ring, drained part too, breathes in the DoT's own lit colour. Only a
     -- font string can follow the time left on a locked button, so this needs the ring font (R.GLYPH); it sits above
