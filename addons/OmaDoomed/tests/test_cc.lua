@@ -50,8 +50,14 @@ return {
     local f = ring(ns)
     T.ok(f, 'still shown'); T.eq(f.num:GetText(), '20', 'Fear rank 3: 20 s')
   end,
-  ['Haunt or Target frame: while the held mob is your target its ring is on the frame, so nothing beside it'] = function(W, T)
+  ['Haunt: the ring stays over the mob, so with your held target off screen it shows beside the frame'] = function(W, T)
     local ns, F, UI = setup(W, { where = 'split' })
+    twoMobs(W, F); W.combat = true
+    cast(W, FEAR); offScreen(W, 'nameplate1'); W.advance(.2)
+    T.ok(ring(ns), 'your target, off screen: beside the frame (the frame row has no crowd-control ring in Haunt)')
+  end,
+  ['Target frame: while the held mob is your target its ring is on the frame, so nothing beside it'] = function(W, T)
+    local ns, F, UI = setup(W, { where = 'frame' })
     twoMobs(W, F); W.combat = true
     cast(W, FEAR); offScreen(W, 'nameplate1'); W.advance(.2)
     T.eq(ring(ns), nil, 'your target: shown in the frame row')

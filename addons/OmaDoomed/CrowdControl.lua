@@ -160,8 +160,10 @@ local function ended(h) return now() >= h.start + h.dur end
 function CC.wantsRing(h)
   if not h or ended(h) or h.over then return false end
   if liveToken(h) then return false end                       -- the plate's exact ring shows instead
-  if isTarget(h) and R.db and (R.db.where == 'frame' or R.db.where == 'split') and R.db.enabled ~= false then
-    return false                                              -- it's on your target's frame, in the frame's own row
+  -- Target frame: it's in the frame's own row. Haunt keeps it over the mob instead (Rings.lua OVERHEAD), so with the
+  -- mob off screen there the ring beside the frame is the only one
+  if isTarget(h) and R.db and R.db.where == 'frame' and R.db.enabled ~= false then
+    return false
   end
   return true
 end
@@ -299,7 +301,8 @@ local function plateGroups()
   if InCombatLockdown() or not R.pairsAll then return end
   local on = db.cc ~= false
   for _, p in ipairs(R.pairsAll) do
-    pcall(p.ring.SetAuraGroupEnabled, p.ring, 'cc', on); pcall(p.main.SetAuraGroupEnabled, p.main, 'cc', on)
+    local k = on and not (p == R.framePair and db.where == 'split')   -- Haunt: over the mob, never in the frame row
+    pcall(p.ring.SetAuraGroupEnabled, p.ring, 'cc', k); pcall(p.main.SetAuraGroupEnabled, p.main, 'cc', k)
   end
 end
 

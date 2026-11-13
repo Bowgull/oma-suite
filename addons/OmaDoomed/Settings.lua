@@ -42,7 +42,7 @@ ns.settings = Core.NewSettings({
       tip = "Your DoTs as rings over enemies. Off: Blizzard's own debuff icons come back on nameplates, and on the target frame unless Blizzard's squares is set to Hide." },
     { key = 'where', store = R, default = 'enemy', control = 'dropdown', label = 'Where the rings show',
       choices = { { 'enemy', 'Above enemies' }, { 'frame', 'Target frame' }, { 'split', 'Haunt' } },
-      tip = "Above enemies: rings over every enemy's head. Target frame: only on your target's frame. Haunt: over every enemy you're not targeting; the one you target shows its rings on its frame, with your curse and your channel still over its head." },
+      tip = "Above enemies: rings over every enemy's head. Target frame: only on your target's frame. Haunt: over every enemy you're not targeting; the one you target shows its rings on its frame, with your curse, your channel and your crowd control still over its head." },
     { key = 'squares', store = R, default = 'notmine', control = 'dropdown', label = "Blizzard's squares",
       choices = { { 'notmine', 'All but my DoTs' }, { 'all', 'All' }, { 'hide', 'Hide' } },
       tip = "Blizzard's own buff and debuff squares on the target frame. All but my DoTs: on mobs the debuff squares go, stuns and the mob's own debuffs too (Blizzard can't hide only yours; the rings show yours), and buffs stay. On players everything stays." },

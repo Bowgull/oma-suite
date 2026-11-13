@@ -177,6 +177,8 @@ return {
     T.eq(#over.curse, 1, 'Curse of Weakness over the mob'); T.eq(#over.channel, 1, 'Drain Life over the mob')
     T.eq(#(over.corruption or {}), 0, 'no DoT over the mob in Haunt')
     T.eq(#onFrame.curse, 0, 'no curse on the frame row'); T.eq(#onFrame.channel, 0, 'no channel on the frame row')
+    T.eq(ns.rings.OVERHEAD.cc, true, 'crowd control stays over the mob in Haunt too')
+    T.eq(UI.group(UI.mainOf(frame), 'cc').enabled, false, 'no crowd-control ring on the frame row in Haunt'); T.eq(UI.group(UI.mainOf(chan), 'cc').enabled, true, 'it is on the over-the-mob row')
     T.eq(#onFrame.corruption, 1, 'Corruption on the frame row')
     noErrors(T)
   end,

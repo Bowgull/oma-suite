@@ -201,13 +201,17 @@ visible = function()
   end
 end
 ns.ringsVisible = visible
--- in Haunt these groups stay over your target's nameplate (chanPair), off its frame row: your channel (sheet 41) and
--- your curses (2026-11-13, Joshua: "in haunt mode this is always on")
-local OVERHEAD = { channel = true, curse = true }
+-- in Haunt these groups stay over your target's nameplate (chanPair), off its frame row: your channel (sheet 41),
+-- your curses (2026-11-13, Joshua: "in haunt mode this is always on") and your crowd control (2026-11-13: "yes keep
+-- it over the mob in haunt")
+local OVERHEAD = { channel = true, curse = true, cc = true }
 R.OVERHEAD = OVERHEAD
 local function channelGroup(p, on)
   if not p or InCombatLockdown() then return end
-  for key in pairs(OVERHEAD) do pcall(p.ring.SetAuraGroupEnabled, p.ring, key, on); pcall(p.main.SetAuraGroupEnabled, p.main, key, on) end
+  for key in pairs(OVERHEAD) do
+    local k = on and not (key == 'cc' and db.cc == false)   -- the crowd-control switch still wins
+    pcall(p.ring.SetAuraGroupEnabled, p.ring, key, k); pcall(p.main.SetAuraGroupEnabled, p.main, key, k)
+  end
 end
 local function makeFramePair()
   if framePair or InCombatLockdown() or not TargetFrame then return end
