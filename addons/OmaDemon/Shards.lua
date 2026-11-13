@@ -396,6 +396,8 @@ table.insert(ns.onSetting, function(key, store)
   if key == 'zeroHint' and last then refreshZero(last) end
   if key == 'gemLook' or key == 'size' or key == 'hideOOC' then ns.shardsPreview(4) end
 end)
+-- shared with the Soulstone tracker (Stones.lua): the same gem art, cells and row, so it always matches the gems
+ns.gemSheet, ns.gemCells, ns.gemRoot = sheet, CELL, root
 -- the pet frame's size changes (Edit Mode): follow it. Our own frame only; theirs untouched.
 if _G.PetFrame and hooksecurefunc then hooksecurefunc(_G.PetFrame, 'SetScale', function() place() end) end
 local lookEv = CreateFrame('Frame'); lookEv:RegisterEvent('PLAYER_LOGIN')

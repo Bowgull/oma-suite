@@ -10,17 +10,19 @@ local function db()
   OmaDemonDB = OmaDemonDB or {}
   OmaDemonDB.glow = OmaDemonDB.glow or {}
   OmaDemonDB.shards = OmaDemonDB.shards or {}
+  OmaDemonDB.group = OmaDemonDB.group or {}
   return OmaDemonDB
 end
 function ns.glowDB() return db().glow end
 function ns.shardsDB() return db().shards end
+function ns.groupDB() return db().group end
 function ns.say(m) print('|cffc08cffOmaDemon:|r ' .. m) end
 
 ns.onSetting = {}
 local function changed(key, store) for _, fn in ipairs(ns.onSetting) do fn(key, store) end end
 
 local pct = function(v) return ('%d%%'):format(v) end
-local G, S = 'glow', 'shards'
+local G, S, R = 'glow', 'shards', 'group'
 
 ns.settings = Core.NewSettings({
   prefix = 'OMADEMON_',
@@ -66,6 +68,20 @@ ns.settings = Core.NewSettings({
     { key = 'zeroHint', store = S, default = false, control = 'check', label = 'Pulse when empty', parent = 'gems',
       tip = 'The first gem pulses amber when you have no shards and Drain Soul is known.' },
 
+    { header = 'Group' },
+    { key = 'soulstone', store = R, default = true, control = 'check', label = 'Soulstone tracker',
+      tip = "Your soul crystal and the time left, on the party frame of whoever has your Soulstone. On yourself, at the end of your gems." },
+    { key = 'sayStone', store = R, default = false, control = 'check', label = 'Say Soulstone in chat',
+      tip = [["Soulstone on <name>." in party or raid chat when you place it. Never when you're alone.]] },
+    { key = 'saySummon', store = R, default = false, control = 'check', label = 'Say summons in chat',
+      tip = '"summoning <name>, click the portal pls" when you start Ritual of Summoning.' },
+    { key = 'sayStones', store = R, default = false, control = 'check', label = 'Say Healthstones in chat',
+      tip = '"healthstones ready, grab one" when you make them.' },
+
+    { header = 'Reminders' },
+    { key = 'armor', store = R, default = true, control = 'check', label = 'Armor missing',
+      tip = 'Your Demon Skin or Demon Armor button glows softly when the armor is off. Out of combat only.' },
+
     { header = 'Extra Shards' },
     { key = 'keep', store = S, default = 6, control = 'slider', label = 'Shards to keep', min = 1, max = 20, step = 1, format = tostring,
       tip = 'Above this many, you get one line in chat so you can clear bag space.' },
@@ -98,6 +114,8 @@ SlashCmdList.OMADEMON = function(msg)
   if cmd == '' or cmd == 'options' then return ns.settings:Open() end
   if cmd == 'shards' then return ns.shardsSlash and ns.shardsSlash(rest) end
   if cmd == 'preview' then return ns.previewWarning and ns.previewWarning() end
+  if cmd == 'stone' then return ns.stoneTest and ns.stoneTest(rest ~= '' and rest or nil) end
+  if cmd == 'armor' then return ns.armorTest and ns.armorTest() end
   if cmd == 'motion' then
     local off = rest:lower() == 'off'
     ns.glowDB().reduced = off; ns.shardsDB().reduced = off

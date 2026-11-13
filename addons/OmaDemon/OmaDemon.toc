@@ -14,3 +14,5 @@ Libs\OmaCore\Slash.lua
 Settings.lua
 Glow.lua
 Shards.lua
+Stones.lua
+Armor.lua
