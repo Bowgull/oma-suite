@@ -48,6 +48,23 @@ local function px(n, frame)           -- screen pixels -> UI units of that frame
   local _, h = GetPhysicalScreenSize(); return n * 768 / h / (frame or UIParent):GetEffectiveScale()
 end
 
+-- The masks that shape the green itself (2026-11-13, 'the mob target health was spilling over into the frame'):
+-- Blizzard's frame, and BetterBlizzFrames' big or portrait-less health bar, draw the green through a mask
+-- (HealthBarsContainer.HealthBarMask) and the bar's own box is bigger than what shows. Pieces filling the box ran onto
+-- the frame art; through the same masks they show exactly where the green does, on every style and scale.
+local function greenMasks(f)
+  local out = {}
+  if not (f and f.GetNumMaskTextures and f.GetMaskTexture) then return out end
+  local ok, n = pcall(f.GetNumMaskTextures, f)
+  if not ok or Secret.is(n) or type(n) ~= 'number' then return out end
+  for i = 1, math.min(n, 4) do
+    local okM, m = pcall(f.GetMaskTexture, f, i)
+    if okM and type(m) == 'table' and m.GetObjectType and m:GetObjectType() == 'MaskTexture' then out[#out + 1] = m end
+  end
+  return out
+end
+P.greenMasks = greenMasks
+
 -- the bar we draw on (TargetFinder.lua): Blizzard's, EllesmereUI's or a saved frame path. P.blizz: Blizzard's own.
 local want                             -- { bar, portrait, blizz } chosen by update()
 local function find()
@@ -78,6 +95,13 @@ local function sizeSkull()
 end
 P.sizeSkull = function() pcall(sizeSkull) end
 
+-- the health bar's width, or a stand-in when it's hidden or not laid out yet (the sizer then sets the real one)
+local function barWidth()
+  local ok, w = pcall(hb.GetWidth, hb)
+  if ok and not Secret.is(w) and type(w) == 'number' and w > 0 then return w end
+  return 120
+end
+
 local function build()
   if built then return true end
   if not find() then return false end
@@ -97,14 +121,14 @@ local function build()
   -- our own copy of the health's end (2026-11-11, 'really jumpy'): pinning to Blizzard's fill mixed two clocks, so on a
   -- tick the pieces jumped left for one frame before the bite caught them. Now the health's end and the bite move in
   -- the same SetValue pass, every frame. Health may be a hidden number: only a status bar is handed it.
-  P.base = CreateFrame('StatusBar', nil, clip); P.base:SetPoint('TOPLEFT', hb, 'TOPLEFT'); P.base:SetPoint('BOTTOMLEFT', hb, 'BOTTOMLEFT'); P.base:SetWidth(hb:GetWidth())
+  P.base = CreateFrame('StatusBar', nil, clip); P.base:SetPoint('TOPLEFT', hb, 'TOPLEFT'); P.base:SetPoint('BOTTOMLEFT', hb, 'BOTTOMLEFT'); P.base:SetWidth(barWidth())
   P.base:SetStatusBarTexture(WHITE); P.base:SetStatusBarColor(0, 0, 0, 0); P.base:SetMinMaxValues(0, 1); P.base:SetValue(0)
   local baseEdge = P.base:GetStatusBarTexture(); nosnap(baseEdge); P.hungOn = fill
   -- 2026-11-11 'jittery, like rubber bands': the pieces used to hang off a chain (health's end -> slide bar -> holder ->
   -- piece bar -> edge), and WoW settles each link of a chain on its own, so mid-slide the pieces wobbled against the
   -- green. Now every edge is a "mark" hung straight off the health's end, one link deep, all moved in the same pass:
   -- the way Blizzard's own smooth bars work (one value glides, everything is drawn from it).
-  local W = hb:GetWidth()
+  local W = barWidth()
   P.marks = {}
   P.baseEdge = baseEdge
   local function hang(m, edge)
@@ -125,11 +149,18 @@ local function build()
     return m
   end
   P.newMark = newMark
+  function P.fitWidth(w)
+    if Secret.is(w) or type(w) ~= 'number' or w <= 0 or w == W then return end
+    W = w; P.base:SetWidth(w)
+    for _, m in ipairs(P.marks) do m.L:SetWidth(w); m.R:SetWidth(w) end
+  end
   P.E = { [0] = newMark() }   -- E[0]: the far end of the pieces (the health's end plus any bite still closing)
   local art = CreateFrame('Frame', nil, clip); art:SetAllPoints(clip); art:SetFrameLevel(clip:GetFrameLevel() + 2)
   -- the health bar's own shape, as a mask: anything striped stays inside it (2026-11-11: the stripes ran onto the
   -- name banner and the mana bar)
-  if art.CreateMaskTexture then
+  P.masks = greenMasks(fill)
+  if #P.masks > 0 then P.barMask = nil
+  elseif art.CreateMaskTexture then
     P.barMask = art:CreateMaskTexture(); P.barMask:SetAllPoints(hb)
     if not P.blizz then P.barMask:SetTexture(WHITE, 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE')   -- not Blizzard's shape: the bar's box
     elseif atlasOK(FILL) then P.barMask:SetAtlas(FILL) else P.barMask:SetTexture('Interface\\TargetingFrame\\UI-StatusBar', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE') end
@@ -174,8 +205,9 @@ local function build()
     -- the light a tick casts on the bitten part (the bar's own shape)
     s.spillC = art:CreateTexture(nil, 'OVERLAY', nil, 4); barTex(s.spillC); s.spillC:SetBlendMode('ADD'); s.spillC:Hide()
     -- every texture of a piece keeps to the health bar's own shape (2026-11-11: saw colour outside the bar once)
-    if P.barMask then
-      for _, t in ipairs({ s.base, s.lift, s.creaseL, s.creaseR, s.ghost, s.spillC, s.pre, s.cbase, s.clift, s.spark, s.wash, s.motes, s.parts[1], s.parts[2], s.parts[3], s.parts[4], s.parts[5] }) do t:AddMaskTexture(P.barMask) end
+    local shape = (#P.masks > 0) and P.masks or { P.barMask }
+    for _, t in ipairs({ s.base, s.lift, s.creaseL, s.creaseR, s.ghost, s.spillC, s.pre, s.cbase, s.clift, s.spark, s.wash, s.motes, s.parts[1], s.parts[2], s.parts[3], s.parts[4], s.parts[5] }) do
+      for _, m in ipairs(shape) do t:AddMaskTexture(m) end
     end
     s.quiet = { s.wash, s.motes, s.parts[1], s.parts[2], s.parts[3], s.parts[4], s.parts[5], s.cbase, s.clift, s.spark, s.pre, s.ghost, s.spillC }   -- an empty slot hides these
     segs[i] = s
@@ -210,7 +242,13 @@ local function build()
   shine = art:CreateTexture(nil, 'OVERLAY', nil, 2); barTex(shine); shine:SetBlendMode('ADD')
   shine:SetPoint('TOPRIGHT', P.E[0].f, 'TOPLEFT'); shine:SetPoint('BOTTOMRIGHT', P.E[0].f, 'BOTTOMLEFT')
   if CreateColor then shine:SetGradient('VERTICAL', CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, .30)) end
+  for _, m in ipairs((#P.masks > 0) and P.masks or { P.barMask }) do shine:AddMaskTexture(m); P.lost:AddMaskTexture(m) end
   P.shineFar = nil
+  -- the pieces' bars are as wide as the health bar; another add-on may resize it after we're built (BetterBlizzFrames
+  -- does at login and on its settings): our own frame on the bar hears it and follows (a hidden size is skipped)
+  local sizer = CreateFrame('Frame', nil, clip); sizer:SetAllPoints(hb)
+  sizer:SetScript('OnSizeChanged', function(_, w) P.fitWidth(w) end)
+  P.sizer = sizer
 
   -- the skull and bones, on the ring's top edge like a raid mark (sheet 23 v5); none when the frame has no portrait
   win, longBar, mark = nil, nil, nil

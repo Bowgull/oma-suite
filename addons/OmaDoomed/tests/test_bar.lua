@@ -167,4 +167,73 @@ return {
     T.eq(slot(M, 'Corruption'), nil); T.eq(slot(M, 'Immolate'), nil)
     noErrors(T)
   end,
+
+  -- 2026-11-13 'the mob target health was spilling over into the frame': the green is drawn through Blizzard's mask
+  -- (BetterBlizzFrames' big health bar makes the bar's box taller than what shows); every piece uses the same mask
+  ['spill: every piece, the shine and the empty bar are shaped by the green\'s own mask'] = function(W, T)
+    local ns, F, UI, M, DOTS = setup(W)
+    DOTS[A] = { dot(W, 'Corruption', 47, 12), dot(W, 'Immolate', 20, 15) }
+    W.advance(1, FRAME)
+    local P = ns.parts.doomed
+    local hbMask = TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBarMask
+    T.eq(#P.masks, 1, 'found the one mask on the green'); T.eq(P.masks[1], hbMask, "it is Blizzard's HealthBarMask")
+    T.eq(P.barMask, nil, 'no box-shaped mask of our own')
+    local s = slot(M, 'Corruption')
+    for _, k in ipairs({ 'base', 'lift', 'creaseL', 'creaseR', 'ghost', 'spillC', 'pre', 'cbase', 'clift', 'spark', 'wash', 'motes' }) do
+      local ms = rawget(s[k], '_masks') or {}
+      local has = false; for _, m in ipairs(ms) do if m == hbMask then has = true end end
+      T.ok(has, k .. ' carries the green\'s mask')
+    end
+    for k = 1, 5 do T.ok((rawget(s.parts[k], '_masks') or {})[1] == hbMask, 'particle ' .. k .. ' carries it') end
+    local function hasMask(t) for _, m in ipairs(rawget(t, '_masks') or {}) do if m == hbMask then return true end end end
+    T.ok(hasMask(P.lost), 'the empty bar carries it')
+    noErrors(T)
+  end,
+
+  ['spill: a bar with no mask of its own still gets the bar\'s shape'] = function(W, T)
+    local ns, F, UI = require('load').addon()
+    -- strip Blizzard's mask: the fill now has none (another add-on's plain bar)
+    local hb = TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar
+    rawset(hb:GetStatusBarTexture(), '_masks', nil)
+    F.mob('nameplate1', A, 'Kobold', 100); F.target(A)
+    local M = ns.model; local DOTS = { [A] = { dot(W, 'Corruption', 47, 12) } }
+    M.source = function(u) local t = W.units[u]; return t and DOTS[t.guid] or {} end
+    W.advance(1, FRAME)
+    local P = ns.parts.doomed
+    T.eq(#P.masks, 0, 'no mask on the green'); T.ok(P.barMask ~= nil, 'our own bar-shaped mask instead')
+    T.eq((rawget(slot(M, 'Corruption').base, '_masks') or {})[1], P.barMask, 'the piece uses it')
+    noErrors(T)
+  end,
+
+  ['spill: when the bar is resized after we are built, the pieces follow; a hidden size is skipped'] = function(W, T)
+    local ns, F, UI, M, DOTS = setup(W)
+    DOTS[A] = { dot(W, 'Corruption', 47, 12) }
+    W.advance(1, FRAME)
+    local P = ns.parts.doomed
+    T.eq(P.base:GetWidth(), 124, 'built at the bar\'s width')
+    local onSize = P.sizer.scripts.OnSizeChanged
+    T.ok(type(onSize) == 'function', 'our own frame listens for the bar\'s size')
+    onSize(P.sizer, 180, 30)
+    T.eq(P.base:GetWidth(), 180, 'the health copy follows')
+    for _, m in ipairs(P.marks) do T.eq(m.L:GetWidth(), 180); T.eq(m.R:GetWidth(), 180) end
+    onSize(P.sizer, W.secret(90), 30)
+    T.eq(P.base:GetWidth(), 180, 'a hidden width changes nothing')
+    for _, m in ipairs(P.marks) do T.eq(m.L:GetWidth(), 180, 'marks keep the last real width') end
+    noErrors(T)
+  end,
+
+  ['spill: a hidden bar width at build time is never handed to SetWidth'] = function(W, T)
+    local ns, F, UI = require('load').addon()
+    local hb = TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar
+    hb._w = W.secret(124)
+    F.mob('nameplate1', A, 'Kobold', 100); F.target(A)
+    local M = ns.model; local DOTS = { [A] = { dot(W, 'Corruption', 47, 12) } }
+    M.source = function(u) local t = W.units[u]; return t and DOTS[t.guid] or {} end
+    W.advance(1, FRAME)
+    local P = ns.parts.doomed
+    T.ok(P.base and type(P.base:GetWidth()) == 'number', 'a plain stand-in width')
+    for _, m in ipairs(P.marks) do T.ok(not issecretvalue(m.L:GetWidth()), 'no mark got a hidden width') end
+    T.ok(slot(M, 'Corruption') ~= nil, 'the piece still drew')
+    noErrors(T)
+  end,
 }

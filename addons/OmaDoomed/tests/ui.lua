@@ -133,6 +133,8 @@ function M.GetText(self) return rawget(self, '_text') end
 function M.SetTexture(self, t) rawset(self, '_texture', t) end
 function M.SetAtlas(self, a) rawset(self, '_atlas', a) end
 function M.AddMaskTexture(self, m) local ms = rawget(self, '_masks') or {}; rawset(self, '_masks', ms); ms[#ms + 1] = m end
+function M.GetNumMaskTextures(self) return #(rawget(self, '_masks') or EMPTY) end
+function M.GetMaskTexture(self, i) return (rawget(self, '_masks') or EMPTY)[i] end
 function M.SetFont(self, f) rawset(self, '_font', f); return true end   -- the game answers true when the font loads
 function M.GetStatusBarTexture(self)
   local t = rawget(self, '_tex'); if not t then t = obj('Texture'); link(t, self); rawset(self, '_tex', t) end
@@ -200,6 +202,9 @@ function UI.install()
   link(content, TargetFrame); link(main, content); link(hbc, main); link(hb, hbc); link(ctx, content)
   link(container, TargetFrame); link(portrait, container)
   hb._w, hb._h = 124, 19
+  -- Blizzard draws the green through the container's mask (TargetFrame.xml: HealthBarsContainer.HealthBarMask)
+  local hbMask = obj('MaskTexture'); hbMask._type = 'MaskTexture'; link(hbMask, hbc); hbc.HealthBarMask = hbMask
+  hb:GetStatusBarTexture():AddMaskTexture(hbMask)
   portrait._w, portrait._h = 58, 58   -- Blizzard's target portrait
   TargetFrame.TargetFrameContent = content; content.TargetFrameContentMain = main; main.HealthBarsContainer = hbc
   hbc.HealthBar = hb; main.ManaBar = obj('ManaBar'); link(main.ManaBar, main)
