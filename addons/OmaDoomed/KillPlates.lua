@@ -99,7 +99,16 @@ local function piecesFor(hb, addon, reversed)
     t:AddMaskTexture(mask); t:Hide(); t.omShown = false
     return t
   end
-  local function newMask() local m = hb:CreateMaskTexture(); m:SetTexture('Interface\\Buttons\\WHITE8X8', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); return m end
+  -- 2026-11-13 ('gaps between the bars'): an 8x8 white square stretched over a piece, smoothly filtered, fades to
+  -- nothing over half a texel at each end: piece width / 16 (measured: 4.6 px on a 73 px piece, 3 px on a 48 px one),
+  -- so Blizzard's red showed between pieces and at the health's end. NEAREST filtering keeps every edge hard.
+  local function newMask()
+    local m = hb:CreateMaskTexture()
+    if not pcall(m.SetTexture, m, 'Interface\\Buttons\\WHITE8X8', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'NEAREST') then
+      m:SetTexture('Interface\\Buttons\\WHITE8X8', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE')
+    end
+    return m
+  end
   set.charge, set.ov, set.mask = {}, {}, {}
   local near, far = edge(reversed, 'near'), edge(reversed, 'far')
   for i = 1, MAX do

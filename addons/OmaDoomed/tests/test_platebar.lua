@@ -176,6 +176,8 @@ return {
         T.ok(pts.LEFT[1] == hb and pts.RIGHT[1] == hb, 'piece ' .. i .. ': the sides are the bar\'s (the mask cuts it)')
         T.ok(rawget(art, '_parent') == hb, 'piece ' .. i .. ': inside the health bar')
         T.eq(#rawget(art, '_masks'), 1, 'piece ' .. i .. ': one square mask, no bar-wide stencil')
+        -- 2026-11-13 'gaps between the bars': a smoothly filtered mask fades over width/16 at each end and the red shows
+        T.eq(rawget(rawget(art, '_masks')[1], '_filter'), 'NEAREST', 'piece ' .. i .. ': its mask has hard edges')
       end
       T.eq(rawget(set[i].omArt, '_atlas'), 'UI-HUD-CoolDownManager-Bar', 'piece ' .. i .. ': the fill\'s own atlas')
       -- the mask hangs on measuring bars that ride the fill: their top and bottom are the fill's too

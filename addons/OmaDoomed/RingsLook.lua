@@ -228,28 +228,32 @@ local function roundIcon(b, size)
   return icon
 end
 
-local function numberOn(cd, b, size)
+-- the number's height as a share of the ring: sheet 39 A 'Bold'. Curses last minutes, so theirs reads "2m" (two
+-- characters at that height overran the ring, Joshua 2026-11-13: "the curses text for the timer is too big")
+R.NUM_K, R.NUM_K_LONG = 0.58, 0.40
+local function numberOn(cd, b, size, k)
   -- the number lives in a child of the cooldown, so it always draws above the dark swipe; it never moves
   local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
   local num = top:CreateFontString(nil, 'OVERLAY')
-  num:SetFont(NUM_FONT, math.floor(size * 0.58 + 0.5), 'THICKOUTLINE')   -- sheet 39 A 'Bold': big outlined number
+  num:SetFont(NUM_FONT, math.floor(size * (type(k) == 'number' and k or R.NUM_K) + 0.5), 'THICKOUTLINE')
   num:SetPoint('CENTER', b, 'CENTER', 0, -size * 0.02)
   num:SetTextColor(1, 1, 1, 1); num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1)
   return num
 end
 
-local function mainOwn(b)
+local function mainOwn(b, k)
   b:SetSize(S, S); pcall(b.EnableMouse, b, false)
   -- sheet 41 'Bold, richer': the icon stays clear; a dark spot behind the number keeps it readable
   local icon = roundIcon(b, S); icon:SetAlpha(.8)
   local spot = b:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot'); spot:SetAllPoints(b)
   local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(b)
   local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_inner')
-  local num = numberOn(cd, b, S)
+  local num = numberOn(cd, b, S, k)
   b:SetIcon(icon)
   b:SetDurationCooldown(cd)
   b:SetDurationText(num, textOpts(NUM_FMT, numCurve))
 end
+local function mainLong(b) mainOwn(b, R.NUM_K_LONG) end   -- curses: minutes-long, so a smaller number
 
 local function mainOthers(b)
   b:SetSize(OS, OS); pcall(b.EnableMouse, b, false); b:SetAlpha(R.OTHERS_ALPHA)
@@ -326,7 +330,7 @@ R.GROUPS = {}
 function R.buildGroups()
   local G = {}
   for _, sp in ipairs(SPELLS) do
-    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = mainOwn, ring = ringOwn(sp.color, ringCurves[sp.key], sp.key) }
+    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = sp.kind == 'curse' and mainLong or mainOwn, ring = ringOwn(sp.color, ringCurves[sp.key], sp.key) }
   end
   G[#G + 1] = { key = 'mine', filter = OWN, max = 6, main = mainOwn, ring = ringOwn(DARK_BRASS, mineRingCurve) }
   G[#G + 1] = { key = 'others', filter = OTHERS, max = 3,   -- a pack's rings crowded the next plate

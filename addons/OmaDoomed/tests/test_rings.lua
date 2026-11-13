@@ -136,6 +136,25 @@ return {
     T.eq(#onFrame.corruption, 1, 'Corruption on the frame row')
     noErrors(T)
   end,
+  -- 2026-11-13, Joshua: "the curses text for the timer is too big" (a curse reads "2m")
+  ['curse ring: its timer number is smaller than a DoT ring\'s'] = function(W, T)
+    local ns, F, UI = setup(W)
+    -- the number of a button: the font string set up under it (button > cooldown > top frame > font string)
+    local function numSize(b)
+      for _, e in ipairs(UI.fontSizes) do
+        local o = e[1]
+        for _ = 1, 4 do o = type(o) == 'table' and rawget(o, '_parent') or nil; if o == b then return e[2] end end
+      end
+    end
+    local main = UI.mainOf(UI.ringContainers()[1])
+    local dot = numSize(UI.group(main, 'corruption').buttons[1])
+    local curse = numSize(UI.group(main, 'curse').buttons[1])
+    T.ok(dot and curse, 'both numbers found')
+    T.ok(curse < dot, ('curse %s smaller than DoT %s'):format(tostring(curse), tostring(dot)))
+    T.near(curse / dot, .40 / .58, .08, 'about 70% of the DoT number')
+    T.eq(numSize(UI.group(main, 'channel').buttons[1]), dot, 'channels keep the big number')
+    noErrors(T)
+  end,
   ['not Haunt: the curse is on the frame row with the rest'] = function(W, T)
     local ns, F, UI = setup(W, { where = 'frame' })
     F.mob('nameplate1', A, 'Kobold', 300).auras = { 172, 702 }

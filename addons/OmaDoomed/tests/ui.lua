@@ -132,12 +132,13 @@ function M.GetReverseFill(self) return rawget(self, '_reverse') or false end
 function M.SetReverseFill(self, v) rawset(self, '_reverse', v and true or false) end
 function M.SetText(self, t) rawset(self, '_text', t) end
 function M.GetText(self) return rawget(self, '_text') end
-function M.SetTexture(self, t) rawset(self, '_texture', t) end
+function M.SetTexture(self, t, wh, wv, filter) rawset(self, '_texture', t); rawset(self, '_filter', filter) end
 function M.SetAtlas(self, a) rawset(self, '_atlas', a) end
 function M.AddMaskTexture(self, m) local ms = rawget(self, '_masks') or {}; rawset(self, '_masks', ms); ms[#ms + 1] = m end
 function M.GetNumMaskTextures(self) return #(rawget(self, '_masks') or EMPTY) end
 function M.GetMaskTexture(self, i) return (rawget(self, '_masks') or EMPTY)[i] end
-function M.SetFont(self, f) rawset(self, '_font', f); return true end   -- the game answers true when the font loads
+UI.fontSizes = {}   -- every SetFont, in order: { object, size }
+function M.SetFont(self, f, size) rawset(self, '_font', f); rawset(self, '_fontSize', size); UI.fontSizes[#UI.fontSizes + 1] = { self, size }; return true end   -- the game answers true when the font loads
 function M.GetStatusBarTexture(self)
   local t = rawget(self, '_tex'); if not t then t = obj('Texture'); link(t, self); rawset(self, '_tex', t) end
   return t
