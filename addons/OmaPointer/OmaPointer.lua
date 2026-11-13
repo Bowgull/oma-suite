@@ -133,6 +133,33 @@ local function windowUnder()
   end
   return best
 end
+-- lists that scroll (aux results, bags, Blizzard lists): the frame that owns the scrolling, if the button is in one
+local function scrollOwner(f)
+  local cur = f
+  for _ = 1, 6 do
+    if blocked(cur) then return end
+    local ok, found = pcall(function()
+      if cur:IsObjectType('ScrollFrame') or (cur:HasScript('OnMouseWheel') and cur:GetScript('OnMouseWheel')) then return cur end
+      for _, c in ipairs({ cur:GetChildren() }) do
+        if not blocked(c) and c:IsObjectType('ScrollFrame') then return cur end
+      end
+    end)
+    if ok and found then return found end
+    local okp, par = pcall(cur.GetParent, cur)
+    if not okp or not par or par == UIParent then return end
+    cur = par
+  end
+end
+local function inside(f, owner)
+  local cur = f
+  for _ = 1, 12 do
+    if not cur then return false end
+    if cur == owner then return true end
+    local ok, par = pcall(cur.GetParent, cur); if not ok then return false end
+    cur = par
+  end
+  return false
+end
 local function step(dir)
   local ox, oy = P.x, P.y   -- the same units as GetScaledRect (scale-1 units, what GetCursorPosition gives)
   local best, bs
@@ -147,6 +174,15 @@ local function step(dir)
       local w = 1 + math.deg(math.atan2(math.abs(off), along)) / 15
       local sc = (dx * w) ^ 2 + (dy * w) ^ 2
       if not bs or sc < bs then best, bs = c, sc end
+    end
+  end
+  -- at the edge of a list, up / down scroll the list and the pointer stays on its row
+  if (dir == 'U' or dir == 'D') and P.target then
+    local owner = scrollOwner(P.target)
+    if owner and (not best or not inside(best.f, owner)) then
+      local ok, err = pcall(SimulateMouseWheel, dir == 'D' and -1 or 1)
+      dbg('scroll', dir, ok and 'ok' or ('failed: ' .. tostring(err)))
+      return
     end
   end
   dbg('step', dir, 'in', win and (win:GetName() or 'a window') or 'everything', 'candidates', #list, 'picked', best and (best.f:GetName() or best.f:GetDebugName()) or 'none')
@@ -204,6 +240,8 @@ local function bindings()
 end
 function OmaPointer_Show()
   if InCombatLockdown() then say('not in a fight'); return end
+  local auxLoaded = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded('auxForever')
+  if P.ah and auxLoaded then say('auxForever has its own controller controls here (D-pad, A, X, Y, LB/RB), so the pointer stays away.'); return end
   if P.up then return end
   P.up = true
   -- with a pad in use WoW pins the mouse to the screen centre unless its own pad pointer is on; ConsolePort's trick:
@@ -254,7 +292,11 @@ end)
 -- ---------- setup: the chord, the macro on set 2 RT + X, combat ----------
 local ev = CreateFrame('Frame')
 ev:RegisterEvent('PLAYER_LOGIN'); ev:RegisterEvent('PLAYER_REGEN_DISABLED')
+-- the auction house: auxForever has its own controller support there, so the pointer stays out of its way
+for _, e in ipairs({ 'AUCTION_HOUSE_SHOW', 'AUCTION_HOUSE_CLOSED' }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript('OnEvent', function(_, e)
+  if e == 'AUCTION_HOUSE_SHOW' then P.ah = true; return end
+  if e == 'AUCTION_HOUSE_CLOSED' then P.ah = false; return end
   if e == 'PLAYER_REGEN_DISABLED' then if P.up then P.up = false; ring:Hide(); pad:EnableGamePadStick(false); pad:EnableGamePadButton(false); P.target = nil; pcall(SetGamePadCursorControl, false); if P.oldSticks then C_CVar.SetCVar('GamePadCursorAutoDisableSticks', P.oldSticks); P.oldSticks = nil end end; return end
   S = OmaPointerDB
   for k, v in pairs(DEF) do if S[k] == nil then S[k] = v end end
@@ -270,7 +312,7 @@ ev:SetScript('OnEvent', function(_, e)
     PickupMacro('Pointer'); PlaceAction(slot); ClearCursor()
     say('put the Pointer button on set 2, RT + X')
   end
-  say('ready. LB + right-stick click (or set 2 RT + X): call it up. Right stick moves, D-pad steps, A click, X right-click, Y player menu, B away.')
+  say('ready. The Pointer button (set 2, RT + X) or LB + right-stick click calls it up. Right stick moves, D-pad steps (and scrolls at the end of a list), A click, X right-click, Y player menu, B away.')
 end)
 
 SLASH_OMAPOINTER1 = '/omapointer'
