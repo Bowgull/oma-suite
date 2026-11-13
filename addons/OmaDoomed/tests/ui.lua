@@ -132,7 +132,8 @@ function M.GetReverseFill(self) return rawget(self, '_reverse') or false end
 function M.SetReverseFill(self, v) rawset(self, '_reverse', v and true or false) end
 function M.SetText(self, t) rawset(self, '_text', t) end
 function M.GetText(self) return rawget(self, '_text') end
-function M.SetTexture(self, t, wh, wv, filter) rawset(self, '_texture', t); rawset(self, '_filter', filter) end
+UI.textures = {}   -- every SetTexture, in order: the file
+function M.SetTexture(self, t, wh, wv, filter) rawset(self, '_texture', t); rawset(self, '_filter', filter); UI.textures[#UI.textures + 1] = t end
 function M.SetAtlas(self, a) rawset(self, '_atlas', a) end
 function M.SetTexCoord(self, l, r, t, b) rawset(self, '_tc', { l, r, t, b }) end
 function M.AddMaskTexture(self, m) local ms = rawget(self, '_masks') or {}; rawset(self, '_masks', ms); ms[#ms + 1] = m end

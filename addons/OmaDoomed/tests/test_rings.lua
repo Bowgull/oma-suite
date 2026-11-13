@@ -27,6 +27,50 @@ local function hauntRows(UI)
 end
 local function errsWith(text) local n = 0; for _, e in ipairs(OmaDoomedDB.errs or {}) do if e:find(text, 1, true) then n = n + 1 end end; return n end
 
+-- sheet 51 B, and the 'Ring look' setting (Rich by default; Flat is sheet 52 F)
+local function ringLook(look)
+  return function(W, T)
+    local function numSize(UI, b)
+      for _, e in ipairs(UI.fontSizes) do
+        local o = e[1]
+        for _ = 1, 4 do o = type(o) == 'table' and rawget(o, '_parent') or nil; if o == b then return e[2] end end
+      end
+    end
+    local function polish(UI)   -- how many shadow / gloss / bezel / number-spot textures were set up
+      local n = 0
+      for _, t in ipairs(UI.textures) do
+        t = tostring(t)
+        if t:find('ring_shadow') or t:find('ring_light') or t:find('bezel') or t:find('numspot') then n = n + 1 end
+      end
+      return n
+    end
+    do
+      local U0 = require('ui'); for k = #U0.textures, 1, -1 do U0.textures[k] = nil end; for k = #U0.fontSizes, 1, -1 do U0.fontSizes[k] = nil end
+      local ns, F, UI = setup(W, { where = 'frame', look = look ~= 'rich' and look or nil })
+      F.mob('nameplate1', A, 'Kobold', 300).auras = { 172 }
+      W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
+      local R = ns.rings
+      local frame = hauntRows(UI)
+      T.ok(frame, look .. ': the frame row exists')
+      T.near(40 * R.FRAME_SCALE, 28, .01, '28 px ring'); T.near(R.FRAME_SPACE * R.FRAME_SCALE, 4, .05, '4 px between rings')
+      T.ok(5 * 28 + 4 * R.FRAME_SPACE * R.FRAME_SCALE <= 157, 'five fit under the health bar')
+      local fm = UI.mainOf(frame)
+      local plateMain
+      for _, c in ipairs(UI.ringContainers()) do if c ~= frame then plateMain = UI.mainOf(c); break end end
+      local fnum, pnum = numSize(UI, UI.group(fm, 'corruption').buttons[1]), numSize(UI, UI.group(plateMain, 'corruption').buttons[1])
+      if look == 'rich' then
+        T.eq(fnum, math.floor(40 * .44 + .5), 'rich: frame row number 44% (sheet 51 B)'); T.eq(pnum, math.floor(40 * .58 + .5), 'rich: over the mobs 58%')
+        T.ok(polish(UI) > 0, 'rich: the lit ring, bezel and number spot are there')
+      else
+        T.eq(fnum, math.floor(40 * .46 + .5), 'flat: 46% on the frame row'); T.eq(pnum, math.floor(40 * .46 + .5), 'flat: 46% over the mobs')
+        T.eq(polish(UI), 0, 'flat: no shadow, gloss, bezel or number spot')
+      end
+      T.ok(numSize(UI, UI.group(fm, 'curse').buttons[1]) < fnum, look .. ': the curse number is smaller still')
+      noErrors(T)
+    end
+  end
+end
+
 return {
   ['the rings start: past the API check, every group on every container'] = function(W, T)
     local ns, F, UI = setup(W)
@@ -151,45 +195,13 @@ return {
     local curse = numSize(UI.group(main, 'curse').buttons[1])
     T.ok(dot and curse, 'both numbers found')
     T.ok(curse < dot, ('curse %s smaller than DoT %s'):format(tostring(curse), tostring(dot)))
-    T.near(curse / dot, .40 / .46, .08, 'smaller than the DoT number (sheet 52 F: 46%)')
+    T.near(curse / dot, .40 / .58, .08, 'about 70% of the DoT number')
     T.eq(numSize(UI.group(main, 'channel').buttons[1]), dot, 'channels keep the big number')
     noErrors(T)
   end,
   -- sheet 51 B (approved "B"): the target-frame row is 28 px with a smaller number
-  ['target-frame row: 28 px rings, 4 px apart; the number on every ring is 46% of it, thin outline'] = function(W, T)
-    local ns, F, UI = setup(W, { where = 'frame' })
-    F.mob('nameplate1', A, 'Kobold', 300).auras = { 172 }
-    W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
-    local R = ns.rings or ns.parts.rings
-    local frame = hauntRows(UI)
-    T.ok(frame, 'the frame row exists')
-    T.near(40 * R.FRAME_SCALE, 28, .01, '28 px ring'); T.near(R.FRAME_SPACE * R.FRAME_SCALE, 4, .05, '4 px between rings')
-    T.ok(5 * 28 + 4 * R.FRAME_SPACE * R.FRAME_SCALE <= 157, 'five fit under the health bar')
-    local function numSize(b)
-      for _, e in ipairs(UI.fontSizes) do
-        local o = e[1]
-        for _ = 1, 4 do o = type(o) == 'table' and rawget(o, '_parent') or nil; if o == b then return e[2] end end
-      end
-    end
-    local fm = UI.mainOf(frame)
-    T.eq(numSize(UI.group(fm, 'corruption').buttons[1]), math.floor(40 * .46 + .5), 'frame row number: 46% of the ring (sheet 52 F)')
-    T.ok(numSize(UI.group(fm, 'curse').buttons[1]) < numSize(UI.group(fm, 'corruption').buttons[1]), 'its curse number is smaller still')
-    local plateMain
-    for _, c in ipairs(UI.ringContainers()) do if c ~= frame then plateMain = UI.mainOf(c); break end end
-    T.eq(numSize(UI.group(plateMain, 'corruption').buttons[1]), math.floor(40 * .46 + .5), 'over the mobs: the same 46% (sheet 52 F)')
-    -- sheet 52 F: flat rings: no shadow, gloss, bezel or dark spot on any ring button
-    for _, c in ipairs(UI.ringContainers()) do
-      for _, cc in ipairs({ c, UI.mainOf(c) }) do
-        for _, g in ipairs(cc.groups) do
-          for _, k in ipairs(UI.kids(g.buttons[1])) do
-            local t = tostring(rawget(k, '_texture') or '')
-            T.ok(not (t:find('ring_shadow') or t:find('ring_light') or t:find('bezel') or t:find('numspot')), 'no polish layer: ' .. t)
-          end
-        end
-      end
-    end
-    noErrors(T)
-  end,
+  ['Ring look: Rich by default (lit ring, bezel, bold number); frame row 28 px, 4 px apart'] = ringLook('rich'),
+  ['Ring look: Flat strips the shadow, gloss, bezel and number spot; thin 46% number'] = ringLook('flat'),
   ['not Haunt: the curse is on the frame row with the rest'] = function(W, T)
     local ns, F, UI = setup(W, { where = 'frame' })
     F.mob('nameplate1', A, 'Kobold', 300).auras = { 172, 702 }

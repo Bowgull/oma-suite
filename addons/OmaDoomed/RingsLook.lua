@@ -35,7 +35,7 @@ R.FRAME_SCALE = 0.70                -- 28 px under the frame (was 0.56: 22 px)
 R.FRAME_GAP = 5                     -- between the bars' bottom edge and the rings (~3.5 px, as before)
 R.FRAME_SPACE = 5.7                 -- between rings in the row: 4 px (5 x 28 + 4 x 4 = 156 of the bar's 157)
 R.FRAME_LEFT = 5.6                  -- the first ring's edge lines up with the frame's brass border (~4 px, as before)
-R.FRAME_NUM_K = 0.46                -- the number's height as a share of the ring in this row (0.58 over the mobs)
+R.FRAME_NUM_K = 0.44                -- the number's height as a share of the ring in this row (0.58 over the mobs)
 local OS = S * 0.6                  -- other players' DoTs: 60% size
 R.OS = OS
 R.OTHERS_ALPHA = 0.55               -- and 55% alpha (settings 'Other players' DoTs' sets it when the rings load)
@@ -233,33 +233,45 @@ end
 
 -- the number's height as a share of the ring: sheet 39 A 'Bold'. Curses last minutes, so theirs reads "2m" (two
 -- characters at that height overran the ring, Joshua 2026-11-13: "the curses text for the timer is too big")
--- Sheet 52 F (approved 2026-11-13, "F with white centred, apply to all rings"): every ring is flat: a hard black
--- disc, one band in the DoT's colour that drains, the icon. No shadow, gloss, bezel or dark spot; the number is white
--- with a thin outline at 46% of the ring, so the icon shows round it.
-R.NUM_K, R.NUM_K_LONG = 0.46, 0.40
+-- Two ring looks, the 'Ring look' setting (2026-11-13: "can we go back to the other rich rings ... maybe this can be
+-- a setting?"). Rich (the default, sheets 39/41): shadow, backing, lit ring, bezel, a dark spot under a bold number.
+-- Flat (sheet 52 F): a hard black disc, the draining colour band, the icon; a white number with a thin outline.
+-- A ring's parts are fixed when it is built, so a change shows after a /reload.
+function R.flat() local d = R.db or (ns.db and ns.db.rings); return d ~= nil and d.look == 'flat' end
+R.NUM_K_LONG = 0.40
+-- the number's share of the ring: over the mobs, and in the target-frame row (sheet 51 B)
+function R.numK(frame) if R.flat() then return 0.46 end; return frame and R.FRAME_NUM_K or 0.58 end
+R.NUM_K = 0.58
 local function numberOn(cd, b, size, k)
   -- the number lives in a child of the cooldown, so it always draws above the dark swipe; it never moves
   local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
   local num = top:CreateFontString(nil, 'OVERLAY')
-  num:SetFont(NUM_FONT, math.floor(size * (type(k) == 'number' and k or R.NUM_K) + 0.5), 'OUTLINE')
+  local flat = R.flat()
+  num:SetFont(NUM_FONT, math.floor(size * (type(k) == 'number' and k or R.numK()) + 0.5), flat and 'OUTLINE' or 'THICKOUTLINE')
   num:SetPoint('CENTER', b, 'CENTER', 0, -size * 0.02)
-  num:SetTextColor(1, 1, 1, 1); num:SetShadowColor(0, 0, 0, 0); num:SetShadowOffset(0, 0)
+  num:SetTextColor(1, 1, 1, 1)
+  if flat then num:SetShadowColor(0, 0, 0, 0); num:SetShadowOffset(0, 0) else num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1) end
   return num
 end
 
 local function mainOwn(b, k)
   b:SetSize(S, S); pcall(b.EnableMouse, b, false)
-  local icon = roundIcon(b, S)   -- sheet 52 F: the icon alone, full strength
+  local icon = roundIcon(b, S)
+  if not R.flat() then   -- Rich (sheet 41): a dark spot behind the number, the brass bezel
+    icon:SetAlpha(.8)
+    local spot = b:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot'); spot:SetAllPoints(b)
+    local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(b)
+  end
   local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_inner')
   local num = numberOn(cd, b, S, k)
   b:SetIcon(icon)
   b:SetDurationCooldown(cd)
   b:SetDurationText(num, textOpts(NUM_FMT, numCurve))
 end
-local function mainLong(b) mainOwn(b, R.NUM_K_LONG) end   -- curses: minutes-long, so a smaller number
+local function mainLong(b) mainOwn(b, R.NUM_K_LONG * R.numK() / 0.58) end   -- curses: minutes-long, so a smaller number
 -- the target-frame row's own numbers (sheet 51 B); a curse keeps its smaller share
-local function mainFrame(b) mainOwn(b, R.FRAME_NUM_K) end
-local function mainFrameLong(b) mainOwn(b, R.FRAME_NUM_K * R.NUM_K_LONG / R.NUM_K) end
+local function mainFrame(b) mainOwn(b, R.numK(true)) end
+local function mainFrameLong(b) mainOwn(b, R.numK(true) * R.NUM_K_LONG / 0.58) end
 
 local function mainOthers(b)
   b:SetSize(OS, OS); pcall(b.EnableMouse, b, false); b:SetAlpha(R.OTHERS_ALPHA)
@@ -296,7 +308,9 @@ end
 local function ringOwn(color, curve, key)
   return function(b)
     b:SetSize(S, S); pcall(b.EnableMouse, b, false)
-    local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. 'backing_flat'); back:SetAllPoints(b)   -- sheet 52 F: a hard black disc
+    local flat = R.flat()
+    if not flat then local shadow = b:CreateTexture(nil, 'BACKGROUND', nil, -8); shadow:SetTexture(ART .. 'ring_shadow'); shadow:SetAllPoints(b) end   -- sheet 41: sits in the world
+    local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (flat and 'backing_flat' or 'backing')); back:SetAllPoints(b)
     if R.GLYPH and curve then
       local fs = b:CreateFontString(nil, 'ARTWORK')
       fs:SetFont(RING_FONT, S, ''); fs:SetSize(S * 2, S * 2); fs:SetPoint('CENTER', b, 'CENTER')
@@ -307,6 +321,8 @@ local function ringOwn(color, curve, key)
       local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. 'ring_bold'); t:SetAllPoints(b)   -- sheet 39 A: twice as thick
       t:SetVertexColor(color[1], color[2], color[3])
     end
+    -- Rich (sheet 41): the ring lit like metal (cream on top, shade underneath, a warm sheen up-left), under the dark track
+    if not flat then local light = b:CreateTexture(nil, 'ARTWORK', nil, 3); light:SetTexture(ART .. 'ring_light'); light:SetAllPoints(b) end
     local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_track_bold')
     b:SetDurationCooldown(cd)
     if key then
@@ -325,7 +341,7 @@ end
 local function ringOthers(b)
   -- only the dark backing disc for other players' DoTs (their plain ring is drawn by the main button)
   b:SetSize(OS, OS); pcall(b.EnableMouse, b, false); b:SetAlpha(R.OTHERS_ALPHA)
-  local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. 'backing_flat'); back:SetAllPoints(b)
+  local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (R.flat() and 'backing_flat' or 'backing')); back:SetAllPoints(b)
 end
 
 -- group order is layout order: crowd control first (sheet 48), the four DoTs (fixed order, one group each so each can carry its own colour), the
