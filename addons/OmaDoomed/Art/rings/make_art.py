@@ -103,6 +103,11 @@ def write_tga(path, px):
 
 
 # ---------- the textures ----------
+def backing_flat(x, y, d):
+    # sheet 52 F (approved 2026-11-13): one hard black disc, no soft shadow: WoW's own level of finish
+    return (0, 0, 0, disc_cov(d, BACK_R))
+
+
 def backing(x, y, d):
     # mockup: shadowColor rgba(0,0,0,.8), shadowBlur 5s, fill #120803 disc of r + 3s
     shadow = (0, 0, 0, 0.8 * blur_edge(d, BACK_R, 5 / 70 / 2) * edge_fade(d))
@@ -195,7 +200,7 @@ def numspot(x, y, d):
 
 
 TEXTURES = {
-    'backing': backing, 'mask': mask, 'bezel': bezel, 'ring': ring, 'ring_plain': ring_plain,
+    'backing': backing, 'backing_flat': backing_flat, 'mask': mask, 'bezel': bezel, 'ring': ring, 'ring_plain': ring_plain,
     'swipe_inner': swipe_inner, 'swipe_track': swipe_track,
     'ring_bold': ring_bold, 'swipe_track_bold': swipe_track_bold,
     'ring_light': ring_light, 'ring_shadow': ring_shadow, 'numspot': numspot,

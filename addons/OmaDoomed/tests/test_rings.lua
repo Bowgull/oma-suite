@@ -151,12 +151,12 @@ return {
     local curse = numSize(UI.group(main, 'curse').buttons[1])
     T.ok(dot and curse, 'both numbers found')
     T.ok(curse < dot, ('curse %s smaller than DoT %s'):format(tostring(curse), tostring(dot)))
-    T.near(curse / dot, .40 / .58, .08, 'about 70% of the DoT number')
+    T.near(curse / dot, .40 / .46, .08, 'smaller than the DoT number (sheet 52 F: 46%)')
     T.eq(numSize(UI.group(main, 'channel').buttons[1]), dot, 'channels keep the big number')
     noErrors(T)
   end,
   -- sheet 51 B (approved "B"): the target-frame row is 28 px with a smaller number
-  ['target-frame row: 28 px rings, 4 px apart, number 44% of the ring; rows over mobs unchanged'] = function(W, T)
+  ['target-frame row: 28 px rings, 4 px apart; the number on every ring is 46% of it, thin outline'] = function(W, T)
     local ns, F, UI = setup(W, { where = 'frame' })
     F.mob('nameplate1', A, 'Kobold', 300).auras = { 172 }
     W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
@@ -172,11 +172,22 @@ return {
       end
     end
     local fm = UI.mainOf(frame)
-    T.eq(numSize(UI.group(fm, 'corruption').buttons[1]), math.floor(40 * .44 + .5), 'frame row number: 44% of the ring')
+    T.eq(numSize(UI.group(fm, 'corruption').buttons[1]), math.floor(40 * .46 + .5), 'frame row number: 46% of the ring (sheet 52 F)')
     T.ok(numSize(UI.group(fm, 'curse').buttons[1]) < numSize(UI.group(fm, 'corruption').buttons[1]), 'its curse number is smaller still')
     local plateMain
     for _, c in ipairs(UI.ringContainers()) do if c ~= frame then plateMain = UI.mainOf(c); break end end
-    T.eq(numSize(UI.group(plateMain, 'corruption').buttons[1]), math.floor(40 * .58 + .5), 'over the mobs: unchanged')
+    T.eq(numSize(UI.group(plateMain, 'corruption').buttons[1]), math.floor(40 * .46 + .5), 'over the mobs: the same 46% (sheet 52 F)')
+    -- sheet 52 F: flat rings: no shadow, gloss, bezel or dark spot on any ring button
+    for _, c in ipairs(UI.ringContainers()) do
+      for _, cc in ipairs({ c, UI.mainOf(c) }) do
+        for _, g in ipairs(cc.groups) do
+          for _, k in ipairs(UI.kids(g.buttons[1])) do
+            local t = tostring(rawget(k, '_texture') or '')
+            T.ok(not (t:find('ring_shadow') or t:find('ring_light') or t:find('bezel') or t:find('numspot')), 'no polish layer: ' .. t)
+          end
+        end
+      end
+    end
     noErrors(T)
   end,
   ['not Haunt: the curse is on the frame row with the rest'] = function(W, T)
