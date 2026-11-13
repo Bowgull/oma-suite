@@ -40,7 +40,8 @@ local OS = S * 0.6                  -- other players' DoTs: 60% size
 R.OS = OS
 R.OTHERS_ALPHA = 0.55               -- and 55% alpha (settings 'Other players' DoTs' sets it when the rings load)
 local OTHERS_GAP = S * 6 / 70       -- mockup: 6 units gap on a 70-unit cell
-R.GAP = 4                           -- row bottom sits this far above the name (mockup: ~5 of 70)
+R.GAP = 6.5   -- sheet 55 (2026-11-13): 6 px of air above the name on his screen (was 4: 3 px, the row read as part of the name)
+R.GAP_OLD = 4                           -- row bottom sits this far above the name (mockup: ~5 of 70)
 local BREATH, LOW_ALPHA = 1.5, 0.3  -- a DoT's last seconds ('Ending soon'): gold, one breath every 1.5 s, down to 30%
 -- How often Blizzard re-draws each countdown number and ring colour, in seconds (0 = every frame). The number changes
 -- once a second; the breath is the only thing that needs speed. Set back to 0 if the breath looks stepped in game.
@@ -154,7 +155,7 @@ function R.probe()
       tries = tries + 1
       local ok2, set2 = pcall(fs.SetFont, fs, RING_FONT, 32)
       if ok2 and set2 then
-        R.GLYPH = true; numCurve = makeCurve(WHITE, WHITE, true)
+        R.GLYPH = true
         log(('probe: ring font loaded on retry %d'):format(tries))
       elseif tries < 6 then C_Timer.After(tries, retry)
       else log('probe: ring font still refused after 6 tries') end
@@ -164,8 +165,9 @@ function R.probe()
 
   for _, sp in ipairs(SPELLS) do ringCurves[sp.key] = makeCurve(sp.color, GOLD, true) end
   mineRingCurve = makeCurve(DARK_BRASS, GOLD, true)
-  -- glyph mode: the number stays white and breathes with the ring. Fallback: the number itself goes gold.
-  numCurve = makeCurve(WHITE, R.GLYPH and WHITE or GOLD, true)
+  -- sheet 55 (2026-11-13): the number always turns gold and breathes in the last seconds. With 2 s left only a
+  -- sliver of ring is left to turn gold, so the ring alone was easy to miss.
+  numCurve = makeCurve(WHITE, GOLD, true)
 end
 
 -- ---------- spell IDs for the per-spell groups ----------
@@ -264,6 +266,8 @@ local function mainOwn(b, k)
     icon:SetAlpha(.8)
     local spot = b:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot'); spot:SetAllPoints(b)
     local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(b)
+    -- sheet 55: the band's inside edge, over the bezel's outer rim
+    local edge = b:CreateTexture(nil, 'ARTWORK', nil, 3); edge:SetTexture(ART .. (R.GLYPH and 'ring_edge_in_thin' or 'ring_edge_in')); edge:SetAllPoints(b)
   end
   local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_inner')
   -- Classic: the icon stays full strength all the way down; the ring alone drains (in game the 50% dark sweep over
@@ -324,13 +328,20 @@ local function ringOwn(color, curve, key)
       fs:SetTextColor(color[1], color[2], color[3], 1)
       b:SetDurationText(fs, textOpts(RING_FMT, curve))
     else
-      local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. 'ring_bold'); t:SetAllPoints(b)   -- sheet 39 A: twice as thick
+      -- sheet 39 A: twice as thick. Modern's band is hard-edged (sheet 55): its soft halo read as airbrushed
+      local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. (flat and 'ring_bold' or 'ring_bold_hard')); t:SetAllPoints(b)
       t:SetVertexColor(color[1], color[2], color[3])
     end
     -- Rich (sheet 41): the ring lit like metal (cream on top, shade underneath, a warm sheen up-left), under the dark track
     if not flat then local light = b:CreateTexture(nil, 'ARTWORK', nil, 3); light:SetTexture(ART .. 'ring_light'); light:SetAllPoints(b) end
     local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_track_bold')
     b:SetDurationCooldown(cd)
+    -- sheet 55 / 53 B: Modern's band sits in a channel: a 1 px black line outside it, above the dark track so it
+    -- runs the whole way round (the inside line is drawn over the bezel, in the main button)
+    if not flat then
+      local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
+      local edge = top:CreateTexture(nil, 'OVERLAY'); edge:SetTexture(ART .. 'ring_edge'); edge:SetAllPoints(b)
+    end
     if key then
       local glow = b:CreateTexture(nil, 'OVERLAY', nil, 7); glow:SetTexture(ART .. 'ring_bold'); glow:SetAllPoints(b)
       glow:SetVertexColor(color[1], color[2], color[3]); glow:SetBlendMode('ADD'); glow:SetAlpha(0)

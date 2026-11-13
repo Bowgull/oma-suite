@@ -83,7 +83,7 @@ local function newRing()
   local flat = R.flat()   -- the 'Ring look' setting: Rich (shadow, lit ring, bezel, number spot) or Flat (sheet 52 F)
   if not flat then local shadow = f:CreateTexture(nil, 'BACKGROUND', nil, -8); shadow:SetTexture(ART .. 'ring_shadow'); shadow:SetAllPoints(f) end
   local back = f:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (flat and 'backing_flat' or 'backing')); back:SetAllPoints(f)
-  local ring = f:CreateTexture(nil, 'ARTWORK'); ring:SetTexture(ART .. 'ring_bold'); ring:SetAllPoints(f)
+  local ring = f:CreateTexture(nil, 'ARTWORK'); ring:SetTexture(ART .. (flat and 'ring_bold' or 'ring_bold_hard')); ring:SetAllPoints(f)
   if not flat then local light = f:CreateTexture(nil, 'ARTWORK', nil, 3); light:SetTexture(ART .. 'ring_light'); light:SetAllPoints(f) end
   local track = CreateFrame('Cooldown', nil, f)
   -- the same cooldown look as the plate rings: the dark track covers the spent part, so the ring drains
@@ -92,6 +92,7 @@ local function newRing()
   pcall(track.SetDrawEdge, track, false); pcall(track.SetDrawBling, track, false); pcall(track.SetReverse, track, true)
   pcall(track.SetHideCountdownNumbers, track, true)
   local top = CreateFrame('Frame', nil, track); top:SetAllPoints(f)
+  if not flat then local edge = top:CreateTexture(nil, 'BACKGROUND'); edge:SetTexture(ART .. 'ring_edge'); edge:SetAllPoints(f) end   -- sheet 55: the band encased
   local icon = top:CreateTexture(nil, 'ARTWORK', nil, 0)
   icon:SetSize(SIZE * 0.756, SIZE * 0.756); icon:SetPoint('CENTER', f, 'CENTER'); icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)
   local m = top:CreateMaskTexture(); m:SetTexture(ART .. 'mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(f)
@@ -100,6 +101,7 @@ local function newRing()
     icon:SetAlpha(.8)
     local spot = top:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot'); spot:SetAllPoints(f)
     local bezel = top:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(f)
+    local edgeIn = top:CreateTexture(nil, 'ARTWORK', nil, 3); edgeIn:SetTexture(ART .. 'ring_edge_in'); edgeIn:SetAllPoints(f)
   end
   local inner = CreateFrame('Cooldown', nil, top)
   inner:SetAllPoints(f)

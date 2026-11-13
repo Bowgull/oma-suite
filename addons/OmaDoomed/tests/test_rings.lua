@@ -61,12 +61,16 @@ local function ringLook(look)
       if look == 'rich' then
         T.eq(fnum, math.floor(40 * .44 + .5), 'rich: frame row number 44% (sheet 51 B)'); T.eq(pnum, math.floor(40 * .46 + .5), 'rich: over the mobs 46% (sheet 54: 58% filled the icon)')
         T.ok(polish(UI) > 0, 'rich: the lit ring, bezel and number spot are there')
+        local edged = false; for _, t in ipairs(UI.textures) do if tostring(t):find('ring_edge') then edged = true end end
+        T.ok(edged, 'rich: the colour band has its black edge (sheet 55)')
       else
         T.eq(fnum, math.floor(40 * .46 + .5), 'flat: 46% on the frame row'); T.eq(pnum, math.floor(40 * .46 + .5), 'flat: 46% over the mobs')
         T.eq(polish(UI), 0, 'flat: no shadow, gloss, bezel or number spot')
+        for _, t in ipairs(UI.textures) do T.ok(not tostring(t):find('ring_edge'), 'flat: no extra edge art') end
       end
       T.eq(numSize(UI, UI.group(fm, 'curse').buttons[1]), math.floor(40 * .36 + .5), look .. ': the curse number is 36% in the frame row too (sheet 54)')
       T.eq(numSize(UI, UI.group(plateMain, 'curse').buttons[1]), math.floor(40 * .36 + .5), look .. ': and over the mobs')
+      T.near(R.GAP * 1.18, 7.7, .2, 'the row sits 6 px clear of the name on a 1.18 px/unit screen (ring art has ~1.5 px of its own margin)')
       noErrors(T)
     end
   end

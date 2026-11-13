@@ -168,6 +168,28 @@ def ring_bold(x, y, d):
     return over(glow, (255, 255, 255, ring_cov(d, BOLD_R, BOLD_W)))
 
 
+# sheet 55 (approved 2026-11-13, "All three") / sheet 53 B: Modern's colour band encased. ring_bold_hard is the band
+# with no soft halo; ring_edge is a 1 screen px black line (1/40 of the cell at Blizzard's ring size) outside and
+# inside it (ring_edge, ring_edge_in; ring_edge_in_thin for the thin font-glyph ring).
+PX1 = 1 / 40
+def ring_bold_hard(x, y, d):
+    return (255, 255, 255, ring_cov(d, BOLD_R, BOLD_W))
+
+
+# The outer line is drawn with the ring; the inner one is drawn above the brass bezel (which overlaps the band's
+# inner edge), so the band sits in a black channel as on the sheet.
+def ring_edge(x, y, d):
+    return (0, 0, 0, ring_cov(d, BOLD_R + BOLD_W / 2 + PX1 * .35, PX1 * 1.1))
+
+
+def ring_edge_in(x, y, d):
+    return (0, 0, 0, ring_cov(d, BOLD_R - BOLD_W / 2 - PX1 * .3, PX1 * 1.0))
+
+
+def ring_edge_in_thin(x, y, d):
+    return (0, 0, 0, ring_cov(d, RING_R - RING_W / 2 - PX1 * .3, PX1 * 1.0))
+
+
 def swipe_track_bold(x, y, d):
     return (10, 5, 3, 0.92 * ring_cov(d, BOLD_R, BOLD_W + (TRACK_W - RING_W)))
 
@@ -200,7 +222,8 @@ def numspot(x, y, d):
 
 
 TEXTURES = {
-    'backing': backing, 'backing_flat': backing_flat, 'mask': mask, 'bezel': bezel, 'ring': ring, 'ring_plain': ring_plain,
+    'backing': backing, 'backing_flat': backing_flat, 'ring_bold_hard': ring_bold_hard, 'ring_edge': ring_edge,
+    'ring_edge_in': ring_edge_in, 'ring_edge_in_thin': ring_edge_in_thin, 'mask': mask, 'bezel': bezel, 'ring': ring, 'ring_plain': ring_plain,
     'swipe_inner': swipe_inner, 'swipe_track': swipe_track,
     'ring_bold': ring_bold, 'swipe_track_bold': swipe_track_bold,
     'ring_light': ring_light, 'ring_shadow': ring_shadow, 'numspot': numspot,

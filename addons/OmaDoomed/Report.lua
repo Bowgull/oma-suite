@@ -117,6 +117,7 @@ function ns.saveReport(how)
     game = ('%s (%s) %s'):format(tostring(version), tostring(build), tostring(iface)), locale = GetLocale and GetLocale() or '?',
     inCombat = InCombatLockdown() and true or false, inGroup = (IsInGroup and IsInGroup()) and true or false,
     doesItDie = (ns.doesItDieOn and ns.doesItDieOn()) and 'yes' or 'no',
+    ringFont = (ns.rings and ns.rings.GLYPH) and 'yes' or 'no',   -- yes: the ring itself can turn gold; no: only the number does
     bar = nil, rings = nil,
     errors = {}, rows = lastRows(), perf = ns.perf(),
     bars = ns.barLines and select(2, pcall(ns.barLines)) or nil,
