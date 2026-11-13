@@ -145,7 +145,7 @@ local function build(host)
     pieces[i] = s
   end
   P.skull = frame:CreateTexture(nil, 'OVERLAY', nil, 7); P.skull:SetTexture(ART .. 'doomed-mark'); P.skull:SetTexCoord(0, 78 / 128, 0, 54 / 64); P.skull:SetSize(60, 42)
-  if P.portrait then P.skull:SetPoint('CENTER', P.portrait, 'TOP', 0, 2) else P.skull:SetPoint('BOTTOMRIGHT', frame, 'TOPRIGHT', -10, -6) end
+  if P.portrait then P.skull:SetPoint('BOTTOM', P.portrait, 'TOP', 0, -6) else P.skull:SetPoint('BOTTOMRIGHT', frame, 'TOPRIGHT', -10, -6) end
 
   -- rings: three of yours and one from another player, in two homes (above the enemy, above the frame)
   for home = 1, 2 do
