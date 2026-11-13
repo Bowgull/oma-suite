@@ -117,7 +117,9 @@ function ns.saveReport(how)
     game = ('%s (%s) %s'):format(tostring(version), tostring(build), tostring(iface)), locale = GetLocale and GetLocale() or '?',
     inCombat = InCombatLockdown() and true or false, inGroup = (IsInGroup and IsInGroup()) and true or false,
     doesItDie = (ns.doesItDieOn and ns.doesItDieOn()) and 'yes' or 'no',
-    ringFont = (ns.rings and ns.rings.GLYPH) and 'yes' or 'no',   -- yes: the ring itself can turn gold; no: only the number does
+    ringFont = (ns.rings and ns.rings.GLYPH) and 'yes' or 'no',   -- yes: the ring itself can follow the time left; no: only the number does
+    -- what building the ring pool cost since login: pairs, total ms, worst single pair (decides how far to cut it)
+    ringBuild = (ns.rings and ns.rings.built) and ('%d pairs, %.0f ms total, worst %.1f ms'):format(ns.rings.built.n, ns.rings.built.total, ns.rings.built.worst) or '?',
     bar = nil, rings = nil,
     errors = {}, rows = lastRows(), perf = ns.perf(),
     bars = ns.barLines and select(2, pcall(ns.barLines)) or nil,
@@ -137,7 +139,8 @@ _G['BINDING_NAME_OMADOOMED_REPORT'] = 'Save a bug report'
 
 local function asText(r)
   local L = { 'OmaDoomed bug report', 'saved ' .. r.at .. ' by ' .. r.how, 'add-on ' .. r.addon .. ', game ' .. r.game .. ', language ' .. r.locale,
-    'in combat: ' .. tostring(r.inCombat) .. ', in a group: ' .. tostring(r.inGroup) .. ', DoesItDie: ' .. r.doesItDie, '', 'kill bar settings:' }
+    'in combat: ' .. tostring(r.inCombat) .. ', in a group: ' .. tostring(r.inGroup) .. ', DoesItDie: ' .. r.doesItDie,
+    'ring font: ' .. tostring(r.ringFont) .. ', ring pool: ' .. tostring(r.ringBuild), '', 'kill bar settings:' }
   local function kv(t) local ks = {}; for k in pairs(t) do ks[#ks + 1] = k end; table.sort(ks); for _, k in ipairs(ks) do L[#L + 1] = '  ' .. k .. ' = ' .. tostring(t[k]) end end
   kv(r.bar); L[#L + 1] = 'ring settings:'; kv(r.rings)
   L[#L + 1] = ''; L[#L + 1] = 'recent errors:'; for _, e in ipairs(r.errors) do L[#L + 1] = '  ' .. e end

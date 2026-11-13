@@ -143,6 +143,7 @@ return {
     local ns, F, UI = setup(W)
     plates(W, F, 1, 25)
     T.eq(rows(UI, 1, 25), 25, 'all 25 plates'); T.eq(#UI.ringContainers(), 25, 'one new pair')
+    T.ok(ns.rings.built.n >= 12 and ns.rings.built.worst >= 0 and ns.rings.built.total >= ns.rings.built.worst, 'the pool build is timed for bug reports')
     noErrors(T)
   end,
   ['Haunt: switching straight from one enemy to another makes both target rows re-read (ring and main)'] = function(W, T)

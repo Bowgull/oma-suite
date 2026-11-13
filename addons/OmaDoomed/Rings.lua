@@ -48,8 +48,12 @@ local function setupContainer(c, kind, gap)   -- gap: space between rings (the t
 end
 
 -- spare: a pool spare (on the free list). Otherwise the caller owns it at once (a plate, the target rows).
+-- what building the ring pool costs on this machine (bug reports print it): pairs built, total and worst ms
+local built = { n = 0, total = 0, worst = 0 }
+R.built = built
 local function newPair(gap, spare)
   if InCombatLockdown() or #pairsAll >= POOL_MAX then return nil end
+  local t0 = debugprofilestop and debugprofilestop()
   local ok, p = pcall(function()
     local anchor = CreateFrame('Frame', nil, holder); anchor:SetSize(1, 1); anchor:Hide()
     local ring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
@@ -63,6 +67,11 @@ local function newPair(gap, spare)
     return { anchor = anchor, ring = ring, main = main }
   end)
   if not ok then log('new pair failed: ' .. tostring(p)); return nil end
+  if t0 then
+    local ms = debugprofilestop() - t0
+    built.n, built.total = built.n + 1, built.total + ms
+    if ms > built.worst then built.worst = ms end
+  end
   pairsAll[#pairsAll + 1] = p; if spare then free[#free + 1] = p end
   return p
 end

@@ -7,6 +7,7 @@ local W = {}
 -- ---------- clock ----------
 W.now = 1000
 function GetTime() return W.now end
+function debugprofilestop() return os.clock() * 1000 end   -- the game's millisecond stopwatch
 function GetTimePreciseSec() return W.now end
 function W.advance(dt, step)
   step = step or 0.1
