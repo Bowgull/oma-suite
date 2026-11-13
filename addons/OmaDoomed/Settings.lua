@@ -50,8 +50,8 @@ ns.settings = Core.NewSettings({
       choices = { { 'all', 'Every enemy' }, { 'target', 'Only your target' }, { 'combat', 'Only in combat' } },
       tip = "Rings on every enemy, only your target, or only while you're fighting." },
     { key = 'look', store = R, default = 'rich', control = 'dropdown', label = 'Ring look',
-      choices = { { 'rich', 'Rich' }, { 'flat', 'Flat' } },
-      tip = "Rich: a lit ring with a bezel and a bold number. Flat: a plain ring, the spell's icon clear, a thin number. Shows after a /reload: type /reload, or pick Reload UI in the game menu (Esc, or Menu on a controller)." },
+      choices = { { 'rich', 'Modern' }, { 'flat', 'Classic' } },   -- Joshua 2026-11-13: "The 2 ring settings are modern and classic"
+      tip = "Modern: a lit ring with a bezel and a bold number. Classic: a plain ring, the spell's icon clear, a thin number. Shows after a /reload: type /reload, or pick Reload UI in the game menu (Esc, or Menu on a controller)." },
     { key = 'size', store = R, default = 40, control = 'slider', label = 'Ring size', min = 28, max = 60, step = 2, format = tostring,
       tip = "How big your rings are. 40 is Blizzard's own size." },
     { key = 'alpha', store = R, default = 100, control = 'slider', label = 'Ring opacity', min = 20, max = 100, step = 5, format = pct,
