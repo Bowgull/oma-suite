@@ -148,5 +148,55 @@ btn('16 Reload (saves the log)', function() (C_UI and C_UI.Reload or ReloadUI)()
 btn('17 Clear log', function() wipe(lines); OmaProbeDB.log = {}; out:SetText('') end)
 OmaProbeRefreshMacro.setup(OmaProbeRefreshMacro)
 
+-- Round 2 (2026-11-13): the phone route. The same actions, but started by a KEY PRESS that a helper program sends
+-- from outside the game (the way Couch Mode presses Ctrl+Shift+F11 for the auction search), and by a timer with no
+-- press at all, to learn where the game draws the line.
+local function twoActs()
+  local acts, out2, lvl = C_LFGList.GetAvailableActivities(2) or {}, {}, UnitLevel('player')
+  for _, id in ipairs(acts) do
+    local i = C_LFGList.GetActivityInfoTable(id)
+    if i and (i.minLevelSuggestion or 0) <= lvl and (i.maxLevelSuggestion or 99) >= lvl then out2[#out2 + 1] = id end
+    if #out2 == 2 then break end
+  end
+  return out2
+end
+local function playstyle()
+  local e = Enum.LFGEntryGeneralPlaystyle
+  if type(e) ~= 'table' then return nil end
+  local best
+  for k, v in pairs(e) do log('  playstyle enum', k, v); if v ~= 0 and (not best or v < best) then best = v end end
+  return best
+end
+local function listMulti(tag)
+  local a, ps = twoActs(), playstyle()
+  log(tag, 'CreateListing with', #a, 'activities:', table.concat(a, ','), 'playstyle', tostring(ps))
+  try(tag .. ' CreateListing', C_LFGList.CreateListing, { activityIDs = a, newPlayerFriendly = false, generalPlaystyle = ps })
+  C_Timer.After(1.5, function()
+    try(tag .. ' HasActiveEntry', C_LFGList.HasActiveEntryInfo)
+    local ok, e = pcall(C_LFGList.GetActiveEntryInfo)
+    if ok and e then log(tag, 'entry acts', type(e.activityIDs) == 'table' and table.concat(e.activityIDs, ',') or '?', 'playstyle', tostring(e.generalPlaystyle)) end
+  end)
+end
+local keyActs = {
+  F7 = function() try('KEY Search', C_LFGList.Search, 2, 0, 0, nil, false, nil, C_LFGList.GetAvailableActivities(2) or {}) end,
+  F8 = function() listMulti('KEY') end,
+  F9 = function() try('KEY RemoveListing', C_LFGList.RemoveListing); C_Timer.After(1.5, function() try('KEY HasActiveEntry', C_LFGList.HasActiveEntryInfo) end) end,
+  F6 = function() log('TIMER search in 3 s (no press when it runs)'); C_Timer.After(3, function() try('TIMER Search', C_LFGList.Search, 2, 0, 0, nil, false, nil, C_LFGList.GetAvailableActivities(2) or {}) end) end,
+  F5 = function() log('TIMER list in 3 s (no press when it runs)'); C_Timer.After(3, function() listMulti('TIMER') end) end,
+}
+local binder = CreateFrame('Frame')
+binder:RegisterEvent('PLAYER_ENTERING_WORLD')
+binder:SetScript('OnEvent', function()
+  if InCombatLockdown() or binder.done then return end
+  binder.done = true
+  for key, fn in pairs(keyActs) do
+    local b = CreateFrame('Button', 'OmaProbeKey' .. key, UIParent)
+    b:RegisterForClicks('AnyDown')
+    b:SetScript('OnClick', function() log('-- key CTRL-SHIFT-' .. key); local ok, e = pcall(fn); if not ok then log('ERROR', e) end end)
+    SetOverrideBindingClick(binder, true, 'CTRL-SHIFT-' .. key, b:GetName(), 'LeftButton')
+  end
+  log('key bindings set: CTRL-SHIFT-F5..F9')
+end)
+
 SLASH_OMAPROBE1 = '/omaprobe'
 SlashCmdList.OMAPROBE = function() f:SetShown(not f:IsShown()) end
