@@ -16,6 +16,18 @@ local function loadCopy(W, minor, mark)
 end
 
 return {
+  -- OmaDemon embeds a newer OmaCore (MINOR 3, 2026-11-13: settings rows can add their own bits) and loads first
+  -- (OmaDe... before OmaDo...): OmaDoomed must run on that copy, its own older files skipped
+  ['OmaDoomed runs on a newer OmaCore another Oma add-on loaded first'] = function(W, T)
+    local ns, F = require('load').addon({ before = function() loadCopy(W, 3, 'demon') end })
+    local C = LibStub('OmaCore-1.0')
+    T.eq(C.MINOR, 3, 'the newer copy stayed'); T.eq(C.mark, 'demon'); T.eq(ns.core, C, 'OmaDoomed uses it')
+    T.eq(ns.omaCoreBuild, nil, 'its own older copy installed nothing')
+    F.mob('nameplate1', 'Creature-0-1-0-1-100-AAAA', 'Kobold', 100); F.target('Creature-0-1-0-1-100-AAAA')
+    W.advance(1, 1 / 30)
+    T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
+  end,
+
   ['LibStub: the newest OmaCore copy wins, an older or equal one changes nothing'] = function(W, T)
     loadCopy(W, 1, 'one')
     local C = LibStub('OmaCore-1.0'); T.eq(C.mark, 'one'); T.eq(C.MINOR, 1)
