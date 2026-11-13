@@ -68,15 +68,17 @@ local function matTex(name, mask, sub)
   end
   return t
 end
-local function tile(t) pcall(t.SetHorizTile, t, true); pcall(t.SetVertTile, t, true); return t end
+-- a scrolling tile must REPEAT past its edge, or WoW clamps and stretches the last row (2026-11-13: seen in game,
+-- the side strands came out flat and the smoke stopped moving)
+local function tile(t, name) t:SetTexture(ART .. name, 'REPEAT', 'REPEAT'); pcall(t.SetHorizTile, t, true); pcall(t.SetVertTile, t, true); return t end
 local fel = { inner = matTex('fel_inner'), mid = matTex('fel_mid', nil, 2), hot = matTex('fel_hot', nil, 3) }
 fel.hot:SetBlendMode('ADD')
-local smoke = { body = tile(matTex('smoke', 'mask_band')), hot = tile(matTex('smoke', 'edgerim', 2)) }
+local smoke = { body = tile(matTex('smoke', 'mask_band'), 'smoke'), hot = tile(matTex('smoke', 'edgerim', 2), 'smoke') }
 smoke.hot:SetBlendMode('ADD')
 local drain = {}
 for _, side in ipairs({ 't', 'b', 'l', 'r' }) do
-  local h = tile(matTex('strands', 'mask_' .. side, 2)); h:SetBlendMode('ADD')
-  drain[side] = { tile(matTex('strands', 'mask_' .. side)), h }
+  local h = tile(matTex('strands', 'mask_' .. side, 2), 'strands'); h:SetBlendMode('ADD')
+  drain[side] = { tile(matTex('strands', 'mask_' .. side), 'strands'), h }
 end
 local allLookTex = { fel.inner, fel.mid, fel.hot, smoke.body, smoke.hot }
 for _, p in pairs(drain) do allLookTex[#allLookTex + 1] = p[1]; allLookTex[#allLookTex + 1] = p[2] end
