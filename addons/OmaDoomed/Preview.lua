@@ -71,15 +71,32 @@ local function build(host)
   local tag = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag:SetPoint('BOTTOMLEFT', 8, 6); tag:SetText('Over the enemy'); P.leftTag = tag
   local tag2 = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag2:SetPoint('BOTTOMRIGHT', -8, 6); tag2:SetText('Your target frame')
 
-  -- the enemy in the world: its name, a thin nameplate bar, the rings above it
-  P.plate = CreateFrame('Frame', nil, P); P.plate:SetSize(150, 60); P.plate:SetPoint('TOPLEFT', P, 'TOPLEFT', 4, -80)
-  local nm = P.plate:CreateFontString(nil, 'OVERLAY', 'GameFontNormal'); nm:SetPoint('BOTTOM', P.plate, 'BOTTOM', 0, 14); nm:SetText('Cursed Darkhound'); nm:SetTextColor(1, .25, .2)
-  local pb = P.plate:CreateTexture(nil, 'ARTWORK'); pb:SetColorTexture(.08, .02, .02); pb:SetSize(120, 8); pb:SetPoint('BOTTOM', P.plate, 'BOTTOM', 0, 2)
-  P.plateFill = P.plate:CreateTexture(nil, 'ARTWORK', nil, 1); P.plateFill:SetColorTexture(.78, .12, .06); P.plateFill:SetPoint('TOPLEFT', pb); P.plateFill:SetPoint('BOTTOMLEFT', pb); P.plateFill:SetWidth(120)
-  local pbor = P.plate:CreateTexture(nil, 'OVERLAY'); pbor:SetPoint('TOPLEFT', pb, 'TOPLEFT', -3, 3); pbor:SetPoint('BOTTOMRIGHT', pb, 'BOTTOMRIGHT', 3, -3)
-  pbor:SetColorTexture(0, 0, 0, 0); local edgeK = { { 'TOPLEFT', 'TOPRIGHT' }, { 'BOTTOMLEFT', 'BOTTOMRIGHT' }, { 'TOPLEFT', 'BOTTOMLEFT' }, { 'TOPRIGHT', 'BOTTOMRIGHT' } }
-  for i, e in ipairs(edgeK) do local t = P.plate:CreateTexture(nil, 'OVERLAY'); t:SetColorTexture(0, 0, 0, .9); t:SetPoint(e[1], pbor); t:SetPoint(e[2], pbor); if i <= 2 then t:SetHeight(1) else t:SetWidth(1) end end
-  P.nameText = nm
+  -- the enemy in the world: Forever's own nameplate, built the way Blizzard builds it (wow-ui-source, forever branch:
+  -- Blizzard_NamePlates.xml, Blizzard_NamePlateUnitFrame.lua, Camelot/Blizzard_NamePlateLevelFrame.xml and
+  -- Camelot/Blizzard_NamePlateConstants.lua): a 20 px bar filled with UI-HUD-CoolDownManager-Bar, its frame
+  -- UI-HUD-CoolDownManager-Bar-BG set (-2, 3) / (6, -6) around it, the 28 px level box ui-hud-nameplates-levelindicator
+  -- 5 px to its right, the nameplate font above, and UI-HUD-CoolDownManager-Selected-yellow round it when it's your
+  -- target. Each atlas falls back to a plain stand-in if the client doesn't have it.
+  local function atlasOK(tex, name) local ok = pcall(tex.SetAtlas, tex, name, false); return ok and tex.GetAtlas and tex:GetAtlas() == name end
+  P.plate = CreateFrame('Frame', nil, P); P.plate:SetSize(170, 62); P.plate:SetPoint('TOPLEFT', P, 'TOPLEFT', 6, -80)
+  local hb = CreateFrame('StatusBar', nil, P.plate); hb:SetSize(126, 16); hb:SetPoint('BOTTOMLEFT', P.plate, 'BOTTOMLEFT', 4, 8)
+  local fillTex = hb:CreateTexture(nil, 'ARTWORK')
+  if not atlasOK(fillTex, 'UI-HUD-CoolDownManager-Bar') then fillTex:SetTexture('Interface\\TargetingFrame\\UI-StatusBar') end
+  hb:SetStatusBarTexture(fillTex); hb:SetStatusBarColor(1, 0, 0); hb:SetMinMaxValues(0, MAXHP); hb:SetValue(START)
+  local bgT = hb:CreateTexture(nil, 'BACKGROUND')
+  if atlasOK(bgT, 'UI-HUD-CoolDownManager-Bar-BG') then bgT:SetPoint('TOPLEFT', hb, 'TOPLEFT', -2, 3); bgT:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT', 6, -6)
+  else bgT:SetColorTexture(0, 0, 0, .8); bgT:SetPoint('TOPLEFT', hb, 'TOPLEFT', -1, 1); bgT:SetPoint('BOTTOMRIGHT', hb, 'BOTTOMRIGHT', 1, -1) end
+  local sel = hb:CreateTexture(nil, 'OVERLAY')
+  if atlasOK(sel, 'UI-HUD-CoolDownManager-Selected-yellow') then sel:SetPoint('TOPLEFT', bgT, 'TOPLEFT', -3, 2); sel:SetPoint('BOTTOMRIGHT', bgT, 'BOTTOMRIGHT', 0, 2) else sel:Hide() end
+  local lvl = CreateFrame('Frame', nil, P.plate); lvl:SetWidth(28)
+  lvl:SetPoint('TOPLEFT', hb, 'TOPRIGHT', 5, 3); lvl:SetPoint('BOTTOMLEFT', hb, 'BOTTOMRIGHT', 5, -2)
+  local lvlArt = lvl:CreateTexture(nil, 'ARTWORK'); lvlArt:SetAllPoints()
+  if not atlasOK(lvlArt, 'ui-hud-nameplates-levelindicator') then lvlArt:SetColorTexture(0, 0, 0, .7) end
+  local lvlText = lvl:CreateFontString(nil, 'OVERLAY', _G.SystemFont_NamePlateLevel and 'SystemFont_NamePlateLevel' or 'GameFontNormalSmall')
+  lvlText:SetPoint('CENTER', lvl, 'CENTER', 0, 0); lvlText:SetText('13'); lvlText:SetTextColor(1, .82, 0)
+  local nm = P.plate:CreateFontString(nil, 'OVERLAY', _G.SystemFont_NamePlate and 'SystemFont_NamePlate' or 'GameFontNormal')
+  nm:SetPoint('BOTTOM', hb, 'TOP', 0, 2); nm:SetText('Cursed Darkhound'); nm:SetTextColor(1, .1, .1)
+  P.plateBar, P.plateSel, P.nameText = hb, sel, nm
 
   -- the target frame stand-in: fixed sizes of our own. Nothing is read off the live TargetFrame (2026-11-13 BugSack:
   -- its sizes come back as hidden values on Forever, and SetSize refuses them). The redesigned preview replaces this.
@@ -164,7 +181,7 @@ function ns.previewDraw()
   local pxPer = bar.w / MAXHP
   local greenHp = math.max(0, hp - (db.doomed ~= false and pending or 0))
   place(P.green, 0, greenHp * pxPer)
-  P.plateFill:SetWidth(math.max(.01, 120 * hp / MAXHP))
+  if P.plateBar then P.plateBar:SetValue(math.max(0, hp)) end
   -- the pieces
   local x = greenHp * pxPer
   for i, s in ipairs(pieces) do
@@ -225,6 +242,7 @@ function ns.previewDraw()
   -- rings
   local where, size, alpha, oa = rdb.where or 'enemy', (rdb.size or 40), (rdb.alpha or 100) / 100, (rdb.othersAlpha or 55) / 100
   if P.leftTag then P.leftTag:SetText(where == 'split' and 'Another enemy you DoT' or 'Over the enemy') end
+  if P.plateSel and P.plateSel.GetAtlas and P.plateSel:GetAtlas() then P.plateSel:SetShown(where ~= 'split') end
   for home = 1, 2 do
     -- Above enemies: the enemy on the left is your target, rings over it. Target frame: rings only on the frame.
     -- Haunt: the left one is ANOTHER enemy you DoT (rings over its head); your target's rings sit on its frame.
@@ -409,3 +427,4 @@ function ns.previewOpen(force)
   if force and ns.db then ns.db.previewPos = nil; dock() end
 end
 ns.previewWindow = function() return win end
+
