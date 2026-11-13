@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: OmaProbe (throwaway test add-on)
+## Notes: Answers the open questions in reports/Group finder in OmaChat.md and reports/Controller cursor in OmaCore.md. Delete after testing.
+## SavedVariables: OmaProbeDB
+OmaProbe.lua
