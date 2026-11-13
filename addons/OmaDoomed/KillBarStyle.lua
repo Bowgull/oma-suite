@@ -6,7 +6,11 @@ local Anim = ns.core.Anim
 local S = {}
 ns.killStyle = S
 
-S.GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- gold means only 'ending soon'
+S.GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- the old 'ending soon' gold (kept for reference; no longer drawn)
+-- Sheet 59 B (approved 2026-11-13, "b"): an ending piece flares in its DoT's OWN colour, the ring colour lifted 22%
+-- towards white, exactly as its ring does (RingsLook.lua, sheet 58 C). One language for bar and rings.
+S.LIT = 0.22
+function S.lit(c, k) k = k or S.LIT; return c[1] + (1 - c[1]) * k, c[2] + (1 - c[2]) * k, c[3] + (1 - c[3]) * k end
 S.OTHER = { .55, .45, .65 }                    -- a DoT with no entry in Spells.lua
 local DIM, FULL, LIFT = .45, 1.15, .7          -- precast dim, the landed piece's strength, the additive lift
 local LOW_TONE, SPARK = 1.3, .45               -- the tick light in gold time, the ember's strength
@@ -55,8 +59,11 @@ function S.piece(o, sp, s)
   local lowNow = left and left <= s.low or false
   local c = o.c
   if lowNow then
-    local b = .6 + .4 * S.breath(left, s.low, s.steady)
-    set(c, S.GOLD[1] * b, S.GOLD[2] * b, S.GOLD[3] * b)
+    -- a piece is drawn as base (c x FULL) plus an additive lift (c x LIFT), so c is the lit colour over their sum:
+    -- what reaches the screen is the ring's lit colour itself, dimmed by the breath, never blown out to white
+    local b = (.6 + .4 * S.breath(left, s.low, s.steady)) / (FULL + LIFT)
+    local r, g, bl = S.lit(sp and sp.color or S.OTHER)
+    set(c, r * b, g * b, bl * b)
   else set(c, deep[1], deep[2], deep[3]) end
   local tn = sp and sp.color or c
   set(o.tn, tn[1], tn[2], tn[3])

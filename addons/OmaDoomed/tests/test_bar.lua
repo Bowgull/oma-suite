@@ -9,7 +9,6 @@ local COLOR = {   -- Doomed.lua's piece colours (sheet 34 B)
   Corruption = { 41 / 255, 40 / 255, 136 / 255 }, Immolate = { 160 / 255, 66 / 255, 22 / 255 },
   ['Bane of Agony'] = { 128 / 255, 30 / 255, 97 / 255 },
 }
-local GOLD = { 206 / 255, 160 / 255, 44 / 255 }
 local function full(c) return { math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15) } end
 
 local function setup(W)
@@ -100,7 +99,8 @@ return {
     T.eq(M.snap().landed, nil, 'dropped after 4.5 s unlisted'); T.ok(not anySlot(M))
     noErrors(T)
   end,
-  ['ending: the last 3 seconds turn gold (steady look), before that its own colour'] = function(W, T)
+  -- sheet 59 B: an ending piece flares in its DoT's own ring colour, lifted 22% towards white (no gold)
+  ['ending: the last 3 seconds flare in its own lit colour (steady look), before that its deep colour'] = function(W, T)
     local ns, F, UI, M, DOTS = setup(W)
     ns.db.lowlook = 'steady'
     DOTS[A] = { dot(W, 'Corruption', 20, 10) }
@@ -109,11 +109,15 @@ return {
     colorIs(T, s.base, full(COLOR.Corruption), 'own colour with 9.5 s left')
     DOTS[A][1].expiresAt = W.now + 2
     W.advance(.2, FRAME)
-    colorIs(T, s.base, full(GOLD), 'gold in the last 3 s')
+    local ring = ns.spells.byKey.corruption.color
+    local lit = { ring[1] + (1 - ring[1]) * .22, ring[2] + (1 - ring[2]) * .22, ring[3] + (1 - ring[3]) * .22 }
+    -- base + additive lift = c x (1.15 + 0.7) = the lit colour itself
+    for i = 1, 3 do T.near((i == 1 and s.base._r or i == 2 and s.base._g or s.base._b) + (i == 1 and s.lift._r or i == 2 and s.lift._g or s.lift._b), lit[i], 1e-6, 'on screen: the ring colour, lit') end
+    T.ok(math.abs(s.base._r / s.base._b - (206 / 44)) > 1, 'not the old gold')
     ns.db.lowlook = 'breathe'
     W.advance(.4, FRAME)
-    T.near(s.base._r / s.base._g, full(GOLD)[1] / full(GOLD)[2], 1e-3, 'breathing gold: same hue')
-    T.ok(s.base._r <= full(GOLD)[1] + 1e-9, 'never brighter than steady gold')
+    T.near(s.base._r / s.base._b, lit[1] / lit[3], 1e-3, 'breathing: same hue')
+    T.ok(s.base._b + s.lift._b <= lit[3] + 1e-9, 'never brighter than the steady flare')
     noErrors(T)
   end,
   ['skull: shows when confirmed DoTs reach the health; off with the setting or a raid mark'] = function(W, T)

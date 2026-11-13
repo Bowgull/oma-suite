@@ -52,8 +52,12 @@ local function ringWidget(parent)
   local cd = CreateFrame('Cooldown', nil, w); cd:SetAllPoints(); pcall(cd.SetSwipeTexture, cd, ART .. 'rings\\swipe_track_bold'); pcall(cd.SetDrawEdge, cd, false); pcall(cd.SetReverse, cd, true); pcall(cd.SetHideCountdownNumbers, cd, true)
   local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(w)
   local bez = top:CreateTexture(nil, 'ARTWORK'); bez:SetTexture(ART .. 'rings\\bezel'); bez:SetAllPoints()
+  -- sheet 55: Modern's colour band sits in a black channel (outside line, and the inside line over the bezel)
+  local edge = top:CreateTexture(nil, 'ARTWORK', nil, 1); edge:SetTexture(ART .. 'rings\\ring_edge'); edge:SetAllPoints()
+  local edgeIn = top:CreateTexture(nil, 'ARTWORK', nil, 2); edgeIn:SetTexture(ART .. 'rings\\ring_edge_in'); edgeIn:SetAllPoints()
   local num = top:CreateFontString(nil, 'OVERLAY'); num:SetFont(STANDARD_TEXT_FONT, 16, 'OUTLINE'); num:SetPoint('CENTER')
   w.ic, w.ring, w.glow, w.cd, w.num, w.light, w.spot, w.shadow, w.bez, w.back = ic, ring, glow, cd, num, light, spot, shadow, bez, back
+  w.edge, w.edgeIn = edge, edgeIn
   return w
 end
 
@@ -221,6 +225,8 @@ function ns.previewDraw()
         w.num:SetFont(STANDARD_TEXT_FONT, math.floor(z * ns.rings.numK() + .5), ol); w.ic:SetAlpha((other or flat) and 1 or .8)
         w.light:SetShown(not other and not flat); w.spot:SetShown(not other and not flat); w.shadow:SetShown(not other and not flat); w.bez:SetShown(not flat)
         w.back:SetTexture(ART .. (flat and 'rings\\backing_flat' or 'rings\\backing'))
+        local modern = not flat and not other
+        w.edge:SetShown(modern); w.edgeIn:SetShown(modern); w.ring:SetTexture(ART .. (modern and 'rings\\ring_bold_hard' or 'rings\\ring_bold'))
         local k = other and 'c' or d.k
         w.ic:SetTexture(icon(NAME[k]))
         local col = other and { .54, .42, .16 } or RING[k]
