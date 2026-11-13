@@ -313,9 +313,12 @@ local function setLook() local path = sheet(); for _, t in ipairs(allTex) do t:S
 local minis = setmetatable({}, { __mode = 'k' })
 local function paintMini(m)
   local d = ns.shardsDB(); local h = math.floor(24 * (d.size or 100) / 100 + .5)
+  -- same layering as the real row: the socket (with its cradle) under every gem, the lit gem on the first two
   for i, t in ipairs(m.gems) do
-    t:SetTexture(sheet()); coords(t, i <= 2 and CELL.lit or CELL.empty); t:SetSize(h * 40 / 48, h)
+    t:SetTexture(sheet()); coords(t, CELL.empty); t:SetSize(h * 40 / 48, h)
     t:ClearAllPoints(); t:SetPoint('LEFT', m, 'LEFT', (i - 1) * (h * 40 / 48 + 2), 0)
+    local g = m.lit[i]; g:SetTexture(sheet()); coords(g, CELL.lit); g:SetSize(h * 40 / 48, h)
+    g:ClearAllPoints(); g:SetPoint('CENTER', t, 'CENTER'); g:SetShown(i <= 2)
   end
 end
 function ns.sizeRow(frame)
@@ -323,8 +326,8 @@ function ns.sizeRow(frame)
   if not sl then return end
   local m = minis[frame]
   if not m then
-    m = CreateFrame('Frame', nil, frame); m:SetSize(120, 40); m.gems = {}
-    for i = 1, N do m.gems[i] = m:CreateTexture(nil, 'ARTWORK') end
+    m = CreateFrame('Frame', nil, frame); m:SetSize(120, 40); m.gems, m.lit = {}, {}
+    for i = 1, N do m.gems[i] = m:CreateTexture(nil, 'ARTWORK', nil, 1); m.lit[i] = m:CreateTexture(nil, 'ARTWORK', nil, 2) end
     minis[frame] = m
   end
   m:ClearAllPoints(); m:SetPoint('LEFT', sl, 'RIGHT', 44, 0); m:Show(); m.isSize = true; paintMini(m)

@@ -102,6 +102,9 @@ boot:SetScript('OnEvent', function(_, _, name)
   if name ~= ADDON then return end
   boot:UnregisterAllEvents()
   local d = db()
+  -- 2026-11-13: Heartbeat, Wisps, Essence and Soul fire are gone; an old saved look would show as "Custom"
+  local looks = { default = true, fel = true, smoke = true, drain = true }
+  if d.glow.look ~= nil and not looks[d.glow.look] then d.glow.look = 'default' end
   ns.settings:Fill(d)
   if select(2, UnitClass('player')) == 'WARLOCK' then ns.category = ns.settings:Build(d, 'OmaDemon') end
 end)
