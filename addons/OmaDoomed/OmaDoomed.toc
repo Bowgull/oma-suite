@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: OmaDoomed
-## Notes: Your DoTs as coloured rings over every enemy nameplate, and on your target's health bar the health your DoTs will still take shows in their colours, and a skull and bones marks a mob they will finish.
+## Notes: Warlock DoT rings over every enemy, a kill bar on health bars showing the health your DoTs will still take, a skull on a mob they will finish, and crowd-control timers you can always see.
 ## Author: Omashu
 ## Version: @project-version@
 ## Category: Buffs & Debuffs

@@ -116,4 +116,25 @@ return {
     local okD, errD = pcall(ns.previewDraw); T.ok(okD, 'draws: ' .. tostring(errD))
     T.eq(#touched, 0, 'no size or position read off TargetFrame: ' .. table.concat(touched, ','))
   end,
+
+  -- release tidy-up (migration 3): the shape of a real saved file from the Shadow, 2026-11-13
+  ['upgrade: debug leftovers and Does It Die look settings are removed, learned ticks and settings kept'] = function(W, T)
+    local errs = {}; for i = 1, 30 do errs[i] = 'old error ' .. i end
+    local ns, F, UI = setup(W, { before = function()
+      OmaDoomedDB = { v = 2, doomed = true, cast = 'motes', low = 4, tfdump = { 'TF Button shown=true' }, plateGeo = { w = 1 }, errs = errs,
+        told = { hello1 = true }, rings = { where = 'split', size = 44 },
+        track = { ticks = { [172] = 16.3 }, tickWeights = { [172] = 29 }, omaRatio = { Corruption = 1.09 }, version = 5,
+          plateFillOpacity = 40, skullIcon = 'cross', focusOutlineColor = 'gold', nameplateMode = 'markerIcon', waitFirstTick = 'off' } }
+    end })
+    local db = OmaDoomedDB
+    T.eq(db.v, 3, 'saved-data version 3')
+    T.eq(db.tfdump, nil, 'the target-frame debug dump is gone'); T.eq(db.plateGeo, nil)
+    T.eq(#db.errs, 20, 'the error list keeps its newest 20'); T.eq(db.errs[20], 'old error 30'); T.eq(db.errs[1], 'old error 11')
+    T.eq(db.track.ticks[172], 16.3, 'learned tick sizes kept'); T.eq(db.track.tickWeights[172], 29); T.eq(db.track.omaRatio.Corruption, 1.09)
+    for _, k in ipairs({ 'plateFillOpacity', 'skullIcon', 'focusOutlineColor', 'nameplateMode' }) do T.eq(db.track[k], nil, k .. ' (a Does It Die look setting) removed') end
+    T.eq(db.track.waitFirstTick, 'off', 'a tracking setting kept')
+    T.eq(db.cast, 'motes', 'his own settings untouched'); T.eq(db.low, 4); T.eq(db.rings.where, 'split'); T.eq(db.rings.size, 44); T.eq(db.told.hello1, true)
+    local n = 0; for _ in pairs(db.track) do n = n + 1 end
+    T.ok(n <= 12, 'nothing put back by the engine: ' .. n .. ' keys in db.track')
+  end,
 }

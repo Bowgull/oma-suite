@@ -8,6 +8,7 @@ manual-changelog:
 ignore:
   - .github
   - tests
+  - tools
   - Art/rings/make_art.py
   - Art/rings/make_font.py
   - "*.md"

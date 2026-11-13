@@ -169,6 +169,14 @@ end""", 'remaining damage per tick')
         '    if action == "WOUND" or absorbed then onHit(key, school) end\n'
         '    if ns.omaClaim and not isSecret(school) and ns.omaClaim(unit, key, school, GetTime()) then return end -- OMA\n',
         'claim known hits')
+    # Saved settings: DoesItDie keeps ~90 look settings for its own display (skull, markers, focus, nameplates).
+    # OmaDoomed draws its own, so only what the tracking itself reads is kept; the rest never reaches
+    # OmaDoomedDB.track (Settings.lua migration 3 removes what older builds already saved).
+    a = s.find('local DEFAULTS = {\n'); b = s.find('\n}\n', a)
+    if a < 0 or b < 0 or 'waitFirstTick = "off"' not in s[a:b] or 'plateOutlineOpacity' not in s[a:b]:
+        sys.exit('import_doesitdie: the DEFAULTS block was not found as expected. Upstream changed: check it by hand.')
+    s = s[:a] + ('local DEFAULTS = { -- OMA: only the settings the tracking reads (DoesItDie\'s display settings are left out)\n'
+        '    showMarkers = true,\n    debug = false,\n    waitFirstTick = "off",\n    estimateDuringCast = true,\n    uiLanguage = "auto",') + s[b:]
     # No slash commands: /did belongs to DoesItDie (both can be installed).
     cut = s.find('---------------------------------------------------------------------------\n-- Slash commands')
     if cut < 0: sys.exit('import_doesitdie: slash command block not found')

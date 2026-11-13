@@ -91,6 +91,21 @@ ns.MIGRATIONS = {
     db.engine, db.compare, db.didSaved = nil, nil, nil
     if type(db.track) == 'table' then db.track.log = nil end
   end,
+  -- 3: tidy up for release. Debug leftovers of earlier builds go; so do the ~90 Does It Die look settings older
+  -- builds copied into db.track (the tracking keeps only what it reads: Track/Engine.lua DEFAULTS and what it
+  -- learns); the error list keeps its newest 20 lines.
+  function(db)
+    db.tfdump, db.plateGeo = nil, nil
+    local keep = { ticks = true, tickWeights = true, omaRatio = true, intervals = true, log = true, omaTrace = true, version = true,
+      showMarkers = true, debug = true, waitFirstTick = true, estimateDuringCast = true, uiLanguage = true }
+    if type(db.track) == 'table' then
+      for k in pairs(db.track) do if not keep[k] then db.track[k] = nil end end
+    end
+    if type(db.errs) == 'table' then
+      local n = #db.errs
+      if n > 20 then local t = {}; for i = n - 19, n do t[#t + 1] = db.errs[i] end; db.errs = t end
+    end
+  end,
 }
 
 function ns.buildSettings() ns.settingsCategory = ns.settings:Build(ns.db, 'OmaDoomed') end

@@ -104,92 +104,12 @@ local SCHOOL_MASKS = {
 }
 
 -- User options (edited in the options panel, saved in DoesItDieDB).
-local DEFAULTS = {
-    -- Skull
-    showSkull = true,
-    skullIcon = "cross",
-    skullSize = 64,
-    skullPulse = true,
-    skullOffsetX = 0,
-    skullOffsetY = 0,
-    -- Damage marker
+local DEFAULTS = { -- OMA: only the settings the tracking reads (DoesItDie's display settings are left out)
     showMarkers = true,
-    fillTexture = "stripes",
-    fillColor = "red",
-    fillOpacity = 100,
-    dotColors = "each",
-    segmentDividers = true,
-    markerStyle = "strip", -- Omashu: "strip" = slim DoT strip along the bar's bottom, green left visible; "box" = original
-    stripHeight = 4,
-    outlineStyle = "dashed",
-    dashLength = 4,
-    outlineThickness = 1,
-    outlineColor = "red",
-    outlineOpacity = 85,
-    -- Animation
-    smoothMotion = true,
-    flashOnApply = true,
-    pulseOutline = true,
-    -- Effects
-    showSpark = true,
-    showGlow = true,
-    glowSize = 7,
-    showShine = true,
-    shineInterval = 3,
-    scrollStripes = true,
-    -- Damage text
-    showLabel = false,
-    labelPosition = "center",
-    labelSize = 10,
-    labelColor = "white",
-    -- Misc
     debug = false,
-    -- Custom frames (Frames.lua): another addon's target health bar / kill icon spot, as frame paths. Empty =
-    -- a known replacement target frame (EllesmereUI's) if there is one, else Blizzard's.
-    customHealthBar = "",
-    customIconAnchor = "",
-    -- Focus frame (Focus.lua): the marker on it too, on a custom bar or the one found, in its own look (Focus tab)
-    focusMode = "markerIcon",
-    customFocusHealthBar = "",
-    customPlateHealthBar = "", -- (Nameplates.lua) keys from Blizzard's nameplate to a plate addon's bar
-    focusIcon = "skull",
-    focusIconSize = 18,
-    focusIconPosition = "left", -- the portrait is on the right of Blizzard's focus frame
-    focusFillDirection = "auto",
-    focusIconOffsetX = 0,
-    focusIconOffsetY = 0,
-    focusDotColors = "school",
-    focusFillTexture = "stripes",
-    focusFillColor = "white",
-    focusFillOpacity = 40,
-    focusOutlineStyle = "dashed",
-    focusDashLength = 4,
-    focusOutlineThickness = 1,
-    focusOutlineColor = "gold",
-    focusOutlineOpacity = 75,
-    -- Accuracy
     waitFirstTick = "off",
     estimateDuringCast = true,
-    uiLanguage = "auto", -- the options window's language (Locale.lua): "auto" or a language tag
-    -- Nameplates (Nameplates.lua): their own look, since enemy plates are red. Defaults read well on red.
-    nameplateMode = "markerIcon",
-    nameplateIconSize = 18,
-    nameplateIconPosition = "left", -- the level badge sits right of the bar on Forever's plates
-    -- Which end the marker fills from: auto follows the health bar's own reverse fill (nameplate addons whose
-    -- health drains to the right; CurseForge request, 2026-11-07).
-    plateFillDirection = "auto",
-    plateIconOffsetX = 0,
-    plateIconOffsetY = 15,          -- clear of the level number, which draws over the icon
-    plateIcon = "skull",
-    plateDotColors = "school",
-    plateFillTexture = "stripes",
-    plateFillColor = "white",
-    plateFillOpacity = 40,
-    plateOutlineStyle = "dashed",
-    plateDashLength = 4,
-    plateOutlineThickness = 1,
-    plateOutlineColor = "gold",
-    plateOutlineOpacity = 75,
+    uiLanguage = "auto",
 }
 
 -- "Wait for first tick": whether a DoT counts toward the marker before its first tick has landed.

@@ -223,8 +223,8 @@ def numspot(x, y, d):
 
 TEXTURES = {
     'backing': backing, 'backing_flat': backing_flat, 'ring_bold_hard': ring_bold_hard, 'ring_edge': ring_edge,
-    'ring_edge_in': ring_edge_in, 'ring_edge_in_thin': ring_edge_in_thin, 'mask': mask, 'bezel': bezel, 'ring': ring, 'ring_plain': ring_plain,
-    'swipe_inner': swipe_inner, 'swipe_track': swipe_track,
+    'ring_edge_in': ring_edge_in, 'ring_edge_in_thin': ring_edge_in_thin, 'mask': mask, 'bezel': bezel, 'ring_plain': ring_plain,
+    'swipe_inner': swipe_inner,
     'ring_bold': ring_bold, 'swipe_track_bold': swipe_track_bold,
     'ring_light': ring_light, 'ring_shadow': ring_shadow, 'numspot': numspot,
 }
@@ -349,14 +349,14 @@ def preview(outdir):
     ImageDraw.Draw(icon).rectangle([int(N * .122), int(N * .122), int(N * .878), int(N * .878)], fill=(120, 60, 150, 255))
     icon.putalpha(Image.eval(tga('mask').getchannel('A'), lambda v: v))
     comp.alpha_composite(icon); comp.alpha_composite(tga('bezel'))
-    ring = tga('ring'); r, g, b, a = ring.split()
+    ring = tga('ring_bold'); r, g, b, a = ring.split()
     tint = Image.merge('RGBA', (r.point(lambda v: v * 0x7f // 255), g.point(lambda v: v * 0xe3 // 255), b.point(lambda v: v * 0x6a // 255), a))
     comp.alpha_composite(tint)
     def wedge(im, frac):
         m = Image.new('L', (N, N), 0)
         ImageDraw.Draw(m).pieslice([-N, -N, 2 * N, 2 * N], -90, -90 + 360 * frac, fill=255)
         out = im.copy(); out.putalpha(Image.composite(im.getchannel('A'), Image.new('L', (N, N), 0), m)); return out
-    comp.alpha_composite(wedge(tga('swipe_inner'), .3)); comp.alpha_composite(wedge(tga('swipe_track'), .3))
+    comp.alpha_composite(wedge(tga('swipe_inner'), .3)); comp.alpha_composite(wedge(tga('swipe_track_bold'), .3))
     tiles.append(('composed', comp))
     font = ImageFont.truetype(os.path.join(HERE, 'OmashuRing.ttf'), N)
     gl = Image.new('RGBA', (N, N), (90, 90, 96, 255)); dr = ImageDraw.Draw(gl)
