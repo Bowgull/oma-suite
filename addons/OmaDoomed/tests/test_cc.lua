@@ -38,7 +38,7 @@ return {
     local r, g, b = f.ring:GetVertexColor()
     T.near(r, 0x5f / 255, 1e-3, 'teal'); T.near(b, 0xc8 / 255, 1e-3)
     W.advance(5); T.eq(f.num:GetText(), '5', 'counts down')
-    W.advance(3); r = f.ring:GetVertexColor(); T.near(r, 1, 1e-3, 'last 3 seconds: gold')
+    W.advance(3); r = f.ring:GetVertexColor(); T.near(r, (0x5f + (255 - 0x5f) * .22) / 255, 1e-3, 'last 3 seconds: its own teal, lit (sheet 58 C), not gold')
     W.advance(2.5); T.eq(ring(ns), nil, 'over: faded out')
     T.eq(ns.cc.holds.fear, nil, 'and forgotten')
     noErrors(T)

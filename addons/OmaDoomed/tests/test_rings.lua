@@ -209,6 +209,26 @@ return {
   -- sheet 51 B (approved "B"): the target-frame row is 28 px with a smaller number
   ['Ring look: Rich by default (lit ring, bezel, bold number); frame row 28 px, 4 px apart'] = ringLook('rich'),
   ['Ring look: Flat strips the shadow, gloss, bezel and number spot; thin 46% number'] = ringLook('flat'),
+  -- sheet 58 C (approved "C, own colour"): an ending DoT flares in its own colour, lit; the whole band breathes
+  ['ending soon: each DoT ends in its own colour, lit, not gold; the band light is dark until the last seconds'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local R = ns.rings
+    local agony = ns.spells.byKey.agony.color
+    local num, light = R.numCurves.agony, R.lightCurves.agony
+    T.ok(num and light, 'a number curve and a band-light curve per DoT')
+    local far, near = num:Evaluate(10), num:Evaluate(0)
+    T.near(far.r, 1, 1e-6, 'the number is white with time to spare'); T.near(far.g, 1, 1e-6); T.near(far.b, 1, 1e-6)
+    local want = R.lit(agony, R.LIT_NUM)
+    T.near(near.r, want[1], 1e-6, "ending: the number in Agony's own colour, lit"); T.near(near.g, want[2], 1e-6); T.near(near.b, want[3], 1e-6)
+    T.ok(math.abs(near.g - 240 / 255) > .05, 'not the old gold')
+    T.near(light:Evaluate(10).a, 0, 1e-6, 'the band light is invisible with time to spare')
+    local peak = 0; for i = 0, 30 do peak = math.max(peak, light:Evaluate(i * .1).a) end
+    T.ok(peak > .3 and peak <= .46, 'and breathes up to 45% in the last 3 seconds: ' .. peak)
+    local lr = light:Evaluate(1); local wr = R.lit(agony, R.LIT_RING)
+    T.near(lr.r, wr[1], 1e-6, "the light is Agony's own colour, lit")
+    T.ok(R.numCurves.corruption ~= R.numCurves.agony, 'Corruption has its own')
+    noErrors(T)
+  end,
   ['not Haunt: the curse is on the frame row with the rest'] = function(W, T)
     local ns, F, UI = setup(W, { where = 'frame' })
     F.mob('nameplate1', A, 'Kobold', 300).auras = { 172, 702 }

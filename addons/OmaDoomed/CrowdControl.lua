@@ -194,7 +194,9 @@ local function paint(f, h)
   f.num:SetText(n >= 60 and (math.ceil(n / 60) .. 'm') or tostring(n))
   if left <= LOW then
     local a = breathes() and Anim.breath(left, LOW, BREATH, LOW_ALPHA) or 1
-    f.ring:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], a); f.num:SetTextColor(WHITE[1], WHITE[2], WHITE[3], a)
+    -- sheet 58 C: ending in its own colour, lit (teal), like every other ring
+    local rc, nc = R.lit(TEAL, R.LIT_RING), R.lit(TEAL, R.LIT_NUM)
+    f.ring:SetVertexColor(rc[1], rc[2], rc[3], a); f.num:SetTextColor(nc[1], nc[2], nc[3], a)
   else
     f.ring:SetVertexColor(TEAL[1], TEAL[2], TEAL[3], 1); f.num:SetTextColor(1, 1, 1, 1)
   end

@@ -225,7 +225,7 @@ function ns.previewDraw()
         w.ic:SetTexture(icon(NAME[k]))
         local col = other and { .54, .42, .16 } or RING[k]
         local lowR = d and d.timeLeft <= low
-        if lowR then local b = breath(d.timeLeft); w.ring:SetVertexColor(1 * b, .94 * b, .69 * b) else w.ring:SetVertexColor(col[1], col[2], col[3]) end
+        if lowR then local b = breath(d.timeLeft); local lc = ns.rings.lit(col, ns.rings.LIT_RING); w.ring:SetVertexColor(lc[1] * b, lc[2] * b, lc[3] * b) else w.ring:SetVertexColor(col[1], col[2], col[3]) end
         w.glow:SetVertexColor(col[1], col[2], col[3])
         local pa = (d and d.lastTick and tickLook ~= 'plain') and (t - d.lastTick.at) or 9
         w.glow:SetAlpha(pa < .12 and pa / .12 * .4 or (pa < .57 and .4 * (1 - (pa - .12) / .45) or 0))

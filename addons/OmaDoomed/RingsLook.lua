@@ -74,6 +74,7 @@ R.GLYPH = false               -- true: the ring is the font glyph and goes gold 
 local NUM_FMT, RING_FMT, BINDING
 local curves = {}             -- every colour curve made, with what it is made of (rebuilt in place on a setting change)
 local numCurve, ringCurves, mineRingCurve = nil, {}, nil
+local numCurves, lightCurves = {}, {}   -- per spell key ('mine' for your other debuffs): the number, the whole-band light
 R.othersOK = true             -- false if the game refused the "!PLAYER" group
 
 -- 'Ending soon' (kill bar settings, shared): how many seconds, and whether the gold breathes
@@ -82,24 +83,33 @@ local function breathes() return not (ns.db and ns.db.lowlook == 'steady') end
 
 -- Blizzard re-evaluates a curve on the seconds left (DurationTextBinding:SetTextColorCurve). Linear with a point
 -- every 1/60 of the gold time draws the breath; the low -> low + 0.001 pair is the step into gold.
-local function fillCurve(c, normal, low, lowBreathes)
+-- light: the whole-band light (sheet 58 C): nothing until the last seconds, then it rises and falls with the breath
+local LIGHT_A = 0.45
+local function fillCurve(c, normal, low, lowBreathes, light)
   local LOW = lowSecs()
   local breathe = lowBreathes and breathes()
   for i = 0, 60 do
     local x = i * LOW / 60
-    c:AddPoint(x, CreateColor(low[1], low[2], low[3], breathe and Anim.breath(x, LOW, BREATH, LOW_ALPHA) or 1))
+    local a = breathe and Anim.breath(x, LOW, BREATH, LOW_ALPHA) or 1
+    if light then a = LIGHT_A * (a - LOW_ALPHA) / (1 - LOW_ALPHA) end
+    c:AddPoint(x, CreateColor(low[1], low[2], low[3], a))
   end
-  c:AddPoint(LOW + 0.001, CreateColor(normal[1], normal[2], normal[3], 1))
-  c:AddPoint(86400, CreateColor(normal[1], normal[2], normal[3], 1))
+  local na = light and 0 or 1
+  c:AddPoint(LOW + 0.001, CreateColor(normal[1], normal[2], normal[3], na))
+  c:AddPoint(86400, CreateColor(normal[1], normal[2], normal[3], na))
 end
-local function makeCurve(normal, low, lowBreathes)
+local function makeCurve(normal, low, lowBreathes, light)
   local ok, c = pcall(C_CurveUtil.CreateColorCurve)
   if not ok or not c then return nil end
   if c.SetType and Enum.LuaCurveType then pcall(c.SetType, c, Enum.LuaCurveType.Linear) end
-  fillCurve(c, normal, low, lowBreathes)
-  curves[#curves + 1] = { c = c, normal = normal, low = low, breathes = lowBreathes }
+  fillCurve(c, normal, low, lowBreathes, light)
+  curves[#curves + 1] = { c = c, normal = normal, low = low, breathes = lowBreathes, light = light }
   return c
 end
+-- Sheet 58 C (approved 2026-11-13, "C, own colour"): a DoT that is ending flares in its OWN colour, lifted towards
+-- white: the ring by 22%, the number by 45%. No gold on the rings any more (the kill bar keeps its gold).
+local function lit(c, k) return { c[1] + (1 - c[1]) * k, c[2] + (1 - c[2]) * k, c[3] + (1 - c[3]) * k } end
+R.lit, R.LIT_RING, R.LIT_NUM = lit, 0.22, 0.45
 
 -- the 'Ending soon' settings changed: every curve again, in place (buttons keep the curve they were given).
 -- Out of combat only. False when the client can't clear a curve: then the change shows after a /reload.
@@ -108,7 +118,7 @@ function R.rebuildCurves()
     if not e.c.ClearPoints then return false end
     local ok = pcall(e.c.ClearPoints, e.c)
     if not ok then return false end
-    fillCurve(e.c, e.normal, e.low, e.breathes)
+    fillCurve(e.c, e.normal, e.low, e.breathes, e.light)
   end
   return true
 end
@@ -163,8 +173,15 @@ function R.probe()
     if C_Timer and C_Timer.After then C_Timer.After(.5, retry) end
   end
 
-  for _, sp in ipairs(SPELLS) do ringCurves[sp.key] = makeCurve(sp.color, GOLD, true) end
-  mineRingCurve = makeCurve(DARK_BRASS, GOLD, true)
+  for _, sp in ipairs(SPELLS) do
+    ringCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true)
+    numCurves[sp.key] = makeCurve(WHITE, lit(sp.color, R.LIT_NUM), true)
+    lightCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true, true)
+  end
+  mineRingCurve = makeCurve(DARK_BRASS, lit(DARK_BRASS, R.LIT_RING), true)
+  numCurves.mine = makeCurve(WHITE, lit(DARK_BRASS, R.LIT_NUM), true)
+  lightCurves.mine = makeCurve(DARK_BRASS, lit(DARK_BRASS, R.LIT_RING), true, true)
+  R.numCurves, R.lightCurves = numCurves, lightCurves
   -- sheet 55 (2026-11-13): the number always turns gold and breathes in the last seconds. With 2 s left only a
   -- sliver of ring is left to turn gold, so the ring alone was easy to miss.
   numCurve = makeCurve(WHITE, GOLD, true)
@@ -259,7 +276,7 @@ local function numberOn(cd, b, size, k)
   return num
 end
 
-local function mainOwn(b, k)
+local function mainOwn(b, k, key)
   b:SetSize(S, S); pcall(b.EnableMouse, b, false)
   local icon = roundIcon(b, S)
   if not R.flat() then   -- Rich (sheet 41): a dark spot behind the number, the brass bezel
@@ -276,12 +293,14 @@ local function mainOwn(b, k)
   local num = numberOn(cd, b, S, k)
   b:SetIcon(icon)
   b:SetDurationCooldown(cd)
-  b:SetDurationText(num, textOpts(NUM_FMT, numCurve))
+  b:SetDurationText(num, textOpts(NUM_FMT, (key and numCurves[key]) or numCurve))   -- ending: the number in its DoT's own colour, lit
 end
-local function mainLong(b) mainOwn(b, R.NUM_K_LONG) end   -- curses: minutes-long, so a smaller number
--- the target-frame row's own numbers (sheet 51 B); a curse keeps its smaller share
-local function mainFrame(b) mainOwn(b, R.numK(true)) end
-local function mainFrameLong(b) mainOwn(b, R.NUM_K_LONG) end
+-- one set of builders per group, so each number ends in its own DoT's colour. long: minutes-long timers (curses) get a
+-- smaller number; frame: the target-frame row's own number size (sheet 51 B)
+local function mainsFor(key, long)
+  local function k(frame) return long and R.NUM_K_LONG or R.numK(frame) end
+  return function(b) mainOwn(b, k(false), key) end, function(b) mainOwn(b, k(true), key) end
+end
 
 local function mainOthers(b)
   b:SetSize(OS, OS); pcall(b.EnableMouse, b, false); b:SetAlpha(R.OTHERS_ALPHA)
@@ -315,7 +334,7 @@ function ns.ringsPulse(unit, name, key)
   end
 end
 
-local function ringOwn(color, curve, key)
+local function ringOwn(color, curve, key, light)
   return function(b)
     b:SetSize(S, S); pcall(b.EnableMouse, b, false)
     local flat = R.flat()
@@ -338,9 +357,21 @@ local function ringOwn(color, curve, key)
     b:SetDurationCooldown(cd)
     -- sheet 55 / 53 B: Modern's band sits in a channel: a 1 px black line outside it, above the dark track so it
     -- runs the whole way round (the inside line is drawn over the bezel, in the main button)
+    local top
     if not flat then
-      local top = CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
+      top = CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
       local edge = top:CreateTexture(nil, 'OVERLAY'); edge:SetTexture(ART .. 'ring_edge'); edge:SetAllPoints(b)
+    end
+    -- sheet 58 C: in the last seconds the WHOLE ring, drained part too, breathes in the DoT's own lit colour. Only a
+    -- font string can follow the time left on a locked button, so this needs the ring font (R.GLYPH); it sits above
+    -- the dark track.
+    if R.GLYPH and light then
+      top = top or CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
+      local fl = top:CreateFontString(nil, 'ARTWORK')
+      fl:SetFont(RING_FONT, S, ''); fl:SetSize(S * 2, S * 2); fl:SetPoint('CENTER', b, 'CENTER')
+      fl:SetJustifyH('CENTER'); fl:SetJustifyV('MIDDLE'); pcall(fl.SetWordWrap, fl, false)
+      fl:SetTextColor(color[1], color[2], color[3], 0)
+      b:SetDurationText(fl, textOpts(RING_FMT, light))
     end
     if key then
       local glow = b:CreateTexture(nil, 'OVERLAY', nil, 7); glow:SetTexture(ART .. 'ring_bold'); glow:SetAllPoints(b)
@@ -368,10 +399,12 @@ R.GROUPS = {}
 function R.buildGroups()
   local G = {}
   for _, sp in ipairs(SPELLS) do
-    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = sp.kind == 'curse' and mainLong or mainOwn,
-      mainFrame = sp.kind == 'curse' and mainFrameLong or mainFrame, ring = ringOwn(sp.color, ringCurves[sp.key], sp.key) }
+    local main, mainFrame = mainsFor(sp.key, sp.kind == 'curse')
+    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = main, mainFrame = mainFrame,
+      ring = ringOwn(sp.color, ringCurves[sp.key], sp.key, lightCurves[sp.key]) }
   end
-  G[#G + 1] = { key = 'mine', filter = OWN, max = 6, main = mainOwn, mainFrame = mainFrame, ring = ringOwn(DARK_BRASS, mineRingCurve) }
+  local mine, mineFrame = mainsFor('mine', false)
+  G[#G + 1] = { key = 'mine', filter = OWN, max = 6, main = mine, mainFrame = mineFrame, ring = ringOwn(DARK_BRASS, mineRingCurve, nil, lightCurves.mine) }
   G[#G + 1] = { key = 'others', filter = OTHERS, max = 3,   -- a pack's rings crowded the next plate
     main = mainOthers, ring = ringOthers, layout = { groupSpacing = OTHERS_GAP } }
   R.GROUPS = G
