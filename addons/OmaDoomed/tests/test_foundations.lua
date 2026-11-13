@@ -93,7 +93,7 @@ return {
     T.eq(S.dot('Drain Life'), nil, 'a channel is not a kill bar piece'); T.eq(S.dot('Bane of Doom'), nil)
     T.eq(S.key(W.secret('Corruption')), nil, 'a secret name finds nothing')
     local keys = {}; for _, sp in ipairs(S.list) do keys[#keys + 1] = sp.key end
-    T.eq(table.concat(keys, ','), 'corruption,agony,immolate,siphon,curse,channel', 'the rings\' group order')
+    T.eq(table.concat(keys, ','), 'cc,corruption,agony,immolate,siphon,curse,channel', 'the rings\' group order')
   end,
   ['spells: a client in another language finds its DoTs by ID (names learned at login and from the tracking)'] = function(W, T)
     local F = require('fight')

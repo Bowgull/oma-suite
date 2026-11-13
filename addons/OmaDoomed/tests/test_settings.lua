@@ -1,8 +1,8 @@
 -- The Options page (Settings.lua) on the strict fake Settings API: every control is built from Blizzard's own
 -- controls with its default, and a change reaches the add-on at once.
-local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'platebar', 'enabled', 'where', 'squares', 'which', 'size', 'alpha', 'othersAlpha' }
+local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'platebar', 'enabled', 'where', 'squares', 'which', 'size', 'alpha', 'othersAlpha', 'cc' }
 local KINDS = { doomed = 'checkbox', skull = 'checkbox', cast = 'dropdown', tick = 'dropdown', low = 'slider', lowlook = 'dropdown', platebar = 'checkbox', enabled = 'checkbox',
-  where = 'dropdown', squares = 'dropdown', which = 'dropdown', size = 'slider', alpha = 'slider', othersAlpha = 'slider' }
+  where = 'dropdown', squares = 'dropdown', which = 'dropdown', size = 'slider', alpha = 'slider', othersAlpha = 'slider', cc = 'checkbox' }
 local UNDER_BAR = { skull = true, cast = true, tick = true, low = true, lowlook = true, platebar = true }
 
 local function setup(W, opts)
@@ -29,7 +29,7 @@ return {
     T.eq(cat.name, 'OmaDoomed'); T.eq(cat.parent.name, 'Oma')
     T.eq(UI.S.addOnCategories[1], cat.parent, 'the Oma parent registered at login')
     local kinds = {}; for _, i in ipairs(cat.layout.inits) do kinds[#kinds + 1] = i.kind == 'header' and ('header:' .. i.text) or i.kind end
-    T.eq(table.concat(kinds, ','), 'element,header:Kill bar,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Rings,checkbox,dropdown,dropdown,dropdown,slider,slider,slider,header:Help,button,button',
+    T.eq(table.concat(kinds, ','), 'element,header:Kill bar,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Rings,checkbox,dropdown,dropdown,dropdown,slider,slider,slider,checkbox,header:Help,button,button',
       'preview, headers, controls, the Pick button and the two report buttons')
   end,
   ['saved values are kept, not reset to defaults'] = function(W, T)

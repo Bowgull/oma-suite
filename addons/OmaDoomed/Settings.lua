@@ -57,6 +57,8 @@ ns.settings = Core.NewSettings({
       format = function(v) return v == 0 and 'Hidden' or ('%d%%'):format(v) end,
       tip = "How solid other warlocks' DoT rings are (theirs only, not every debuff). 0 hides them; another strength shows after a /reload." },
     { key = 'others', store = R, default = true },    -- /omadoomed rings others on|off
+    { key = 'cc', store = R, default = true, control = 'check', label = 'Crowd-control timers',
+      tip = "Your Fear, Banish, Howl of Terror and your Sayaad's Seduction as a teal ring over the mob. When it isn't your target or is off screen, the ring stands beside your target frame instead, so you always see how long is left." },
 
     { header = 'Help' },
     { button = 'Save a bug report', name = 'Bug report', click = function() if ns.saveReport then ns.saveReport('settings') end end,

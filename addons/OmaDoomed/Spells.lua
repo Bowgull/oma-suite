@@ -9,8 +9,12 @@ local function rgb(r, g, b) return { r / 255, g / 255, b / 255 } end
 local function hex(h) return { tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3, 4), 16) / 255, tonumber(h:sub(5, 6), 16) / 255 } end
 
 -- deep: the kill bar piece (sheet 34 B, deep pieces); color: the ring and the tick light (sheet 25); beat: seconds
--- between ticks. Order is the rings' group order.
+-- between ticks. Order is the rings' group order. Only kind 'dot' feeds the kill bar.
 local LIST = {
+  -- crowd control: spectral teal, first in the row (sheet 48, approved 2026-11-13). Fear R1-3, Banish R1-2, Howl of
+  -- Terror R1-2, Seduction (the Sayaad's; its aura counts as yours). Death Coil and Subjugate Demon left out.
+  { key = 'cc', kind = 'cc', names = { 'Fear', 'Banish', 'Howl of Terror', 'Seduction' }, color = hex('5fd8c8'),
+    ids = { 5782, 6213, 6215, 710, 18647, 5484, 17928, 6358 } },
   { key = 'corruption', kind = 'dot', beat = 3, names = { 'Corruption' }, deep = rgb(78, 40, 136), color = hex('b078ff'),
     ids = { 172, 6222, 6223, 7648, 11671, 11672, 25311, 27216 } },
   { key = 'agony', kind = 'dot', beat = 2, names = { 'Bane of Agony', 'Curse of Agony' }, deep = rgb(128, 30, 74), color = hex('f05496'),
