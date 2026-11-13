@@ -39,6 +39,8 @@ ns.settings = Core.NewSettings({
       tip = 'How strong the purple edge is.' },
     { key = 'level', store = G, default = 30, control = 'slider', label = 'Warning level', min = 10, max = 50, step = 5, format = pct,
       tip = "The glow starts when your demon's health drops below this." },
+    { button = 'Preview', name = '', click = function() if ns.previewWarning then ns.previewWarning() end end,
+      tip = 'Runs the full warning for 6 seconds: ring and edge together.' },
 
     { header = 'Soul Shard Gems' },
     { key = 'gems', store = S, default = true, control = 'check', label = 'Shard gems',
@@ -66,8 +68,6 @@ ns.settings = Core.NewSettings({
       tip = 'Above this many, you get one line in chat so you can clear bag space.' },
     { key = 'chat', store = S, default = true, control = 'check', label = 'Line in chat',
       tip = 'One line in chat when you go over.' },
-    { button = 'Preview', name = '', click = function() if ns.previewWarning then ns.previewWarning() end end,
-      tip = 'Runs the full warning for 6 seconds: ring and edge together.' },
   },
 })
 

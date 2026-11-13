@@ -353,7 +353,7 @@ for _, k in ipairs(keys) do
   local bt = CreateFrame('Button', 'OmaDemonNudge' .. k[1], mover); bt:SetScript('OnClick', function() nudge(k[2], k[3]) end)
 end
 local done = CreateFrame('Button', 'OmaDemonGemMoverDone', mover, 'UIPanelButtonTemplate'); done:SetSize(90, 24); done:SetText(DONE or 'Done')
-done:SetPoint('TOPRIGHT', mover, 'BOTTOMRIGHT', 0, -4)
+done:SetPoint('TOPLEFT', label, 'BOTTOMLEFT', 0, -6)
 function ns.endMove()
   if not moving then return end
   moving = false; mover:Hide(); ClearOverrideBindings(mover); ns.shardsVis()
