@@ -215,13 +215,34 @@ function ns.previewWarning()
   if ns.shardsPreview then ns.shardsPreview(6) end
 end
 
+-- Warning colour (2026-11-13, sheet 46: Default soul purple, Fel green, Hellfire ember). The ring and edge have their
+-- own art per colour (make_art.py); the drifting looks' art is purple, so it's greyed and tinted instead.
+local COLOUR = { default = '', fel = '-fel', ember = '-ember' }
+local TINT = { fel = { .45, 1, .3 }, ember = { 1, .55, .18 } }
+local function applyColour()
+  local c = ns.glowDB().colour or 'default'
+  local sfx = COLOUR[c] or ''
+  bloom:SetTexture(ART .. 'bloom' .. sfx); rim:SetTexture(ART .. 'rim' .. sfx); sheen:SetTexture(ART .. 'sheen' .. sfx)
+  edgeTex:SetTexture(ART .. 'edge' .. sfx)
+  local tint = TINT[c]
+  local function paint(t)
+    t:SetDesaturated(tint ~= nil)
+    if tint then t:SetVertexColor(tint[1], tint[2], tint[3]) else t:SetVertexColor(1, 1, 1) end
+  end
+  for _, p in ipairs(wisps) do paint(p.t) end
+  for _, p in ipairs(hazes) do paint(p.t) end
+  for _, f in ipairs(flames) do paint(f.t) end
+end
+ns.applyWarningColour = applyColour
+
 table.insert(ns.onSetting, function(key, store)
   if store ~= 'glow' then return end
+  if key == 'colour' then applyColour() end
   if key == 'level' then curve = nil; buildCurve(); update() end
   if key == 'look' or key == 'edge' or key == 'ring' then if root:IsShown() then edgeMotion() end end
   if key == 'strength' then edgeSettle() end
   -- show a change right away for a few seconds (out of combat), like the mockup's live preview
-  if (key == 'look' or key == 'strength' or key == 'level') and not InCombatLockdown() then
+  if (key == 'look' or key == 'strength' or key == 'level' or key == 'colour') and not InCombatLockdown() then
     testAt = GetTime(); testUntil = testAt + 4; litAt = nil; root:Hide(); update()
   end
 end)
@@ -230,6 +251,7 @@ local ev = CreateFrame('Frame')
 ev:SetScript('OnEvent', function(_, e, unit)
   if e == 'PLAYER_LOGIN' then
     if select(2, UnitClass('player')) ~= 'WARLOCK' then ev:UnregisterAllEvents(); ev:SetScript('OnUpdate', nil); return end
+    applyColour()
     buildCurve()
   end
   if e == 'CVAR_UPDATE' then if root:IsShown() then edgeMotion() end; return end

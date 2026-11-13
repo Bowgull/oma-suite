@@ -141,7 +141,11 @@ local function place()
     local rs = root:GetEffectiveScale()
     if fx and px and rs and rs > 0 then
       local dx = (fx * pf:GetEffectiveScale() - px * pet:GetEffectiveScale()) / rs
-      root:SetPoint('TOP', pet, 'BOTTOM', dx, 0); if db then db.placed = 'centred under pet frame' end
+      -- 2026-11-13 optical centre (sheet 47 B, Joshua: "yes build it ... the optical center and brass"): the round
+      -- portrait reads lighter than the square bar box, so the box centre looks left. Nudge toward the bars by about a
+      -- quarter of the portrait's width (17 px on the Shadow), so it scales with the frame on every layout.
+      dx = dx + .26 * (pet:GetWidth() * pet:GetEffectiveScale()) / rs
+      root:SetPoint('TOP', pet, 'BOTTOM', dx, 0); if db then db.placed = 'optically centred under pet frame' end
     else
       root:SetPoint('TOPLEFT', pet, 'BOTTOMLEFT', -3, 0); if db then db.placed = 'under pet' end
     end
