@@ -71,6 +71,7 @@ f:SetScript('OnEvent', function(self, event, name)
     slash()
     if ns.buildSettings then
       local ok, err = pcall(ns.buildSettings)
+      if ok and ns.previewStart then pcall(ns.previewStart) end   -- the preview window docks beside Options (sheet 60)
       if not ok then ns.say('settings page failed: ' .. tostring(err)) end
     end
     self:RegisterEvent('PLAYER_LOGIN')

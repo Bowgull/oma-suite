@@ -1,6 +1,9 @@
--- The live preview at the top of OmaDoomed's Options page (sheet 37): a target frame stand-in of fixed sizes (nothing
--- read off the real TargetFrame), an enemy nameplate, the rings and Blizzard's squares, running the
--- test fight. It reads the settings every frame, so any change shows at once. Nothing here touches your real target.
+-- The preview window (sheet 60, 2026-11-13, Joshua: "I agree this is right this is the right way"): its own window docked
+-- beside the Options window while OmaDoomed's page is open. A target frame built from Blizzard's own art (atlases; nothing
+-- is read off the live TargetFrame, whose sizes are hidden on Forever), an enemy nameplate, the rings and Blizzard's
+-- squares, running a looping test fight. It reads the settings every frame, so every change and every combination shows
+-- at once. Pointing at a group of settings (mouse, or the pad's cursor) lights the part of the scene that group controls.
+-- Nothing here touches your real target, and nothing is hooked or written onto Blizzard's settings rows.
 local ADDON, ns = ...
 
 local ART = 'Interface\\AddOns\\OmaDoomed\\Art\\'
@@ -14,7 +17,8 @@ local look, ask = K.new(), {}
 local RING = { c = SP.corruption.color, a = SP.agony.color, i = SP.immolate.color }    -- rings and tick light
 local NAME = { c = 'Corruption', a = 'Bane of Agony', i = 'Immolate' }
 local MAXHP, START = 198, 124      -- your DoTs finish this one, so the skull shows
-local H = 150                      -- the preview's height in the list
+local H = 190                      -- the scene's height inside the window
+local WIN_W, WIN_H = 470, H + 52    -- the window: narrow enough to sit beside Options on a 1080p screen
 
 local ss, sst = Anim.smoothstep, Anim.smootherstep
 local function barTex(t)
@@ -64,24 +68,34 @@ end
 local function build(host)
   P = CreateFrame('Frame', nil, host); P:SetHeight(H)
   local bg = P:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(); bg:SetColorTexture(.05, .04, .035, .92)
-  local tag = P:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall'); tag:SetPoint('TOPLEFT', 8, -6); tag:SetText('Preview: the test fight')
+  local tag = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag:SetPoint('BOTTOMLEFT', 8, 6); tag:SetText('Over the enemy'); P.leftTag = tag
+  local tag2 = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag2:SetPoint('BOTTOMRIGHT', -8, 6); tag2:SetText('Your target frame')
 
   -- the enemy in the world: its name, a thin nameplate bar, the rings above it
-  P.plate = CreateFrame('Frame', nil, P); P.plate:SetSize(150, 60); P.plate:SetPoint('TOPLEFT', P, 'TOPLEFT', 20, -40)
+  P.plate = CreateFrame('Frame', nil, P); P.plate:SetSize(150, 60); P.plate:SetPoint('TOPLEFT', P, 'TOPLEFT', 4, -80)
   local nm = P.plate:CreateFontString(nil, 'OVERLAY', 'GameFontNormal'); nm:SetPoint('BOTTOM', P.plate, 'BOTTOM', 0, 14); nm:SetText('Cursed Darkhound'); nm:SetTextColor(1, .25, .2)
   local pb = P.plate:CreateTexture(nil, 'ARTWORK'); pb:SetColorTexture(.08, .02, .02); pb:SetSize(120, 8); pb:SetPoint('BOTTOM', P.plate, 'BOTTOM', 0, 2)
   P.plateFill = P.plate:CreateTexture(nil, 'ARTWORK', nil, 1); P.plateFill:SetColorTexture(.78, .12, .06); P.plateFill:SetPoint('TOPLEFT', pb); P.plateFill:SetPoint('BOTTOMLEFT', pb); P.plateFill:SetWidth(120)
+  local pbor = P.plate:CreateTexture(nil, 'OVERLAY'); pbor:SetPoint('TOPLEFT', pb, 'TOPLEFT', -3, 3); pbor:SetPoint('BOTTOMRIGHT', pb, 'BOTTOMRIGHT', 3, -3)
+  pbor:SetColorTexture(0, 0, 0, 0); local edgeK = { { 'TOPLEFT', 'TOPRIGHT' }, { 'BOTTOMLEFT', 'BOTTOMRIGHT' }, { 'TOPLEFT', 'BOTTOMLEFT' }, { 'TOPRIGHT', 'BOTTOMRIGHT' } }
+  for i, e in ipairs(edgeK) do local t = P.plate:CreateTexture(nil, 'OVERLAY'); t:SetColorTexture(0, 0, 0, .9); t:SetPoint(e[1], pbor); t:SetPoint(e[2], pbor); if i <= 2 then t:SetHeight(1) else t:SetWidth(1) end end
   P.nameText = nm
 
   -- the target frame stand-in: fixed sizes of our own. Nothing is read off the live TargetFrame (2026-11-13 BugSack:
   -- its sizes come back as hidden values on Forever, and SetSize refuses them). The redesigned preview replaces this.
-  frame = CreateFrame('Frame', nil, P); frame:SetSize(232, 100); frame:SetPoint('TOPRIGHT', P, 'TOPRIGHT', -10, -34)
+  frame = CreateFrame('Frame', nil, P); frame:SetSize(232, 100); frame:SetScale(1.2); frame:SetPoint('TOPRIGHT', P, 'TOPRIGHT', -6 / 1.2, -30 / 1.2)
   local pt = frame:CreateTexture(nil, 'BACKGROUND'); pt:SetSize(58, 58); pt:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -26, -19)
   pt:SetTexture('Interface\\Icons\\Ability_Hunter_Pet_Wolf')
   local pm = frame:CreateMaskTexture(); pm:SetTexture('Interface\\CharacterFrame\\TempPortraitAlphaMask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); pm:SetAllPoints(pt); pt:AddMaskTexture(pm)
   P.portrait = pt
   local fs = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall'); fs:SetPoint('BOTTOMLEFT', frame, 'TOPLEFT', 24, -40); fs:SetText('Cursed Darkhound')
   bar.x, bar.y, bar.w, bar.h = 24, -42, 124, 18
+  -- Blizzard's own target frame art (the same atlases the real frame uses), drawn over our bars; skipped if missing
+  local function atlas(tex, name) local ok = pcall(tex.SetAtlas, tex, name, false); return ok and tex.GetAtlas and tex:GetAtlas() == name end
+  local art = frame:CreateTexture(nil, 'OVERLAY', nil, -1); art:SetSize(192, 67); art:SetPoint('TOPLEFT', frame, 'TOPLEFT', 20, -19)
+  if not atlas(art, 'UI-HUD-UnitFrame-Target-PortraitOn') then art:Hide() end
+  local mana = frame:CreateTexture(nil, 'ARTWORK', nil, 0); mana:SetSize(bar.w, 9); mana:SetPoint('TOPLEFT', frame, 'TOPLEFT', bar.x, bar.y - bar.h - 1)
+  if not atlas(mana, 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Mana') then mana:SetColorTexture(.1, .2, .7) end
 
   -- the bar: empty, green, a piece per DoT (base + lift), its bite wash, particles, creases, cast looks
   local empty = frame:CreateTexture(nil, 'ARTWORK', nil, 0); barTex(empty); empty:SetVertexColor(.14, .09, .05)
@@ -128,8 +142,6 @@ local function place(tex, x, w)
 end
 
 function ns.previewDraw()
-  -- Blizzard reuses list rows: if ours now holds another setting, the preview steps away
-  if P.row and P.row.GetElementData and P.row:GetElementData() ~= P.init then P:Hide(); return end
   local db, rdb = ns.db, OmaDoomedDB.rings
   local t = GetTime() - t0
   if t > 26 then t0 = GetTime(); t = 0; P.plan = plan() end
@@ -212,8 +224,11 @@ function ns.previewDraw()
   P.skull:SetShown(db.doomed ~= false and db.skull ~= false and greenHp <= 0)
   -- rings
   local where, size, alpha, oa = rdb.where or 'enemy', (rdb.size or 40), (rdb.alpha or 100) / 100, (rdb.othersAlpha or 55) / 100
+  if P.leftTag then P.leftTag:SetText(where == 'split' and 'Another enemy you DoT' or 'Over the enemy') end
   for home = 1, 2 do
-    local on = (home == 1 and (where == 'enemy' or where == 'both')) or (home == 2 and where ~= 'enemy')   -- the preview's enemy IS your target
+    -- Above enemies: the enemy on the left is your target, rings over it. Target frame: rings only on the frame.
+    -- Haunt: the left one is ANOTHER enemy you DoT (rings over its head); your target's rings sit on its frame.
+    local on = (home == 1 and (where == 'enemy' or where == 'both' or where == 'split')) or (home == 2 and where ~= 'enemy')
     local n = 0
     for i = 1, 4 do
       local w = rings[home][i]
@@ -259,22 +274,138 @@ function ns.previewDraw()
   end
 end
 
--- the preview sits at the top of the OmaDoomed page, as a list row of its own
-function ns.previewInitializer()
-  if not Settings.CreateElementInitializer then return nil end
-  local init = Settings.CreateElementInitializer('SettingsListElementTemplate', {})
-  init.GetExtent = function() return H + 12 end
-  -- Blizzard pools these rows: we only parent our own frame to one, never hook or tag it, and never let the default
-  -- Resetter run (it calls the row's Release, which needs cbrHandles that this plain template never makes: the
-  -- 2026-11-13 BugSack error when switching Options categories)
-  init.InitFrame = function(self, row)
-    if not built then build(row) end
-    P:SetParent(row); P:ClearAllPoints(); P:SetPoint('TOPLEFT', row, 'TOPLEFT', 30, -6); P:SetPoint('RIGHT', row, 'RIGHT', -30, 0); P:Show()
-    P.row, P.init = row, self
-    t0 = GetTime(); P.plan = plan()
-  end
-  init.Resetter = function(self, row)
-    if P and P.row == row then P:Hide(); P:ClearAllPoints(); P:SetParent(UIParent); P.row = nil end
-  end
-  return init
+-- ---------- the window: docked beside Options while OmaDoomed's page is open ----------
+local win, tucked, hl, watch
+local GROUP = {   -- which part of the scene each setting lights (keys from Settings.lua)
+  doomed = 'tf', skull = 'tf', cast = 'tf', tick = 'tf', low = 'tf', lowlook = 'tf', targetPath = 'tf',
+  platebar = 'np', enabled = 'np', which = 'np', othersAlpha = 'np', cc = 'np',
+  where = 'where', look = 'rings', size = 'rings', alpha = 'rings', squares = 'sq',
+}
+local HEADER = { ['Your target frame'] = 'tf', ['Over enemies'] = 'np', ['Where the rings go'] = 'where', ['Ring look'] = 'rings', ["Blizzard's squares"] = 'sq' }
+
+local function makeHighlight()
+  hl = CreateFrame('Frame', nil, P); hl:SetFrameLevel(P:GetFrameLevel() + 30); hl:Hide()
+  hl.edges = {}
+  for i = 1, 4 do local t = hl:CreateTexture(nil, 'OVERLAY'); t:SetColorTexture(1, .82, 0, .9); hl.edges[i] = t end
+  local e = hl.edges
+  e[1]:SetPoint('TOPLEFT'); e[1]:SetPoint('TOPRIGHT'); e[1]:SetHeight(2)
+  e[2]:SetPoint('BOTTOMLEFT'); e[2]:SetPoint('BOTTOMRIGHT'); e[2]:SetHeight(2)
+  e[3]:SetPoint('TOPLEFT'); e[3]:SetPoint('BOTTOMLEFT'); e[3]:SetWidth(2)
+  e[4]:SetPoint('TOPRIGHT'); e[4]:SetPoint('BOTTOMRIGHT'); e[4]:SetWidth(2)
+  hl.glow = hl:CreateTexture(nil, 'BACKGROUND'); hl.glow:SetAllPoints(); hl.glow:SetColorTexture(1, .82, 0, .08)
+  hl.dim = {}   -- the rest of the scene dims a little
+  for i = 1, 4 do local t = P:CreateTexture(nil, 'OVERLAY', nil, 7); t:SetColorTexture(0, 0, 0, .4); t:Hide(); hl.dim[i] = t end
 end
+local function lightUp(g)
+  if not hl then return end
+  if not g then hl:Hide(); for _, t in ipairs(hl.dim) do t:Hide() end; return end
+  hl:ClearAllPoints()
+  if g == 'tf' then hl:SetPoint('TOPLEFT', frame, 'TOPLEFT', 16, -14); hl:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -6, 8)
+  elseif g == 'np' then hl:SetPoint('TOPLEFT', P.plate, 'TOPLEFT', -2, 44); hl:SetPoint('BOTTOMRIGHT', P.plate, 'BOTTOMRIGHT', 10, -10)
+  elseif g == 'where' then hl:SetPoint('TOPLEFT', P, 'TOPLEFT', 6, -6); hl:SetPoint('BOTTOMRIGHT', P, 'BOTTOMRIGHT', -6, 22)
+  elseif g == 'rings' then hl:SetPoint('TOPLEFT', P.plate, 'TOPLEFT', -2, 44); hl:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -6, -30)
+  elseif g == 'sq' then hl:SetPoint('TOPLEFT', frame, 'BOTTOMLEFT', 16, -26); hl:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -6, -54) end
+  hl:Show()
+  local L, T, R, B = hl:GetLeft(), hl:GetTop(), hl:GetRight(), hl:GetBottom()
+  local pl, pt, pr, pb = P:GetLeft(), P:GetTop(), P:GetRight(), P:GetBottom()
+  local d = hl.dim
+  if L and pl then
+    d[1]:ClearAllPoints(); d[1]:SetPoint('TOPLEFT', P); d[1]:SetPoint('BOTTOMRIGHT', P, 'TOPRIGHT', 0, -(pt - T))
+    d[2]:ClearAllPoints(); d[2]:SetPoint('BOTTOMLEFT', P); d[2]:SetPoint('TOPRIGHT', P, 'BOTTOMRIGHT', 0, B - pb)
+    d[3]:ClearAllPoints(); d[3]:SetPoint('TOPLEFT', P, 'TOPLEFT', 0, -(pt - T)); d[3]:SetPoint('BOTTOMRIGHT', P, 'BOTTOMLEFT', L - pl, B - pb)
+    d[4]:ClearAllPoints(); d[4]:SetPoint('TOPRIGHT', P, 'TOPRIGHT', 0, -(pt - T)); d[4]:SetPoint('BOTTOMLEFT', P, 'BOTTOMRIGHT', -(pr - R), B - pb)
+    for _, t in ipairs(d) do t:Show() end
+  end
+end
+
+-- which group the pointer is on: read Blizzard's own row data under the cursor (no hooks, nothing written)
+local function pointedGroup()
+  local foci = GetMouseFoci and GetMouseFoci() or { GetMouseFocus and GetMouseFocus() }
+  local f = foci and foci[1]
+  for _ = 1, 8 do
+    if not f then return end
+    local ok, g = pcall(function()
+      if not f.GetElementData then return end
+      local data = f:GetElementData(); if not data then return end
+      local setting = data.GetSetting and data:GetSetting()
+      local var = setting and setting.GetVariable and setting:GetVariable()
+      if type(var) == 'string' then return GROUP[(var:gsub('^OMADOOMED_', ''))] end
+      local name = data.data and data.data.name
+      if type(name) == 'string' then return HEADER[name] end
+    end)
+    if ok and g then return g end
+    f = f.GetParent and f:GetParent()
+  end
+end
+
+local function onOurPage()
+  local sp = _G.SettingsPanel
+  if not (sp and sp:IsShown() and ns.settingsCategory) then return false end
+  local ok, cur = pcall(sp.GetCurrentCategory, sp)
+  return ok and cur == ns.settingsCategory
+end
+
+local function dock()
+  local sp = _G.SettingsPanel; if not (win and sp) then return end
+  win:ClearAllPoints()
+  local db = ns.db
+  if db and db.previewPos then win:SetPoint('CENTER', UIParent, 'BOTTOMLEFT', db.previewPos[1], db.previewPos[2]); return end
+  -- beside Options on the right, else on the left, else (small screens) over its lower part
+  local s = win:GetEffectiveScale() / UIParent:GetEffectiveScale()
+  local left, right, uiRight = sp:GetLeft(), sp:GetRight(), UIParent:GetRight()
+  local w = WIN_W * s
+  if right and uiRight and right + w + 8 <= uiRight then win:SetPoint('TOPLEFT', sp, 'TOPRIGHT', 6, -40)
+  elseif left and left - w - 8 >= 0 then win:SetPoint('TOPRIGHT', sp, 'TOPLEFT', -6, -40)
+  else win:SetPoint('BOTTOM', sp, 'BOTTOM', 0, 40) end
+end
+
+local function buildWindow()
+  local ok, w = pcall(CreateFrame, 'Frame', 'OmaDoomedPreviewWindow', UIParent, 'BasicFrameTemplateWithInset')
+  if not ok or not w then w = CreateFrame('Frame', 'OmaDoomedPreviewWindow', UIParent) end
+  win = w
+  win:SetSize(WIN_W, WIN_H); win:SetFrameStrata('DIALOG'); win:SetToplevel(true); win:Hide()
+  win:SetClampedToScreen(true); win:EnableMouse(true); win:SetMovable(true); win:RegisterForDrag('LeftButton')
+  win:SetScript('OnDragStart', function(self) self:StartMoving() end)
+  win:SetScript('OnDragStop', function(self)
+    self:StopMovingOrSizing(); local x, y = self:GetCenter(); if x and ns.db then ns.db.previewPos = { x, y } end
+  end)
+  local hasTitle = type(win.TitleText) == 'table'
+  local title = hasTitle and win.TitleText or win:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+  if not hasTitle then title:SetPoint('TOP', 0, -6) end
+  title:SetText('OmaDoomed preview')
+  if type(win.CloseButton) == 'table' then win.CloseButton:SetScript('OnClick', function() tucked = true; win:Hide() end) end
+  build(win)
+  P:ClearAllPoints(); P:SetPoint('TOPLEFT', win, 'TOPLEFT', 10, -30); P:SetPoint('RIGHT', win, 'RIGHT', -10, 0)
+  makeHighlight()
+end
+
+-- shown while OmaDoomed's page is open (unless closed with X this session); lights what the pointer is on
+local acc = 0
+local function tick(_, dt)
+  acc = acc + dt; if acc < .1 then return end; acc = 0
+  local want = onOurPage() and not tucked
+  if want and not win then buildWindow() end
+  if not win then return end
+  if want and not win:IsShown() then dock(); t0 = GetTime(); P.plan = plan(); win:Show() elseif not want and win:IsShown() then win:Hide() end
+  if win:IsShown() then lightUp(pointedGroup()) end
+end
+local startWatching
+function startWatching()
+  local sp = _G.SettingsPanel
+  if watch then return end
+  if not sp then C_Timer.After(2, startWatching); return end   -- Blizzard's settings may load after us
+  watch = CreateFrame('Frame'); watch:Hide(); watch:SetScript('OnUpdate', tick)
+  sp:HookScript('OnShow', function() watch:Show() end)
+  sp:HookScript('OnHide', function() watch:Hide(); if win then win:Hide() end; tucked = false end)
+  if sp:IsShown() then watch:Show() end
+end
+ns.previewStart = startWatching
+
+-- the Show button on the page, and /omadoomed preview
+function ns.previewOpen(force)
+  tucked = false
+  if not win then buildWindow() end
+  dock(); t0 = GetTime(); P.plan = plan(); win:Show()
+  if force and ns.db then ns.db.previewPos = nil; dock() end
+end
+ns.previewWindow = function() return win end

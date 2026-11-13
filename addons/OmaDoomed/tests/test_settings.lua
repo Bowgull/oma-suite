@@ -1,6 +1,6 @@
 -- The Options page (Settings.lua) on the strict fake Settings API: every control is built from Blizzard's own
 -- controls with its default, and a change reaches the add-on at once.
-local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'platebar', 'enabled', 'where', 'squares', 'which', 'look', 'size', 'alpha', 'othersAlpha', 'cc' }
+local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'platebar', 'enabled', 'which', 'othersAlpha', 'cc', 'where', 'look', 'size', 'alpha', 'squares' }
 local KINDS = { look = 'dropdown', doomed = 'checkbox', skull = 'checkbox', cast = 'dropdown', tick = 'dropdown', low = 'slider', lowlook = 'dropdown', platebar = 'checkbox', enabled = 'checkbox',
   where = 'dropdown', squares = 'dropdown', which = 'dropdown', size = 'slider', alpha = 'slider', othersAlpha = 'slider', cc = 'checkbox' }
 local UNDER_BAR = { skull = true, cast = true, tick = true, low = true, lowlook = true, platebar = true }
@@ -29,8 +29,8 @@ return {
     T.eq(cat.name, 'OmaDoomed'); T.eq(cat.parent.name, 'Oma')
     T.eq(UI.S.addOnCategories[1], cat.parent, 'the Oma parent registered at login')
     local kinds = {}; for _, i in ipairs(cat.layout.inits) do kinds[#kinds + 1] = i.kind == 'header' and ('header:' .. i.text) or i.kind end
-    T.eq(table.concat(kinds, ','), 'element,header:Kill bar,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Rings,checkbox,dropdown,dropdown,dropdown,dropdown,slider,slider,slider,checkbox,header:Help,button,button',
-      'preview, headers, controls, the Pick button and the two report buttons')
+    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,button,header:Over enemies,checkbox,checkbox,dropdown,slider,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Blizzard's squares,dropdown,header:Help,button,button,button",
+      'grouped by place on screen (sheet 60): headers, controls, Pick, the preview button and the two report buttons')
   end,
   ['saved values are kept, not reset to defaults'] = function(W, T)
     local ns, F, UI = setup(W, { before = function() OmaDoomedDB = { cast = 'motes', rings = { size = 52 } } end })
@@ -79,23 +79,12 @@ return {
 
   -- 2026-11-13 BugSack: 'Blizzard_SettingControls.lua:382: attempt to index field 'cbrHandles' (a nil value)' in
   -- Release when switching categories, and 'Preview.lua:84 copyRegion: SetSize (Secret values...)'
-  ['preview: a pooled row is shown and recycled with no error, and nothing is written or hooked onto it'] = function(W, T)
+  ['preview window: opens beside Options, draws, and lives in no settings row'] = function(W, T)
     local ns, F, UI = setup(W)
-    local init = ns.settingsCategory.layout.inits[1]
-    T.eq(init.kind, 'element', 'the preview is the first row')
-    local row = UI.S.row()
-    local before = {}; for k in pairs(row) do before[k] = true end
-    UI.S.show(init, row)
-    T.ok(UI.isVisible(row) and #UI.kids(row) == 1, 'our preview sits in the row')
-    local ok, err = pcall(ns.previewDraw); T.ok(ok, 'draws: ' .. tostring(err))
-    for k in pairs(row) do if not before[k] and k ~= '_kids' then T.ok(false, 'wrote ' .. tostring(k) .. ' onto the row') end end
-    T.eq(row.scripts.OnHide, nil, 'no script hooked on the row')
-    local okR, errR = pcall(UI.S.recycle, init, row)
-    T.ok(okR, 'recycling the row: ' .. tostring(errR))
-    local P = UI.kids(row)[1]
-    T.ok(P == nil or not P:IsShown(), 'the preview went away with the row')
-    -- the same pooled row reused for us again
-    T.ok(pcall(UI.S.show, init, UI.S.row()), 'shown again in another pooled row')
+    for _, i in ipairs(ns.settingsCategory.layout.inits) do T.ok(i.kind ~= 'element', 'no preview row in the list any more') end
+    local ok, err = pcall(ns.previewOpen); T.ok(ok, 'opens: ' .. tostring(err))
+    local win = ns.previewWindow(); T.ok(win and win:IsShown(), 'the window shows')
+    local okD, errD = pcall(ns.previewDraw); T.ok(okD, 'draws: ' .. tostring(errD))
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
   end,
 
@@ -111,8 +100,7 @@ return {
       for _, k in ipairs(UI.kids(o)) do hide(k, depth + 1) end
     end
     hide(TargetFrame, 0)
-    local init = ns.settingsCategory.layout.inits[1]
-    local ok, err = pcall(UI.S.show, init, UI.S.row()); T.ok(ok, 'builds: ' .. tostring(err))
+    local ok, err = pcall(ns.previewOpen); T.ok(ok, 'builds: ' .. tostring(err))
     local okD, errD = pcall(ns.previewDraw); T.ok(okD, 'draws: ' .. tostring(errD))
     T.eq(#touched, 0, 'no size or position read off TargetFrame: ' .. table.concat(touched, ','))
   end,
