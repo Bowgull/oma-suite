@@ -207,6 +207,15 @@ function R.probe()
   numCurves.mine = makeCurve(WHITE, lit(DARK_BRASS, R.LIT_NUM), true)
   lightCurves.mine = makeCurve(DARK_BRASS, lit(DARK_BRASS, R.LIT_RING), true, true)
   R.numCurves, R.lightCurves = numCurves, lightCurves
+  -- for '/omadoomed rings': what the ending effects stand on (2026-11-16: they never showed in game)
+  R.diag = function()
+    local n = 0; for _ in pairs(curves) do n = n + 1 end
+    local okE, v = false, nil
+    if numCurves.agony and numCurves.agony.Evaluate then okE, v = pcall(numCurves.agony.Evaluate, numCurves.agony, 1) end
+    return ('ring font %s, number formatter %s, timer binding %s, colour curves %d (test %s), ending soon %ss'):format(
+      tostring(R.GLYPH), tostring(NUM_FMT ~= nil), tostring(BINDING ~= nil), n,
+      okE and type(v) == 'table' and ('ok %.2f/%.2f/%.2f'):format(v.r or 0, v.g or 0, v.b or 0) or 'FAILED', tostring(lowSecs()))
+  end
   -- sheet 55 (2026-11-13): the number always turns gold and breathes in the last seconds. With 2 s left only a
   -- sliver of ring is left to turn gold, so the ring alone was easy to miss.
   numCurve = makeCurve(WHITE, GOLD, true)
@@ -270,7 +279,7 @@ local function roundIcon(b, size)
   icon:SetSize(size * 0.756, size * 0.756); icon:SetPoint('CENTER', b, 'CENTER')
   icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)       -- trim the icon's own border; the mask makes it round
   local m = b:CreateMaskTexture()
-  m:SetTexture(ART .. 'mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(b)
+  m:SetTexture(ART .. 'mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(b)
   icon:AddMaskTexture(m)
   return icon
 end
@@ -306,8 +315,8 @@ local function mainOwn(b, k, key)
   local icon = roundIcon(b, S)
   if not R.flat() then   -- Rich (sheet 41): a dark spot behind the number, the brass bezel
     icon:SetAlpha(.8)
-    local spot = b:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot'); spot:SetAllPoints(b)
-    local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel'); bezel:SetAllPoints(b)
+    local spot = b:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot', nil, nil, 'TRILINEAR'); spot:SetAllPoints(b)
+    local bezel = b:CreateTexture(nil, 'ARTWORK', nil, 2); bezel:SetTexture(ART .. 'bezel', nil, nil, 'TRILINEAR'); bezel:SetAllPoints(b)
     -- sheet 55: the band's inside edge, over the bezel's outer rim
     local edge = b:CreateTexture(nil, 'ARTWORK', nil, 3); edge:SetTexture(ART .. (R.GLYPH and 'ring_edge_in_thin' or 'ring_edge_in'), nil, nil, 'TRILINEAR'); edge:SetAllPoints(b)
   end
@@ -330,7 +339,7 @@ end
 local function mainOthers(b)
   b:SetSize(OS, OS); pcall(b.EnableMouse, b, false); b:SetAlpha(R.OTHERS_ALPHA)
   local icon = roundIcon(b, OS)
-  local ring = b:CreateTexture(nil, 'ARTWORK', nil, 2); ring:SetTexture(ART .. 'ring_plain'); ring:SetAllPoints(b)
+  local ring = b:CreateTexture(nil, 'ARTWORK', nil, 2); ring:SetTexture(ART .. 'ring_plain', nil, nil, 'TRILINEAR'); ring:SetAllPoints(b)
   ring:SetVertexColor(DARK_BRASS[1], DARK_BRASS[2], DARK_BRASS[3])
   local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_inner')
   local num = numberOn(cd, b, OS)
@@ -386,8 +395,8 @@ local function ringOwn(color, curve, key, light)
   return function(b)
     b:SetSize(S, S); pcall(b.EnableMouse, b, false)
     local flat = R.flat()
-    if not flat then local shadow = b:CreateTexture(nil, 'BACKGROUND', nil, -8); shadow:SetTexture(ART .. 'ring_shadow'); shadow:SetAllPoints(b) end   -- sheet 41: sits in the world
-    local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (flat and 'backing_flat' or 'backing')); back:SetAllPoints(b)
+    if not flat then local shadow = b:CreateTexture(nil, 'BACKGROUND', nil, -8); shadow:SetTexture(ART .. 'ring_shadow', nil, nil, 'TRILINEAR'); shadow:SetAllPoints(b) end   -- sheet 41: sits in the world
+    local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (flat and 'backing_flat' or 'backing'), nil, nil, 'TRILINEAR'); back:SetAllPoints(b)
     if R.GLYPH and curve then
       local fs = b:CreateFontString(nil, 'ARTWORK')
       fs:SetFont(RING_FONT, S, ''); fs:SetSize(S * 2, S * 2); fs:SetPoint('CENTER', b, 'CENTER')
@@ -396,11 +405,11 @@ local function ringOwn(color, curve, key, light)
       b:SetDurationText(fs, textOpts(RING_FMT, curve))
     else
       -- sheet 39 A: twice as thick. Modern's band is hard-edged (sheet 55): its soft halo read as airbrushed
-      local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. (flat and 'ring_bold' or 'ring_bold_hard')); t:SetAllPoints(b)
+      local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. (flat and 'ring_bold' or 'ring_bold_hard'), nil, nil, 'TRILINEAR'); t:SetAllPoints(b)
       t:SetVertexColor(color[1], color[2], color[3])
     end
     -- Rich (sheet 41): the ring lit like metal (cream on top, shade underneath, a warm sheen up-left), under the dark track
-    if not flat then local light = b:CreateTexture(nil, 'ARTWORK', nil, 3); light:SetTexture(ART .. 'ring_light'); light:SetAllPoints(b) end
+    if not flat then local light = b:CreateTexture(nil, 'ARTWORK', nil, 3); light:SetTexture(ART .. 'ring_light', nil, nil, 'TRILINEAR'); light:SetAllPoints(b) end
     local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_track_bold')
     b:SetDurationCooldown(cd)
     -- sheet 55 / 53 B: Modern's band sits in a channel: a 1 px black line outside it, above the dark track so it
@@ -422,7 +431,7 @@ local function ringOwn(color, curve, key, light)
       b:SetDurationText(fl, textOpts(RING_FMT, light))
     end
     if key then
-      local glow = b:CreateTexture(nil, 'OVERLAY', nil, 7); glow:SetTexture(ART .. 'ring_bold'); glow:SetAllPoints(b)
+      local glow = b:CreateTexture(nil, 'OVERLAY', nil, 7); glow:SetTexture(ART .. 'ring_bold', nil, nil, 'TRILINEAR'); glow:SetAllPoints(b)
       glow:SetVertexColor(color[1], color[2], color[3]); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
       local g = glow:CreateAnimationGroup()
       local a1 = g:CreateAnimation('Alpha'); a1:SetFromAlpha(0); a1:SetToAlpha(.4); a1:SetDuration(.12); a1:SetOrder(1); a1:SetSmoothing('OUT')
@@ -437,7 +446,7 @@ end
 local function ringOthers(b)
   -- only the dark backing disc for other players' DoTs (their plain ring is drawn by the main button)
   b:SetSize(OS, OS); pcall(b.EnableMouse, b, false); b:SetAlpha(R.OTHERS_ALPHA)
-  local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (R.flat() and 'backing_flat' or 'backing')); back:SetAllPoints(b)
+  local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (R.flat() and 'backing_flat' or 'backing'), nil, nil, 'TRILINEAR'); back:SetAllPoints(b)
 end
 
 -- ---------- everything else on a mob (sheet 78, approved 2026-11-16 "build the rest of sheet 78") ----------
@@ -461,13 +470,13 @@ local function softIcon(b, size)
   local icon = b:CreateTexture(nil, 'ARTWORK', nil, 0)
   icon:SetSize(size, size); icon:SetPoint('CENTER', b, 'CENTER')
   icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  local m = b:CreateMaskTexture(); m:SetTexture(ART .. 'softsq_mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(icon)
+  local m = b:CreateMaskTexture(); m:SetTexture(ART .. 'softsq_mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(icon)
   icon:AddMaskTexture(m)
-  local edge = b:CreateTexture(nil, 'ARTWORK', nil, 2); edge:SetTexture(ART .. 'softsq_edge'); edge:SetAllPoints(icon)
+  local edge = b:CreateTexture(nil, 'ARTWORK', nil, 2); edge:SetTexture(ART .. 'softsq_edge', nil, nil, 'TRILINEAR'); edge:SetAllPoints(icon)
   return icon
 end
 local function glowBehind(b, size, fixed)
-  local g = b:CreateTexture(nil, 'BACKGROUND', nil, -6); g:SetTexture(ART .. 'softsq_glow'); g:SetSize(size * 1.5, size * 1.5)
+  local g = b:CreateTexture(nil, 'BACKGROUND', nil, -6); g:SetTexture(ART .. 'softsq_glow', nil, nil, 'TRILINEAR'); g:SetSize(size * 1.5, size * 1.5)
   g:SetPoint('CENTER', b, 'CENTER'); g:SetBlendMode('ADD')
   if fixed then g:SetVertexColor(fixed[1], fixed[2], fixed[3], fixed[4] or 1); return g end
   -- the game colours it by the debuff's type; if this client refuses, a quiet red stays

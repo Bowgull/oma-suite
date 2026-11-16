@@ -270,7 +270,7 @@ local function build()
     win:SetSize(W, H); win:SetPoint('CENTER', portrait, 'CENTER', px(.8, win) * k, px(65.5, win) * k)
     longBar = CreateFrame('StatusBar', nil, win); longBar:SetSize(W * 400, H); longBar:SetPoint('RIGHT', win, 'RIGHT')
     longBar:SetStatusBarTexture(WHITE); longBar:SetStatusBarColor(0, 0, 0, 0); longBar:SetMinMaxValues(0, 1); longBar:SetValue(0)
-    mark = longBar:CreateTexture(nil, 'OVERLAY'); mark:SetTexture(MARK); mark:SetTexCoord(0, MARK_W / 128, 0, MARK_H / 64)
+    mark = longBar:CreateTexture(nil, 'OVERLAY'); mark:SetTexture(MARK, nil, nil, 'TRILINEAR'); mark:SetTexCoord(0, MARK_W / 128, 0, MARK_H / 64)
     mark:SetSize(W, H); mark:SetPoint('RIGHT', longBar:GetStatusBarTexture(), 'RIGHT')
   end
   P.builtOn = hb

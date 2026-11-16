@@ -515,6 +515,7 @@ function ns.ringsSlash(msg)
   else
     local n = 0; for _ in pairs(active) do n = n + 1 end
     say(('%s. Rows on %d plates, %d spare.'):format(db.enabled and 'On' or 'Off', n, #free))
+    if R.diag then say('Ending effects: ' .. R.diag() .. '.') end
     say('Ending soon: ' .. (R.GLYPH and 'ring turns gold and breathes, number breathes.' or 'ring font unavailable, so the number turns gold and breathes.'))
     say('Other players\' DoTs: ' .. ((db.others and R.othersOK) and 'on' or (R.othersOK and 'off' or 'not allowed by the game')) .. '.')
     say('Blizzard\'s debuff row: ' .. BC.state() .. '.')
