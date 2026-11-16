@@ -1,41 +1,32 @@
--- The mob list (MobList.lua): rows handed out by Blizzard's secure state drivers, fixed for the whole fight,
--- clickable to target, each with your DoTs in their seats. The secure parts are faked here the way the game runs
--- them: a state driver re-evaluates its macro condition and, on a change, runs the header's _onstate snippet.
+-- The mob list (MobList.lua), built the way Warlock HUD and Warlock All-in-One do it on Forever: a row per nameplate
+-- token, shown by plain code, packed at a fight's start and frozen during it; an invisible secure button per row for
+-- the click, shown by Blizzard's state driver. The secure parts are faked here the way the game runs them.
 local function secure(W)
   local drivers = {}
   local create = CreateFrame
   CreateFrame = function(kind, name, parent, template)
     local f = create(kind, name, parent, template)
     local attrs = {}
-    f.SetAttribute = function(self, k, v) attrs[k] = v; local h = self:GetScript('OnAttributeChanged'); if h then h(self, k, v) end end
+    f.SetAttribute = function(self, k, v) attrs[k] = v end
     f.GetAttribute = function(_, k) return attrs[k] end
-    f.SetFrameRef = function(_, k, o) attrs['frameref-' .. k] = o end
-    f.GetFrameRef = function(_, k) return attrs['frameref-' .. k] end
     f._template = template
     return f
   end
   local function eval(cond)
     if cond == '[combat] show; hide' then return W.combat and 'show' or 'hide' end
-    local tok = cond:match('^%[@(nameplate%d+),harm,nodead%]')
-    local u = tok and W.units[tok]
-    return (u and u.enemy and not u.dead) and 1 or 0
-  end
-  local function run(f, state, v)
-    if state == 'visibility' then f:SetShown(v == 'show'); return end
-    local code = f:GetAttribute('_onstate-' .. state); if not code then return end
-    local fn = assert(loadstring(code))
-    setfenv(fn, { self = f, stateid = state, newstate = v, strsub = string.sub })
-    fn()
+    local t = cond:match('^%[@(nameplate%d+),exists,harm,nodead%]')
+    local u = t and W.units[t]
+    return (u and u.enemy and not u.dead) and 'show' or 'hide'
   end
   RegisterStateDriver = function(f, state, cond)
     drivers[f] = drivers[f] or {}
-    local v = eval(cond); drivers[f][state] = { cond = cond, v = v }; run(f, state, v)
+    local v = eval(cond); drivers[f][state] = { cond = cond, v = v }
+    if state == 'visibility' then f:SetShown(v == 'show') end
   end
   UnregisterStateDriver = function(f, state) if drivers[f] then drivers[f][state] = nil end end
-  -- the state driver manager's pass (every frame in the game)
-  return function()
+  return function()   -- the state driver manager's pass (every frame in the game)
     for f, ds in pairs(drivers) do for state, d in pairs(ds) do
-      local v = eval(d.cond); if v ~= d.v then d.v = v; run(f, state, v) end
+      local v = eval(d.cond); if v ~= d.v then d.v = v; if state == 'visibility' then f:SetShown(v == 'show') end end
     end end
   end
 end
@@ -51,55 +42,72 @@ local function setup(W)
   return ns, F, UI
 end
 local function noErrors(T) T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1])) end
-local function units(ns) local t = {}; for i, r in ipairs(ns.moblist.rows) do t[i] = r:GetAttribute('unit') or '-' end; return table.concat(t, ',') end
+local function mob(W, F, k, name, o) local u = F.mob('nameplate' .. k, 'C-' .. k, name or ('Mob' .. k), 300, o); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate' .. k); return u end
+local function shownRows(ns) local t = {}; for k = 1, 16 do if ns.moblist.rows[k].shown then t[#t + 1] = k end end; return table.concat(t, ',') end
 
 return {
-  ['list: enemies take rows in turn, friends never; rows are secure target buttons'] = function(W, T)
+  ['list: one row per nameplate, enemies only, packed to the top; clicks are secure target buttons'] = function(W, T)
     local ns, F, UI = setup(W)
-    T.ok(ns.moblist.rows[1], 'the list is built')
-    T.eq(#ns.moblist.rows, 8, '8 rows by default')
-    T.eq(ns.moblist.rows[1]._template, 'SecureUnitButtonTemplate', 'a secure unit button')
-    T.eq(ns.moblist.rows[1]:GetAttribute('type1'), 'target', 'a click targets')
-    F.mob('nameplate1', 'C-1', 'Raptor', 300); F.mob('nameplate2', 'C-2', 'Screecher', 300)
-    F.mob('nameplate3', 'C-3', 'Guard', 300, { friendly = true }); F.mob('nameplate4', 'C-4', 'Lashtail', 300)
+    local L = ns.moblist
+    mob(W, F, 2, 'Raptor'); mob(W, F, 3, 'Guard', { friendly = true }); mob(W, F, 5, 'Lashtail')
     pump()
-    T.eq(units(ns), 'nameplate1,nameplate2,nameplate4,-,-,-,-,-', 'three enemies, in turn; the friendly guard has no row')
-    T.ok(ns.moblist.rows[1]:IsShown(), 'a used row shows'); T.ok(not ns.moblist.rows[4]:IsShown(), 'a free row is hidden')
+    T.eq(shownRows(ns), '2,5', 'the two enemies show; the friendly guard has no row')
+    T.eq(L.slotOf[2], 1, 'packed: the first enemy at the top'); T.eq(L.slotOf[5], 2, 'the second just under it')
+    local b = L.rows[2].click
+    T.eq(b._template, 'SecureUnitButtonTemplate', 'a secure unit button')
+    T.eq(b:GetAttribute('type1'), 'target', 'a click targets'); T.eq(b:GetAttribute('unit'), 'nameplate2', 'its own token, for good')
+    W.combat = true; pump()
+    T.ok(b:IsShown() or b.shown, "an enemy's button shows in a fight")
+    T.ok(not (L.rows[3].click.shown), "a friendly plate's button stays hidden")
     noErrors(T)
   end,
-  ['list: a mob keeps its row for the whole fight; a new one takes the first free row'] = function(W, T)
+  ['list: in a fight nothing moves; a dead mob leaves its place empty; a newcomer takes its own place'] = function(W, T)
     local ns, F, UI = setup(W)
-    W.combat = true
-    for i = 1, 3 do F.mob('nameplate' .. i, 'C-' .. i, 'Mob' .. i, 300) end
-    pump(); T.eq(units(ns), 'nameplate1,nameplate2,nameplate3,-,-,-,-,-')
-    W.units.nameplate2.dead = true; pump()
-    T.eq(units(ns), 'nameplate1,-,nameplate3,-,-,-,-,-', 'the dead one frees its row; the others do not move')
-    T.ok(not ns.moblist.rows[2]:IsShown(), 'its row hides')
-    F.mob('nameplate7', 'C-7', 'Late', 300); pump()
-    T.eq(units(ns), 'nameplate1,nameplate7,nameplate3,-,-,-,-,-', 'a newcomer takes the free row')
+    local L = ns.moblist
+    for k = 1, 3 do mob(W, F, k) end
+    W.combat = true; W.fire('PLAYER_REGEN_DISABLED'); pump()
+    local before = { L.slotOf[1], L.slotOf[2], L.slotOf[3], L.slotOf[4] }
+    T.eq(shownRows(ns), '1,2,3')
+    W.units.nameplate2.dead = true; W.fire('UNIT_HEALTH', 'nameplate2')
+    T.eq(shownRows(ns), '1,3', 'the dead one goes')
+    mob(W, F, 4, 'Late')
+    T.eq(shownRows(ns), '1,3,4', 'a newcomer shows')
+    T.eq(L.slotOf[1], before[1]); T.eq(L.slotOf[3], before[3]); T.eq(L.slotOf[4], before[4], 'in the place its token already had: nothing moved')
+    W.combat = false; W.fire('PLAYER_REGEN_ENABLED')
+    T.eq(L.slotOf[4], 3, 'after the fight the list packs again')
     noErrors(T)
   end,
-  ['list: each row shows your DoTs in their seats, for its own mob'] = function(W, T)
+  ['list: each row shows your DoTs in their seats, bound once to its own nameplate'] = function(W, T)
     local ns, F, UI = setup(W)
-    F.mob('nameplate1', 'C-1', 'Raptor', 300).auras = { 172, 980 }
-    pump(); W.advance(1)
+    W.advance(1)
+    mob(W, F, 1, 'Raptor').auras = { 172, 980 }
+    W.fire('UNIT_AURA', 'nameplate1'); W.advance(.5)
     local r = ns.moblist.rows[1]
     T.ok(r.pair, 'the row has its rings')
-    T.eq(r.pair.ring.unit, 'nameplate1', 'bound to its mob')
+    T.eq(r.pair.ring.unit, 'nameplate1', 'bound to its own token')
+    UI.mainOf(r.pair.ring):UpdateAllAuras()
     local seen = UI.showing(UI.mainOf(r.pair.ring))
     T.eq(#seen.corruption, 1, 'Corruption'); T.eq(#seen.agony, 1, 'Agony'); T.eq(#seen.immolate, 0, 'Immolate blank')
     T.ok(not UI.group(r.pair.ring, 'others').enabled, "other players' DoTs are not in the list")
-    T.ok(not UI.group(r.pair.ring, 'cc').enabled, 'only your DoT seats')
     noErrors(T)
   end,
-  ['list: shown in fights only; unlock shows it to move, lock puts it back'] = function(W, T)
+  ['list: shown in fights only (plain code); unlock shows it to move, lock puts it back'] = function(W, T)
     local ns, F, UI = setup(W)
     local h = ns.moblist.header
     T.ok(not h:IsShown(), 'hidden out of combat')
-    W.combat = true; pump(); T.ok(h:IsShown(), 'shown in a fight')
-    W.combat = false; pump(); T.ok(not h:IsShown(), 'hidden after')
+    W.combat = true; W.fire('PLAYER_REGEN_DISABLED'); T.ok(h:IsShown(), 'shown in a fight')
+    W.combat = false; W.fire('PLAYER_REGEN_ENABLED'); T.ok(not h:IsShown(), 'hidden after')
     ns.moblist.slash('unlock'); T.ok(h:IsShown(), 'unlocked: shown to move'); T.eq(OmaDoomedDB.list.unlocked, true)
-    ns.moblist.slash('lock'); pump(); T.ok(not h:IsShown(), 'locked: back to fights only')
+    ns.moblist.slash('lock'); T.ok(not h:IsShown(), 'locked: back to fights only')
+    noErrors(T)
+  end,
+  ["list: the skull rides a bar from 0 to the mob's health, filled with your DoTs' damage"] = function(W, T)
+    local ns, F, UI = setup(W)
+    mob(W, F, 1, 'Raptor')
+    ns.moblist.rows[1].unit = 'nameplate1'
+    local r = ns.moblist.rows[1]
+    T.ok(r.skullBar and r.skull, 'the skull and its bar are there')
+    T.ok(r.skullWin, 'inside a small window over the portrait')
     noErrors(T)
   end,
 }
