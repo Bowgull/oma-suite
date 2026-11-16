@@ -515,6 +515,20 @@ local function odebButton(b)
 end
 R.odebButton = odebButton
 
+-- A shield or anti-magic buff on a mob (the mob list, sheet 83): shown only while it's up, a soft square in the pale
+-- blue of Blizzard's "can steal" glow, with its time. Built from HELPFUL|IMPORTANT, what the game itself flags.
+function R.buffButton(size)
+  return function(b)
+    b:SetSize(size, size); pcall(b.EnableMouse, b, false)
+    local icon = softIcon(b, size)
+    glowBehind(b, size, { .66, .88, 1, .9 })
+    local cd = CreateFrame('Cooldown', nil, b); cd:SetAllPoints(b); pcall(cd.SetDrawSwipe, cd, false); pcall(cd.SetDrawEdge, cd, false)
+    pcall(cd.SetHideCountdownNumbers, cd, true); pcall(cd.SetUseAuraDisplayTime, cd, true)
+    b:SetIcon(icon); b:SetDurationCooldown(cd)
+    b:SetDurationText(numberSmall(b, size), textOpts(NUM_FMT, nil))
+  end
+end
+
 -- Someone else's crowd control (sheet 78): the health bar BECOMES its timer. The button covers the bar with a dark
 -- panel (no red behind), a teal bar the game drains as the CC runs out, the number riding its end, and the spell as
 -- a soft square, one ring wide, left of the bar in Blizzard's white crowd-control glow. place(b, barFrame) puts it.

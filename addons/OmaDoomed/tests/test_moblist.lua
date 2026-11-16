@@ -51,7 +51,7 @@ return {
     local ns, F, UI = setup(W)
     local L = ns.moblist
     mob(W, F, 2, 'Raptor'); mob(W, F, 3, 'Guard', { friendly = true }); mob(W, F, 5, 'Lashtail')
-    pump()
+    pump(); W.advance(.3)
     T.eq(shownRows(ns), '2,5', 'the two enemies show; the friendly guard has no row')
     T.eq(L.slotOf[2], 1, 'packed: the first enemy at the top'); T.eq(L.slotOf[5], 2, 'the second just under it')
     local b = L.rows[2].click
@@ -68,12 +68,12 @@ return {
     local ns, F, UI = setup(W)
     local L = ns.moblist
     for k = 1, 3 do mob(W, F, k) end
-    W.combat = true; W.fire('PLAYER_REGEN_DISABLED'); pump()
+    W.combat = true; W.advance(.3); W.fire('PLAYER_REGEN_DISABLED'); pump()
     local before = { L.slotOf[1], L.slotOf[2], L.slotOf[3], L.slotOf[4] }
     T.eq(shownRows(ns), '1,2,3')
-    W.units.nameplate2.dead = true; W.fire('UNIT_HEALTH', 'nameplate2')
+    W.units.nameplate2.dead = true; W.fire('UNIT_HEALTH', 'nameplate2'); W.advance(.3)
     T.eq(shownRows(ns), '1,3', 'the dead one goes')
-    mob(W, F, 4, 'Late')
+    mob(W, F, 4, 'Late'); W.advance(.3)
     T.eq(shownRows(ns), '1,3,4', 'a newcomer shows')
     T.eq(L.slotOf[1], before[1]); T.eq(L.slotOf[3], before[3]); T.eq(L.slotOf[4], before[4], 'in the place its token already had: nothing moved')
     W.combat = false; W.fire('PLAYER_REGEN_ENABLED')

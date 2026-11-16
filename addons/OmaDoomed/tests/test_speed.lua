@@ -48,7 +48,7 @@ return {
     local most = 0
     local real = ns.model.listInto
     local perFrame = 0
-    ns.model.listInto = function(u, ...) if u ~= 'target' then perFrame = perFrame + 1 end; return real(u, ...) end   -- plates only (not the target bar)
+    ns.model.listInto = function(u, ...) if u ~= 'target' and debug.traceback():find('KillPlates.lua', 1, true) then perFrame = perFrame + 1 end; return real(u, ...) end   -- the plates' kill bars only (not the target bar, the roster or the list)
     local total = 0
     for f = 0, 4 * 60 do
       if f % 60 == 0 then for i = 1, 40 do F.hit('nameplate' .. i, 32); F.hit('nameplate' .. i, 4) end end

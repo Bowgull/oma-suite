@@ -6,7 +6,7 @@ local ADDON, ns = ...
 local Core = ns.core
 
 local pct = function(v) return ('%d%%'):format(v) end
-local BAR, R = 'doomed', 'rings'
+local BAR, R, L = 'doomed', 'rings', 'list'
 
 ns.settings = Core.NewSettings({
   prefix = 'OMADOOMED_',
@@ -55,6 +55,28 @@ ns.settings = Core.NewSettings({
     { key = 'others', store = R, default = true },    -- /omadoomed rings others on|off
     { key = 'cc', store = R, default = true, control = 'check', label = 'Crowd-control timers',
       tip = "Your Fear, Banish, Howl of Terror and your Sayaad's Seduction as a teal ring over the mob. When it isn't your target or is off screen, the ring stands beside your target frame instead, so you always see how long is left." },
+
+    -- 2026-11-16 (sheet 83): the mob list, its own store (OmaDoomedDB.list)
+    { header = 'Mob list' },
+    { key = 'on', store = L, default = true, control = 'check', label = 'Mob list',
+      tip = "Every enemy in your fight in one list: its health, your DoTs, threat, and the skull when your DoTs will finish it. Hover a row and press a mouseover DoT key, or click it to target. Shows in fights. Takes a /reload." },
+    { key = 'rows', store = L, default = 8, control = 'slider', label = 'Rows', min = 4, max = 16, step = 1, format = tostring,
+      tip = 'How many enemies the list has room for.' },
+    { key = 'scale', store = L, default = 100, control = 'slider', label = 'Size', min = 60, max = 180, step = 5, format = pct,
+      tip = 'How big the list is. Everything in it grows and shrinks together. You can also drag its corner when it is unlocked.' },
+    { key = 'sort', store = L, default = 'missing', control = 'dropdown', label = 'Order',
+      choices = { { 'missing', 'Missing a DoT first' }, { 'soonest', 'Ending soonest' } },
+      tip = "How the list orders the enemies between fights and as a pull starts (in a fight each keeps its row, so nothing moves under your mouse):\n|cffffd100Missing a DoT first:|r the enemies with an empty seat at the top.\n|cffffd100Ending soonest:|r the DoT that runs out first at the top." },
+    { key = 'threat', store = L, default = true, control = 'check', label = 'Threat glow',
+      tip = "A row breathes softly in Blizzard's threat colour when you climb on that enemy's threat: yellow, orange, red when it's on you." },
+    { key = 'range', store = L, default = true, control = 'check', label = 'Fade out of range',
+      tip = 'An enemy your spells cannot reach shows at half strength.' },
+    { key = 'hp', store = L, default = true, control = 'check', label = 'Health numbers' },
+    { key = 'unlocked', store = L, default = false },
+    { button = 'Move', name = 'Move the list', click = function() if ns.moblist and ns.moblist.unlock then ns.moblist.unlock(true) end end,
+      tip = 'Shows the list so you can drag it and size it from its corner. Type /omadoomed list lock when done.' },
+    { key = 'calm', default = false, control = 'check', label = 'Calm motion',
+      tip = 'Things change at once instead of easing, and nothing breathes.' },
 
     { header = 'Where the rings go' },
     { key = 'where', store = R, default = 'enemy', control = 'dropdown', label = 'Where the rings show',

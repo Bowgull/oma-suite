@@ -31,7 +31,12 @@ Track\Wrack.lua
 Track\Forever.lua
 DotModel.lua
 KillBarStyle.lua
+Engine\Scheduler.lua
+Engine\Motion.lua
+Engine\Layout.lua
+Engine\Skin.lua
 PlateManager.lua
+Engine\Roster.lua
 TargetFinder.lua
 Doomed.lua
 KillPlates.lua
