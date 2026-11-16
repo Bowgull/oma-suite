@@ -78,7 +78,26 @@ local function newPair(gap, spare, flow, list)
     -- on a plate the flowing rings (crowd control, channel, your other debuffs, others' DoTs) ride above the seats
     local up = seats and R.ABOVE_SEATS or 0
     ring:SetPoint('BOTTOM', anchor, 'BOTTOM', 0, up); main:SetPoint('BOTTOM', anchor, 'BOTTOM', 0, up)
-    return { anchor = anchor, ring = ring, main = main, seats = seats, up = up }
+    -- sheet 78: a frame that follows the health bar (placeBar), someone else's crowd control laid over it as the
+    -- bar's own timer, and other players' debuffs as soft squares right of the level box (a small third container)
+    local bar, side = CreateFrame('Frame', nil, anchor), nil
+    bar:SetSize(1, 1)
+    if seats and db.occ ~= false then
+      local okC, errC = pcall(main.AddAuraSlot, main, 'occ', R.OCC_FILTER, { sortMethod = SORT,
+        initializeFrame = function(b) R.occButton(b); b:ClearAllPoints(); b:SetAllPoints(bar) end })
+      if not okC then log('crowd-control slot failed: ' .. tostring(errC)) end
+    end
+    if seats and not list and db.odeb ~= false then
+      side = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
+      pcall(side.SetEditModePreviewEnabled, side, false)
+      side:SetFlowLayoutAnchorPoint('LEFT'); side:SetFlowLayoutGrowthDirection(1, 1)
+      side:SetFlowLayoutMaximumLineSize(R.ODEB * 4.2)
+      local okD, errD = pcall(side.AddAuraGroup, side, 'odeb', R.ODEB_FILTER, { initializeFrame = R.odebButton,
+        candidateFilters = R.odebFilters(), sortMethod = SORT, maxFrameCount = 3, layout = { groupSpacing = R.ODEB * .3 } })
+      if not okD then log("other players' debuffs failed: " .. tostring(errD)); side = nil
+      else side:SetPoint('LEFT', bar, 'RIGHT', R.LEVEL_BOX, 0) end
+    end
+    return { anchor = anchor, ring = ring, main = main, seats = seats, up = up, bar = bar, side = side }
   end)
   if not ok then log('new pair failed: ' .. tostring(p)); return nil end
   if t0 then
@@ -172,6 +191,18 @@ local function place(anchor, plate, unit)
   end
 end
 
+-- the pair's bar frame on the plate's health bar (Blizzard's, or another add-on's); the CC timer lies over it
+local function placeBar(p, plate, unit)
+  if not (p and p.bar) then return end
+  p.bar:ClearAllPoints()
+  local other = addonBar(plate, unit)
+  local uf = plate and plate.UnitFrame
+  local hb = (other and other.bar) or (uf and uf.HealthBarsContainer)
+  if hb then p.bar:SetAllPoints(hb) else p.bar:SetSize(1, 1); p.bar:SetPoint('CENTER', p.anchor, 'BOTTOM') end
+  if p.side then pcall(p.side.SetUnit, p.side, unit) end
+end
+R.placeBar = placeBar
+
 local function isEnemy(unit)
   local ok, can = pcall(UnitCanAttack, 'player', unit)
   if not ok or secret(can) then return false end
@@ -198,7 +229,7 @@ local function attach(unit)
   if not p then log('no free container for ' .. unit .. (InCombatLockdown() and ' (in combat; filled after)' or '')); return end
   active[unit] = p
   hostOn(p.anchor, plate, unit)
-  place(p.anchor, plate, unit)
+  place(p.anchor, plate, unit); placeBar(p, plate, unit)
   p.ring:SetUnit(unit); p.main:SetUnit(unit)   -- while hidden: no event churn; Show re-reads every aura
   p.want = nil; p.anchor:SetAlpha(0); p.anchor:Hide(); look(p); p.want = false; p.curA = 0; visible()
   if #free < POOL_MIN_FREE and not InCombatLockdown() then fill() end   -- keep spares for the next pull
@@ -392,7 +423,7 @@ local function start()
   ns.bus:On('PLATE_CHANGED', function(u, plate, enemy, why)
     if not db then return end
     if why == 'hostility' then if enemy then attach(u) else release(u) end   -- a duel starts, a mob is charmed
-    else local p = active[u]; if p then hostOn(p.anchor, plate, u); place(p.anchor, plate, u) end end   -- another bar
+    else local p = active[u]; if p then hostOn(p.anchor, plate, u); place(p.anchor, plate, u); placeBar(p, plate, u) end end   -- another bar
   end)
   R.probe(); R.buildGroups()
   if db.enabled then BC.blizzardRow(false) end
@@ -408,7 +439,7 @@ onEvent = (function(_, e, a1, _, a3)
     -- switching straight from one enemy to another (Haunt, Target frame): the rows that follow 'target' re-read
     reread(framePair); reread(chanPair)
     -- the name can appear or move when the target changes; keep each row on top of its name
-    for u, p in pairs(active) do local plate = PM.live[u]; if plate then place(p.anchor, plate, u) end end
+    for u, p in pairs(active) do local plate = PM.live[u]; if plate then place(p.anchor, plate, u); placeBar(p, plate, u) end end
   elseif e == 'PLAYER_REGEN_DISABLED' then visible()
   elseif e == 'PLAYER_REGEN_ENABLED' then
     if filtersDirty then refreshFilters(); placeAllSeats() end

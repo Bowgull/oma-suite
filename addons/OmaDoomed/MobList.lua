@@ -57,11 +57,28 @@ local function alive(u)
   local ok, dead = pcall(UnitIsDead, u)
   return not (ok and plain(dead) and dead == true)
 end
--- an enemy plate that's up (PlateManager knows the live plates and who is hostile; it reads that out of combat or
--- on the plate's own events, never a hidden value)
+-- In YOUR fight (2026-11-16, his screenshots: the list showed a Kodo he never touched and missed hyenas he was
+-- fighting, and kept a dead one at 0). 'Can I attack it' is hidden in combat, so a plate that appeared mid-fight
+-- counted as friendly; and 'is it dead' is hidden too. Warlock HUD's rule instead, which Forever answers: you, your
+-- pet or a party/raid member is on the mob's threat list (a hidden answer counts as no), or it carries your DoTs.
+-- A dead mob drops off every threat list, so its row goes.
+local GROUP = { 'player', 'pet' }
+for i = 1, 4 do GROUP[#GROUP + 1] = 'party' .. i; GROUP[#GROUP + 1] = 'partypet' .. i end
+local dlist, dseen2 = {}, {}
+local function inFight(u)
+  for _, m in ipairs(GROUP) do
+    local ok, st = pcall(UnitThreatSituation, m, u)
+    if ok and plain(st) then return true end
+  end
+  if IsInRaid and IsInRaid() then
+    for i = 1, 40 do local ok, st = pcall(UnitThreatSituation, 'raid' .. i, u); if ok and plain(st) then return true end end
+  end
+  local ok = pcall(ns.model.listInto, u, true, dlist, dseen2)
+  return ok and #dlist > 0
+end
 local function wanted(k)
   local u = tok(k)
-  return PM.live[u] ~= nil and PM.enemy[u] == true and alive(u)
+  return PM.live[u] ~= nil and alive(u) and inFight(u)
 end
 
 local function isTarget(u)
@@ -150,13 +167,16 @@ local function newRow(k)
   r.tgt:SetColorTexture(1, .9, 0, .08); r.tgt:Hide()
   -- portrait; Blizzard's aggro colour breathes around it when your threat climbs; the skull on its top edge
   local cx = PADX + D / 2
-  r.glow = r:CreateTexture(nil, 'ARTWORK', nil, 0); r.glow:SetTexture(ART .. 'ring_bold'); r.glow:SetBlendMode('ADD')
-  r.glow:SetSize(D * 1.45, D * 1.45); r.glow:SetPoint('CENTER', r, 'LEFT', cx, 0); r.glow:Hide()
+  -- a soft glow, not a hard ring (2026-11-16: the ring_bold circle read as a thick red hoop)
+  r.glow = r:CreateTexture(nil, 'ARTWORK', nil, 0); r.glow:SetTexture(ART .. 'softring_glow'); r.glow:SetBlendMode('ADD')
+  r.glow:SetSize(D * 1.7, D * 1.7); r.glow:SetPoint('CENTER', r, 'LEFT', cx, 0); r.glow:Hide()
   r.breath = r.glow:CreateAnimationGroup(); r.breath:SetLooping('BOUNCE')
   local a = r.breath:CreateAnimation('Alpha'); a:SetFromAlpha(1); a:SetToAlpha(.35); a:SetDuration(.8); a:SetSmoothing('IN_OUT')
   r.face = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.face:SetSize(D * .9, D * .9); r.face:SetPoint('CENTER', r, 'LEFT', cx, 0)
   local m = r:CreateMaskTexture(); m:SetTexture(ART .. 'mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(r.face)
   r.face:AddMaskTexture(m)
+  local rim = r:CreateTexture(nil, 'ARTWORK', nil, 2); rim:SetTexture(ART .. 'portrait_rim'); rim:SetSize(D * .94, D * .94)
+  rim:SetPoint('CENTER', r.face, 'CENTER')
   local SW, SH = D * .95, D * .95 * 54 / 78
   r.skullWin = CreateFrame('Frame', nil, r); r.skullWin:SetClipsChildren(true)
   r.skullWin:SetSize(SW, SH); r.skullWin:SetPoint('BOTTOM', r.face, 'TOP', 0, -D * .18); r.skullWin:SetFrameLevel(r:GetFrameLevel() + 6)
@@ -207,7 +227,7 @@ local function buildPairs()
       local r = rows[k]
       if r and not r.pair then
         r.pair = R.newListPair(r) or false
-        if r.pair then placeSeats(r); r.pair.ring:SetUnit(r.unit); r.pair.main:SetUnit(r.unit) end
+        if r.pair then placeSeats(r); r.pair.bar:SetAllPoints(r.bar); r.pair.ring:SetUnit(r.unit); r.pair.main:SetUnit(r.unit) end   -- a CC on it: the row's bar becomes its timer too
         return
       end
     end
@@ -277,7 +297,11 @@ local function tick(_, el)
   since = 0
   for k = 1, TOKENS do
     local r = rows[k]
-    if r and r.shown then pcall(threat, r); pcall(health, r); pcall(doomed, r); r.tgt:SetShown(isTarget(r.unit)) end
+    if r then
+      local on = wanted(k)
+      if on ~= r.shown then refreshRow(k)
+      elseif on then pcall(threat, r); pcall(health, r); pcall(doomed, r); r.tgt:SetShown(isTarget(r.unit)) end
+    end
   end
 end
 
@@ -290,7 +314,8 @@ local function start()
   header = CreateFrame('Frame', 'OmaDoomedList', UIParent)
   header:SetClampedToScreen(true); header:SetMovable(true)
   header:SetScale(db.scale or 1)
-  header:SetPoint(db.point or 'CENTER', UIParent, db.rel or 'CENTER', db.x or 380, db.y or 120)
+  -- first place: down the right side under the minimap, clear of the target frame (2026-11-16)
+  header:SetPoint(db.point or 'TOPRIGHT', UIParent, db.rel or 'TOPRIGHT', db.x or -40, db.y or -330)
   -- the click buttons' parent: secure, shown in a fight (Blizzard's driver); the buttons sit over the rows
   holder = CreateFrame('Frame', 'OmaDoomedListClicks', UIParent, 'SecureHandlerStateTemplate')
   holder:SetAllPoints(UIParent)
@@ -311,7 +336,7 @@ local function start()
   ns.bus:On('PLATE_REMOVED', plateEvent)
   ns.bus:On('PLATE_CHANGED', plateEvent)
   local ev = CreateFrame('Frame')
-  for _, e in ipairs({ 'PLAYER_REGEN_DISABLED', 'PLAYER_REGEN_ENABLED', 'SPELLS_CHANGED', 'PLAYER_TARGET_CHANGED', 'UNIT_HEALTH' }) do pcall(ev.RegisterEvent, ev, e) end
+  for _, e in ipairs({ 'PLAYER_REGEN_DISABLED', 'PLAYER_REGEN_ENABLED', 'SPELLS_CHANGED', 'PLAYER_TARGET_CHANGED', 'UNIT_HEALTH', 'UNIT_THREAT_LIST_UPDATE' }) do pcall(ev.RegisterEvent, ev, e) end
   ev:SetScript('OnEvent', function(_, e, u)
     if e == 'PLAYER_REGEN_DISABLED' then
       pack()                      -- the last packing before Blizzard locks the buttons: the places for this fight
@@ -322,6 +347,9 @@ local function start()
       for k = 1, TOKENS do refreshRow(k) end
     elseif e == 'SPELLS_CHANGED' then layout()
     elseif e == 'PLAYER_TARGET_CHANGED' then for k = 1, TOKENS do local r = rows[k]; if r and r.shown then r.tgt:SetShown(isTarget(r.unit)) end end
+    elseif e == 'UNIT_THREAT_LIST_UPDATE' then
+      local k = type(u) == 'string' and tonumber(u:match('^nameplate(%d+)$'))
+      if k and rows[k] then refreshRow(k) end
     elseif e == 'UNIT_HEALTH' then
       local k = type(u) == 'string' and tonumber(u:match('^nameplate(%d+)$'))
       if k and rows[k] and rows[k].shown then
@@ -347,7 +375,7 @@ function L.slash(msg)
   elseif cmd == 'reset' then
     if InCombatLockdown() then return end
     db.point, db.rel, db.x, db.y, db.scale = nil, nil, nil, nil, nil
-    header:ClearAllPoints(); header:SetPoint('CENTER', UIParent, 'CENTER', 380, 120); header:SetScale(1); say('list back in its first place.')
+    header:ClearAllPoints(); header:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -40, -330); header:SetScale(1); say('list back in its first place.')
   else
     local n = 0; for k = 1, TOKENS do if rows[k] and rows[k].shown then n = n + 1 end end
     say(('mob list: %d shown of up to %d. /omadoomed list unlock | lock | rows 4-16 | reset'):format(n, db.rows))

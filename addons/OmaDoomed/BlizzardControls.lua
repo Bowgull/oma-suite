@@ -34,6 +34,11 @@ function BC.blizzardRow(show)
         if db.saved[cv.name] == nil then db.saved[cv.name] = cur end
         local okS, err = pcall(C_CVar.SetCVarBitfield, cv.name, cv.bit, false)
         if not okS then ns.err('rings: could not turn off ' .. cv.name .. ': ' .. tostring(err)) end
+        -- sheet 78: someone else's crowd control is ours now (the bar becomes its timer), so Blizzard's own CC icon,
+        -- the one drawn behind the level box on Forever, goes too. Its buffs list (purgeable, important) stays.
+        local cc = cv.name:find('Npc') and Enum.NamePlateEnemyNpcAuraDisplay and Enum.NamePlateEnemyNpcAuraDisplay.CrowdControl
+          or (Enum.NamePlateEnemyPlayerAuraDisplay and Enum.NamePlateEnemyPlayerAuraDisplay.CrowdControl) or 4
+        if db.occ ~= false then pcall(C_CVar.SetCVarBitfield, cv.name, cc, false) end
       end
     end
   end

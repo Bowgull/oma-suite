@@ -36,7 +36,8 @@ local function setup(W)
   local ns, F, UI = require('load').addon({ rings = true, before = function()
     pump = secure(W)
     SetPortraitTexture = SetPortraitTexture or function() end
-    UnitThreatSituation = UnitThreatSituation or function() return nil end
+    -- the threat list: a mob in your fight (not friendly, not dead, not .idle) has you on it
+    UnitThreatSituation = function(who, u) local x = W.units[u]; if who == 'player' and x and x.enemy and not x.dead and not x.idle then return 0 end end
   end })
   W.advance(3)
   return ns, F, UI
@@ -108,6 +109,18 @@ return {
     local r = ns.moblist.rows[1]
     T.ok(r.skullBar and r.skull, 'the skull and its bar are there')
     T.ok(r.skullWin, 'inside a small window over the portrait')
+    noErrors(T)
+  end,
+  ["list: only mobs in your fight (his Barrens screenshots): a Kodo standing by stays off, a hyena that dies leaves"] = function(W, T)
+    local ns, F, UI = setup(W)
+    W.combat = true; W.fire('PLAYER_REGEN_DISABLED')
+    mob(W, F, 1, 'Lost Barrens Kodo').idle = true      -- attackable, but not fighting you
+    mob(W, F, 2, 'Hecklefang Hyena')                     -- pulled
+    mob(W, F, 3, 'Hecklefang Hyena')                     -- joins mid-fight
+    W.advance(.3)
+    T.eq(shownRows(ns), '2,3', 'the two hyenas, not the Kodo')
+    W.units.nameplate2.dead = true; W.advance(.3)
+    T.eq(shownRows(ns), '3', 'the dead hyena leaves (it drops off the threat list)')
     noErrors(T)
   end,
 }

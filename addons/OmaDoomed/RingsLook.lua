@@ -405,6 +405,101 @@ local function ringOthers(b)
   local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (R.flat() and 'backing_flat' or 'backing')); back:SetAllPoints(b)
 end
 
+-- ---------- everything else on a mob (sheet 78, approved 2026-11-16 "build the rest of sheet 78") ----------
+-- Soft squares (Blizzard's square, corners 20% of the side, no frame), their colour a soft glow behind them that the
+-- GAME tints by debuff type (AddDispelTypeTexture with a colour map: nothing hidden is ever read here).
+R.SQ = 'softsq'
+local DISPEL_RGB = { Magic = { .24, .61, 1 }, Curse = { .64, .21, .93 }, Disease = { .6, .4, 0 }, Poison = { .12, .75, .12 },
+  Bleed = { .82, .1, .1 }, None = { .82, .1, .1 } }
+local dispelMap
+local function colorMap()
+  if dispelMap or not CreateColor then return dispelMap end
+  dispelMap = {}
+  for k, c in pairs(DISPEL_RGB) do dispelMap[k] = CreateColor(c[1], c[2], c[3], 1) end
+  return dispelMap
+end
+-- Blizzard's style that keeps our own glow art and only tints it ('PreserveAsset'); found by name, any enum spelling
+local function preserveStyle()
+  for _, t in pairs(Enum or {}) do if type(t) == 'table' and t.PreserveAsset ~= nil then return t.PreserveAsset end end
+end
+local function softIcon(b, size)
+  local icon = b:CreateTexture(nil, 'ARTWORK', nil, 0)
+  icon:SetSize(size, size); icon:SetPoint('CENTER', b, 'CENTER')
+  icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  local m = b:CreateMaskTexture(); m:SetTexture(ART .. 'softsq_mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(icon)
+  icon:AddMaskTexture(m)
+  local edge = b:CreateTexture(nil, 'ARTWORK', nil, 2); edge:SetTexture(ART .. 'softsq_edge'); edge:SetAllPoints(icon)
+  return icon
+end
+local function glowBehind(b, size, fixed)
+  local g = b:CreateTexture(nil, 'BACKGROUND', nil, -6); g:SetTexture(ART .. 'softsq_glow'); g:SetSize(size * 1.5, size * 1.5)
+  g:SetPoint('CENTER', b, 'CENTER'); g:SetBlendMode('ADD')
+  if fixed then g:SetVertexColor(fixed[1], fixed[2], fixed[3], fixed[4] or 1); return g end
+  -- the game colours it by the debuff's type; if this client refuses, a quiet red stays
+  g:SetVertexColor(.82, .1, .1, .6)
+  local style = preserveStyle()
+  if b.AddDispelTypeTexture then
+    pcall(b.AddDispelTypeTexture, b, g, { style = style, showWhenHarmful = true, showWithoutDispelType = true, customDispelColorMap = colorMap() })
+  end
+  return g
+end
+local function numberSmall(b, size)
+  local top = CreateFrame('Frame', nil, b); top:SetAllPoints(b); top:SetFrameLevel(b:GetFrameLevel() + 3)
+  local num = top:CreateFontString(nil, 'OVERLAY')
+  num:SetFont(NUM_FONT, math.max(8, math.floor(size * .46 + .5)), 'OUTLINE'); num:SetPoint('CENTER', b, 'CENTER', 0, 0)
+  num:SetTextColor(1, 1, 1, 1); num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1)
+  return num
+end
+
+-- Other players' debuffs (Sunder, poisons, slows, Faerie Fire...): half a ring, soft squares, right of the level box
+R.ODEB = S * 0.5
+R.LEVEL_BOX = 36                    -- past Blizzard's level box (28 px + its gaps), in the row's own units
+local function odebButton(b)
+  local s = R.ODEB
+  b:SetSize(s, s); pcall(b.EnableMouse, b, false)
+  local icon = softIcon(b, s)
+  glowBehind(b, s)
+  local cd = CreateFrame('Cooldown', nil, b); cd:SetAllPoints(b); pcall(cd.SetDrawSwipe, cd, false); pcall(cd.SetDrawEdge, cd, false)
+  pcall(cd.SetHideCountdownNumbers, cd, true); pcall(cd.SetUseAuraDisplayTime, cd, true)
+  b:SetIcon(icon); b:SetDurationCooldown(cd)
+  b:SetDurationText(numberSmall(b, s), textOpts(NUM_FMT, nil))
+  b:SetAlpha(.9)
+end
+R.odebButton = odebButton
+
+-- Someone else's crowd control (sheet 78): the health bar BECOMES its timer. The button covers the bar with a dark
+-- panel (no red behind), a teal bar the game drains as the CC runs out, the number riding its end, and the spell as
+-- a soft square, one ring wide, left of the bar in Blizzard's white crowd-control glow. place(b, barFrame) puts it.
+R.OCC_TEAL = { .18, .72, .65 }
+local function occButton(b)
+  pcall(b.EnableMouse, b, false)
+  local back = b:CreateTexture(nil, 'BACKGROUND', nil, -7); back:SetAllPoints(b); back:SetColorTexture(.05, .04, .03, 1)
+  local bar = CreateFrame('StatusBar', nil, b); bar:SetAllPoints(b)
+  bar:SetStatusBarTexture('Interface\\TargetingFrame\\UI-StatusBar'); bar:SetStatusBarColor(R.OCC_TEAL[1], R.OCC_TEAL[2], R.OCC_TEAL[3])
+  bar:SetMinMaxValues(0, 1); bar:SetValue(1)
+  local sheen = bar:CreateTexture(nil, 'OVERLAY'); sheen:SetPoint('TOPLEFT', bar:GetStatusBarTexture(), 'TOPLEFT')
+  sheen:SetPoint('BOTTOMRIGHT', bar:GetStatusBarTexture(), 'RIGHT'); sheen:SetColorTexture(1, 1, 1, .16)
+  local top = CreateFrame('Frame', nil, bar); top:SetAllPoints(b); top:SetFrameLevel(bar:GetFrameLevel() + 2)
+  local num = top:CreateFontString(nil, 'OVERLAY')
+  num:SetFont(NUM_FONT, 13, 'OUTLINE'); num:SetTextColor(.87, .98, .96, 1)
+  num:SetPoint('LEFT', bar:GetStatusBarTexture(), 'RIGHT', 3, 0)
+  local holder = CreateFrame('Frame', nil, b); holder:SetSize(S, S); holder:SetPoint('RIGHT', b, 'LEFT', -6, 0)
+  local icon = softIcon(holder, S * .82)
+  glowBehind(holder, S * .82, { 1, 1, 1, .85 })
+  b:SetIcon(icon)
+  if b.SetDurationBar then pcall(b.SetDurationBar, b, bar) end
+  b:SetDurationText(num, textOpts(NUM_FMT, nil))
+end
+R.occButton = occButton
+R.OCC_FILTER = 'HARMFUL|!PLAYER|CROWD_CONTROL|INCLUDE_NAME_PLATE_ONLY'
+R.ODEB_FILTER = 'HARMFUL|!PLAYER|!CROWD_CONTROL|INCLUDE_NAME_PLATE_ONLY'
+-- other warlocks' DoTs keep their faint rings (the 'others' group): the squares leave them out
+function R.odebFilters()
+  local ex = {}
+  for _, sp in ipairs(SPELLS) do idSet(sp, ex) end
+  return { excludeSpellIDs = ex }
+end
+
 -- ---------- seats ----------
 R.SEAT_OF = {}; for i, k in ipairs(R.SEATS) do R.SEAT_OF[k] = i end
 -- do you know this spell (any rank)? Without the API (or before spells load) every seat counts.

@@ -29,7 +29,7 @@ return {
       T.ok(seatOf(UI.mainOf(ring), k).slot, k .. ': a slot in main too')
     end
     for _, k in ipairs({ 'cc', 'channel', 'mine', 'others' }) do T.ok(not seatOf(ring, k).slot, k .. ' still flows') end
-    T.eq(ring.built + UI.mainOf(ring).built, 90, '90 aura buttons a pair (was 180)')
+    T.eq(ring.built + UI.mainOf(ring).built, 91, '91 aura buttons a pair (was 180): the seats, the flowing groups, one crowd-control slot')
     noErrors(T)
   end,
   ['seats: fixed spots, centred, 20% of a ring apart; a missing DoT leaves its spot blank'] = function(W, T)
