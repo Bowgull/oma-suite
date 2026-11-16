@@ -36,6 +36,7 @@ TargetFinder.lua
 Doomed.lua
 KillPlates.lua
 BlizzardControls.lua
+Fonts.xml
 RingsLook.lua
 RingsFade.lua
 Rings.lua

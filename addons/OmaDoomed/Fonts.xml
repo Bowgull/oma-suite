@@ -1,0 +1,5 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <!-- 2026-11-16: the ring font, declared so the client loads the file at start-up. Loaded late by SetFont it was
+       refused on Forever ("/omadoomed rings": ring font false), which switched off every ending effect. -->
+  <Font name="OmaDoomedRingFont" font="Interface\AddOns\OmaDoomed\Art\rings\OmashuRing.ttf" height="40" outline="NONE"/>
+</Ui>

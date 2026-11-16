@@ -2,7 +2,7 @@
 local function tocFiles()
   local files = {}
   for line in io.lines('OmaDoomed.toc') do
-    if not line:match('^##') and line:match('%S') then files[#files + 1] = (line:gsub('\\', '/'):gsub('%s+$', '')) end
+    if not line:match('^##') and line:match('%S') and not line:match('%.xml%s*$') then files[#files + 1] = (line:gsub('\\', '/'):gsub('%s+$', '')) end
   end
   return files
 end

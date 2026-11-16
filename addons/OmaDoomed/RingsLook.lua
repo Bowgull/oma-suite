@@ -120,7 +120,7 @@ end
 -- Sheet 58 C (approved 2026-11-13, "C, own colour"): a DoT that is ending flares in its OWN colour, lifted towards
 -- white: the ring by 22%, the number by 45%. No gold on the rings any more (the kill bar keeps its gold).
 local function lit(c, k) return { c[1] + (1 - c[1]) * k, c[2] + (1 - c[2]) * k, c[3] + (1 - c[3]) * k } end
-R.lit, R.LIT_RING, R.LIT_NUM = lit, 0.6, 0.7   -- white-hot (sheet 64 B): ring 60% to white, number 70%
+R.lit, R.LIT_RING, R.LIT_NUM = lit, 0.6, 0.1   -- white-hot ring; the number turns its DoT's own full colour (70% white read as white)
 
 -- the 'Ending soon' settings changed: every curve again, in place (buttons keep the curve they were given).
 -- Out of combat only. False when the client can't clear a curve: then the change shows after a /reload.
@@ -162,6 +162,7 @@ function R.probe()
   local pf = CreateFrame('Frame'); pf:Hide()          -- our own scratch frame: never add regions to Blizzard's
   local fs = pf:CreateFontString(nil, 'BACKGROUND')
   local okF, fontSet = pcall(fs.SetFont, fs, RING_FONT, 32, '')
+  if not fontSet and _G.OmaDoomedRingFont then okF, fontSet = pcall(fs.SetFontObject, fs, _G.OmaDoomedRingFont); if okF then fontSet = true end end
   if not fontSet then   -- which part is refused: the file, or the empty flags?
     local _, a = pcall(fs.SetFont, fs, RING_FONT, 32); local _, b2 = pcall(fs.SetFont, fs, STANDARD_TEXT_FONT, 32, '')
     local _, c = pcall(fs.SetFont, fs, STANDARD_TEXT_FONT, 32)
