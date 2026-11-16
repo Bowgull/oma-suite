@@ -68,6 +68,21 @@ local function newPair(gap, spare, flow, list)
   local ok, p = pcall(function()
     local anchor = CreateFrame('Frame', nil, holder); anchor:SetSize(1, 1); anchor:Hide()
     local seats = not flow and {} or nil
+    -- the ending glow, under the rings: one slot per seat, placed with the seats (RingsLook.lua R.haloFor)
+    local halo
+    if seats then
+      halo = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
+      pcall(halo.SetEditModePreviewEnabled, halo, false)
+      for _, g in ipairs(R.GROUPS) do
+        if g.seat then
+          local init = R.haloFor(g.key)
+          local okH, errH = pcall(halo.AddAuraSlot, halo, g.key, g.filter, { sortMethod = SORT, candidateFilters = R.filtersFor(g.key),
+            initializeFrame = function(b) init(b); seats[b] = g.key; R.placeSeats({ [b] = g.key }, anchor) end })
+          if not okH then log('ending glow ' .. g.key .. ' failed: ' .. tostring(errH)) end
+        end
+      end
+      halo:SetPoint('BOTTOM', anchor, 'BOTTOM')
+    end
     local ring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
     setupContainer(ring, 'ring', gap, seats, anchor)
     -- main is a CHILD of ring: that alone keeps every main button drawn above the ring's backing disc
@@ -97,7 +112,8 @@ local function newPair(gap, spare, flow, list)
       if not okD then log("other players' debuffs failed: " .. tostring(errD)); side = nil
       else side:SetPoint('LEFT', bar, 'RIGHT', R.LEVEL_BOX, 0) end
     end
-    return { anchor = anchor, ring = ring, main = main, seats = seats, up = up, bar = bar, side = side }
+    if halo then halo:SetFrameLevel(math.max(0, ring:GetFrameLevel() - 1)) end
+    return { anchor = anchor, ring = ring, main = main, seats = seats, up = up, bar = bar, side = side, halo = halo }
   end)
   if not ok then log('new pair failed: ' .. tostring(p)); return nil end
   if t0 then
@@ -230,7 +246,7 @@ local function attach(unit)
   active[unit] = p
   hostOn(p.anchor, plate, unit)
   place(p.anchor, plate, unit); placeBar(p, plate, unit)
-  p.ring:SetUnit(unit); p.main:SetUnit(unit)   -- while hidden: no event churn; Show re-reads every aura
+  p.ring:SetUnit(unit); p.main:SetUnit(unit); if p.halo then p.halo:SetUnit(unit) end   -- while hidden: no event churn; Show re-reads every aura
   p.want = nil; p.anchor:SetAlpha(0); p.anchor:Hide(); look(p); p.want = false; p.curA = 0; visible()
   if #free < POOL_MIN_FREE and not InCombatLockdown() then fill() end   -- keep spares for the next pull
 end
@@ -350,6 +366,7 @@ local function refreshFilters()
     for _, c in ipairs({ p.ring, p.main }) do
       for _, g in ipairs(R.GROUPS) do
         if p.seats and g.seat then pcall(c.SetAuraSlotCandidateFilters, c, g.key, R.filtersFor(g.key))
+          if c == p.ring and p.halo then pcall(p.halo.SetAuraSlotCandidateFilters, p.halo, g.key, R.filtersFor(g.key)) end
         elseif g.key ~= 'others' or R.othersOK then pcall(c.SetAuraGroupCandidateFilters, c, g.key, R.filtersFor(g.key)) end
       end
     end

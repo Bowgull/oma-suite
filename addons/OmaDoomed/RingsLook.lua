@@ -83,7 +83,7 @@ R.GLYPH = false               -- true: the ring is the font glyph and goes gold 
 local NUM_FMT, RING_FMT, BINDING
 local curves = {}             -- every colour curve made, with what it is made of (rebuilt in place on a setting change)
 local numCurve, ringCurves, mineRingCurve = nil, {}, nil
-local numCurves, lightCurves = {}, {}   -- per spell key ('mine' for your other debuffs): the number, the whole-band light
+local numCurves, lightCurves, haloCurves = {}, {}, {}   -- per spell key ('mine' for your other debuffs): the number, the whole-band light
 R.othersOK = true             -- false if the game refused the "!PLAYER" group
 
 -- 'Ending soon' (kill bar settings, shared): how many seconds, and whether the gold breathes
@@ -188,6 +188,7 @@ function R.probe()
     ringCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true)
     numCurves[sp.key] = makeCurve(WHITE, lit(sp.color, R.LIT_NUM), true)
     lightCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true, true)
+    haloCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_HALO), true, true)
   end
   mineRingCurve = makeCurve(DARK_BRASS, lit(DARK_BRASS, R.LIT_RING), true)
   numCurves.mine = makeCurve(WHITE, lit(DARK_BRASS, R.LIT_NUM), true)
@@ -344,6 +345,27 @@ function ns.ringsPulse(unit, name, key)
       local p = b; for _ = 1, 12 do p = p and p:GetParent(); if p == plate then break end end
       if p == plate and b.omPulse then b.omPulse:Stop(); b.omPulse:Play() end
     end
+  end
+end
+
+-- The ending glow OUTSIDE the ring (sheets 64 B / 73, 2026-11-16 "its misable"): a button can drive only one timed
+-- colour and the ring's is taken by its band light, so the glow is a third layer of its own, one aura slot per seat
+-- (Rings.lua: the 'halo' container, under the rings). It's the ring glyph drawn half again as big, invisible with time
+-- to spare, then breathing in the DoT's own colour lifted towards white for its last seconds.
+R.LIT_HALO = 0.5
+R.HALO_K = 1.5
+function R.haloFor(key)
+  local sp = Spells.byKey[key]
+  local color, curve = sp and sp.color, haloCurves[key]
+  return function(b)
+    b:SetSize(S, S); pcall(b.EnableMouse, b, false)
+    if not (R.GLYPH and curve and color) then return end
+    local k = R.HALO_K
+    local fs = b:CreateFontString(nil, 'ARTWORK')
+    fs:SetFont(RING_FONT, S * k, ''); fs:SetSize(S * k * 2, S * k * 2); fs:SetPoint('CENTER', b, 'CENTER')
+    fs:SetJustifyH('CENTER'); fs:SetJustifyV('MIDDLE'); pcall(fs.SetWordWrap, fs, false)
+    fs:SetTextColor(color[1], color[2], color[3], 0)
+    b:SetDurationText(fs, textOpts(RING_FMT, curve))
   end
 end
 

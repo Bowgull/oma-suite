@@ -46,9 +46,10 @@ local function say(m) print('|cffb48cffOmaDoomed:|r ' .. m) end
 local function plain(v) return v ~= nil and not Secret.is(v) end
 local function tok(k) return 'nameplate' .. k end
 
+local RD = 44                         -- the list's rings (2026-11-16: 40 read thin at real size)
 local function seatWidth()
   local _, n = R.seatSpots()
-  return n * D + (n - 1) * R.SEAT_GAP
+  return n * RD + (n - 1) * R.SEAT_GAP * RD / R.S
 end
 local function width() return PADX + D + GP + BW + GB + seatWidth() + PADX end
 
@@ -181,9 +182,17 @@ end
 -- moment a fight starts, before Blizzard locks the secure buttons).
 local function pack()
   if InCombatLockdown() and fighting then return end
-  local n = 0
-  for k = 1, TOKENS do if wanted(k) then n = n + 1; slotOf[k] = n end end
-  for k = 1, TOKENS do if not wanted(k) then n = n + 1; slotOf[k] = n end end
+  -- places: mobs in the fight first, then hostile mobs nearby (the likely joiners), then neutral ones and the rest
+  local n, done = 0, {}
+  local function hostileIdle(k)
+    local u = tok(k)
+    if not PM.live[u] then return false end
+    local ok, re = pcall(UnitReaction, u, 'player')
+    return ok and plain(re) and re <= 3          -- red: likely to join; yellow animals (reaction 4) wait their turn
+  end
+  for _, pass in ipairs({ wanted, hostileIdle, function() return true end }) do
+    for k = 1, TOKENS do if not done[k] and pass(k) then n = n + 1; slotOf[k] = n; done[k] = true end end
+  end
   for k = 1, TOKENS do if rows[k] then place(rows[k]) end end
   fitPanel(); placeClicks()
 end
@@ -223,12 +232,15 @@ local function newRow(k)
   r.bar:SetSize(BW, BAR_H); r.bar:SetPoint('TOPLEFT', r, 'TOPLEFT', tx, -(RH / 2 - blk / 2 + NAME * .72 + NB))
   r.bar:SetStatusBarTexture('Interface\\TargetingFrame\\UI-StatusBar'); r.bar:SetStatusBarColor(.78, .08, .08)
   r.bar:SetMinMaxValues(0, 1); r.bar:SetValue(1)
-  local bbg = r.bar:CreateTexture(nil, 'BACKGROUND'); bbg:SetPoint('TOPLEFT', -1, 1); bbg:SetPoint('BOTTOMRIGHT', 1, -1); bbg:SetColorTexture(0, 0, 0, 1)
+  -- the plates' frame colour round a black line, and a sheen on the fill (sheet 78's bar)
+  local bfr = r.bar:CreateTexture(nil, 'BACKGROUND', nil, -2); bfr:SetPoint('TOPLEFT', -2, 2); bfr:SetPoint('BOTTOMRIGHT', 2, -2); bfr:SetColorTexture(.35, .29, .21, 1)
+  local bbg = r.bar:CreateTexture(nil, 'BACKGROUND', nil, -1); bbg:SetPoint('TOPLEFT', -1, 1); bbg:SetPoint('BOTTOMRIGHT', 1, -1); bbg:SetColorTexture(0, 0, 0, 1)
+  local sheen = r.bar:CreateTexture(nil, 'OVERLAY', nil, 1); sheen:SetPoint('TOPLEFT'); sheen:SetPoint('RIGHT'); sheen:SetHeight(BAR_H * .42); sheen:SetColorTexture(1, 1, 1, .12)
   local bin = r.bar:CreateTexture(nil, 'BACKGROUND', nil, 1); bin:SetAllPoints(r.bar); bin:SetColorTexture(.16, .03, .03, 1)
   r.hp = r.bar:CreateFontString(nil, 'OVERLAY')
   r.hp:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', BAR_H - 1, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
   r.name = r:CreateFontString(nil, 'OVERLAY')
-  r.name:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', NAME, 'OUTLINE')
+  r.name:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', NAME + 1, 'THICKOUTLINE')   -- heavier, as on sheet 78
   r.name:SetTextColor(1, .82, 0); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
   r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', 0, NB); r.name:SetWidth(BW); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
   -- the click: an invisible secure button over the row, for this row's token, never changed
@@ -248,8 +260,10 @@ end
 local function placeSeats(r)
   local p = r.pair; if not p then return end
   local sw = seatWidth()
-  p.anchor:ClearAllPoints(); p.anchor:SetSize(sw, 1)
-  p.anchor:SetPoint('BOTTOM', r, 'BOTTOMLEFT', PADX + D + GP + BW + GB + sw / 2, (RH - D) / 2)
+  local k = RD / R.S
+  p.anchor:SetScale(k)
+  p.anchor:ClearAllPoints(); p.anchor:SetSize(sw / k, 1)
+  p.anchor:SetPoint('BOTTOM', r, 'BOTTOMLEFT', (PADX + D + GP + BW + GB + sw / 2) / k, ((RH - RD) / 2) / k)
 end
 local builder
 local function buildPairs()
@@ -260,7 +274,7 @@ local function buildPairs()
       local r = rows[k]
       if r and not r.pair then
         r.pair = R.newListPair(r) or false
-        if r.pair then placeSeats(r); r.pair.bar:SetAllPoints(r.bar); r.pair.ring:SetUnit(r.unit); r.pair.main:SetUnit(r.unit) end   -- a CC on it: the row's bar becomes its timer too
+        if r.pair then placeSeats(r); r.pair.bar:SetAllPoints(r.bar); r.pair.ring:SetUnit(r.unit); r.pair.main:SetUnit(r.unit); if r.pair.halo then r.pair.halo:SetUnit(r.unit) end end   -- a CC on it: the row's bar becomes its timer too
         return
       end
     end
