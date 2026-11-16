@@ -63,7 +63,7 @@ R.built = built
 -- flow: a row that follows your target (target frame, Haunt's channel row): no seats, every group in the flow
 local listPairs = 0                 -- the mob list's rows (MobList.lua): outside the pool, never handed to a plate
 local function newPair(gap, spare, flow, list)
-  if InCombatLockdown() or (not list and #pairsAll - listPairs >= POOL_MAX) then return nil end
+  if InCombatLockdown() or R.glyphWaiting or (not list and #pairsAll - listPairs >= POOL_MAX) then return nil end
   local t0 = debugprofilestop and debugprofilestop()
   local ok, p = pcall(function()
     local anchor = CreateFrame('Frame', nil, holder); anchor:SetSize(1, 1); anchor:Hide()
@@ -444,7 +444,7 @@ local function start()
   end)
   R.probe(); R.buildGroups()
   if db.enabled then BC.blizzardRow(false) end
-  fill(); attachAll()
+  R.whenGlyph(function() fill(); attachAll() end)   -- rows wait for the ring font (their ending effects need it)
   if db.where ~= 'enemy' then C_Timer.After(1, function() makeFramePair(); if db.where == 'split' then ns.makeChanPair() end; visible() end) end
   BC.squaresApply()
 end

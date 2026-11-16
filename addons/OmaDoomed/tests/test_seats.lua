@@ -82,4 +82,15 @@ return {
     T.near(p[4], R.S + 0.2 * R.S, 1e-6, 'flow row above the seats')
     noErrors(T)
   end,
+  ['rings wait for the ring font: nothing is built before it loads (2026-11-16: endings were missable)'] = function(W, T)
+    local ns = require('load').addon({ rings = true })
+    local R = ns.rings
+    R.glyphWaiting = true
+    local ran = false
+    R.whenGlyph(function() ran = true end)
+    T.ok(not ran, 'held while the font is still loading')
+    R.glyphReady()
+    T.ok(ran, 'run once it has loaded')
+    T.ok(not R.glyphWaiting)
+  end,
 }

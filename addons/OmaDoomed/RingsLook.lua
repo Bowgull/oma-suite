@@ -134,6 +134,15 @@ function R.rebuildCurves()
   return true
 end
 
+-- run f once the ring font has loaded (or given up): rows built before it would never get their ending effects
+local glyphQueue = {}
+function R.whenGlyph(f) if R.glyphWaiting then glyphQueue[#glyphQueue + 1] = f else f() end end
+function R.glyphReady()
+  R.glyphWaiting = false
+  local q = glyphQueue; glyphQueue = {}
+  for _, f in ipairs(q) do local ok, err = pcall(f); if not ok then log('after the ring font: ' .. tostring(err)) end end
+end
+
 function R.probe()
   -- number: whole seconds rounded up ("3" for 2.2 s), minutes past a minute ("2m")
   local ok = pcall(function()
@@ -171,6 +180,9 @@ function R.probe()
   -- right after a reload). Try again a few times; icons are styled when first made, so the ring is used
   -- from the next new icon on.
   if okR and r == 'O' and not R.GLYPH then
+    -- 2026-11-16 ("its misable"): rings built in this first moment had no ending effects at all (the band light and
+    -- the outer glow both need the font), and the pool was built right away. Now the rows wait for this (R.whenGlyph).
+    R.glyphWaiting = true
     local tries = 0
     local function retry()
       tries = tries + 1
@@ -178,10 +190,11 @@ function R.probe()
       if ok2 and set2 then
         R.GLYPH = true
         log(('probe: ring font loaded on retry %d'):format(tries))
+        R.glyphReady()
       elseif tries < 6 then C_Timer.After(tries, retry)
-      else log('probe: ring font still refused after 6 tries') end
+      else log('probe: ring font still refused after 6 tries'); R.glyphReady() end
     end
-    if C_Timer and C_Timer.After then C_Timer.After(.5, retry) end
+    if C_Timer and C_Timer.After then C_Timer.After(.5, retry) else R.glyphWaiting = false end
   end
 
   for _, sp in ipairs(SPELLS) do

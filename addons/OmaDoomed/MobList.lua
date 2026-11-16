@@ -89,6 +89,8 @@ local function isTarget(u)
 end
 
 local function threat(r)
+  -- the glow says something only in a group: solo you hold every mob, so it lit every row red (2026-11-16)
+  if not (IsInGroup and IsInGroup()) then if r.glow:IsShown() then r.breath:Stop(); r.glow:Hide() end; return end
   local ok, s = pcall(UnitThreatSituation, 'player', r.unit)
   local c = ok and plain(s) and TCOL[s]
   if c then
@@ -128,7 +130,7 @@ end
 local function fill(r)
   local u = r.unit
   pcall(r.name.SetText, r.name, UnitName(u))
-  pcall(SetPortraitTexture, r.face, u)
+  pcall(SetPortraitTexture, r.face, u); pcall(SetPortraitTexture, r.lift, u)
   health(r); threat(r); killbar(r); doomed(r)
   r.tgt:SetShown(isTarget(u))
 end
@@ -161,21 +163,28 @@ local function place(r)
 end
 -- the click buttons over the rows, by screen position (UIParent units); out of combat only, and in the moment a
 -- fight starts. Each button follows its row's rectangle; the rows themselves stay plain frames.
+-- 2026-11-16: reading the rows' screen positions failed (the list is hidden until a fight, and a frame that has
+-- never shown has no position), so clicking stopped working. Now the buttons hang off 'geo': a plain, always-shown,
+-- empty frame placed exactly like the list (same point, size and scale), never shown, hidden or moved in combat.
+-- Each button sits at its row's place by arithmetic, in the list's own units.
+local geo
 local function placeClicks()
-  if InCombatLockdown() and fighting then return end
-  local us = UIParent:GetEffectiveScale()
-  for k = 1, TOKENS do
-    local r = rows[k]
-    if r and r.click then
-      local ok, l, b, w, h = pcall(function() return r:GetLeft(), r:GetBottom(), r:GetWidth(), r:GetHeight() end)
-      if ok and type(l) == 'number' and type(b) == 'number' and type(w) == 'number' and w > 0 then
-        local k2 = r:GetEffectiveScale() / us
+  if not (geo and holder and header) or (InCombatLockdown() and fighting) then return end
+  pcall(function()
+    local p, _, rp, x, y = header:GetPoint(1)
+    local sc = header:GetScale()
+    geo:SetScale(sc); holder:SetScale(sc)
+    geo:ClearAllPoints(); geo:SetPoint(p or 'TOPRIGHT', UIParent, rp or 'TOPRIGHT', x or 0, y or 0)
+    geo:SetSize(width(), PADY * 2 + RH * TOKENS)
+    for k = 1, TOKENS do
+      local r = rows[k]
+      if r and r.click then
         r.click:ClearAllPoints()
-        r.click:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', l * k2, b * k2)
-        r.click:SetSize(w * k2, h * k2)
+        r.click:SetPoint('TOPLEFT', geo, 'TOPLEFT', 0, -PADY - ((slotOf[k] or k) - 1) * RH)
+        r.click:SetSize(width(), RH)
       end
     end
-  end
+  end)
 end
 
 -- packs the rows top-down: enemies up now first, then every other token in order. Out of combat only (and in the
@@ -209,17 +218,20 @@ local function newRow(k)
   local cx = PADX + D / 2
   -- a soft glow, not a hard ring (2026-11-16: the ring_bold circle read as a thick red hoop)
   r.glow = r:CreateTexture(nil, 'ARTWORK', nil, 0); r.glow:SetTexture(ART .. 'softring_glow'); r.glow:SetBlendMode('ADD')
-  r.glow:SetSize(D * 1.9, D * 1.9); r.glow:SetPoint('CENTER', r, 'LEFT', cx, 0); r.glow:Hide()
+  r.glow:SetSize(D * 1.6, D * 1.6); r.glow:SetAlpha(.6); r.glow:SetPoint('CENTER', r, 'LEFT', cx, 0); r.glow:Hide()
   r.breath = r.glow:CreateAnimationGroup(); r.breath:SetLooping('BOUNCE')
   local a = r.breath:CreateAnimation('Alpha'); a:SetFromAlpha(1); a:SetToAlpha(.35); a:SetDuration(.8); a:SetSmoothing('IN_OUT')
   r.face = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.face:SetSize(D * .96, D * .96); r.face:SetPoint('CENTER', r, 'LEFT', cx, 0)
   local m = r:CreateMaskTexture(); m:SetTexture(ART .. 'mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(r.face)
   r.face:AddMaskTexture(m)
+  -- the 3D portrait is dark at this size: a faint added copy lifts it
+  r.lift = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.lift:SetAllPoints(r.face); r.lift:SetBlendMode('ADD'); r.lift:SetAlpha(.35)
+  r.lift:AddMaskTexture(m)
   local rim = r:CreateTexture(nil, 'ARTWORK', nil, 2); rim:SetTexture(ART .. 'portrait_rim'); rim:SetSize(D, D)
   rim:SetPoint('CENTER', r.face, 'CENTER')
-  local SW, SH = D * .95, D * .95 * 54 / 78
+  local SW, SH = D * .72, D * .72 * 54 / 78    -- smaller, on the portrait's top edge (it spilled into the row above)
   r.skullWin = CreateFrame('Frame', nil, r); r.skullWin:SetClipsChildren(true)
-  r.skullWin:SetSize(SW, SH); r.skullWin:SetPoint('BOTTOM', r.face, 'TOP', 0, -D * .18); r.skullWin:SetFrameLevel(r:GetFrameLevel() + 6)
+  r.skullWin:SetSize(SW, SH); r.skullWin:SetPoint('BOTTOM', r.face, 'TOP', 0, -D * .26); r.skullWin:SetFrameLevel(r:GetFrameLevel() + 6)
   r.skullBar = CreateFrame('StatusBar', nil, r.skullWin); r.skullBar:SetSize(SW * 400, SH); r.skullBar:SetPoint('RIGHT', r.skullWin, 'RIGHT')
   r.skullBar:SetStatusBarTexture('Interface\\Buttons\\WHITE8X8'); r.skullBar:SetStatusBarColor(0, 0, 0, 0)
   r.skullBar:SetMinMaxValues(0, 1); r.skullBar:SetValue(0)
@@ -240,9 +252,9 @@ local function newRow(k)
   r.hp = r.bar:CreateFontString(nil, 'OVERLAY')
   r.hp:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', BAR_H - 1, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
   r.name = r:CreateFontString(nil, 'OVERLAY')
-  r.name:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', NAME + 1, 'THICKOUTLINE')   -- heavier, as on sheet 78
+  r.name:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', NAME, 'OUTLINE')   -- names must fit (THICKOUTLINE cut them off)
   r.name:SetTextColor(1, .82, 0); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
-  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', 0, NB); r.name:SetWidth(BW); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
+  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', 0, NB); r.name:SetWidth(BW + GB - 6); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
   -- the click: an invisible secure button over the row, for this row's token, never changed
   local b = CreateFrame('Button', 'OmaDoomedListClick' .. k, holder, 'SecureUnitButtonTemplate')
   b:SetAttribute('type1', 'target'); b:SetAttribute('unit', tok(k))
@@ -364,21 +376,23 @@ local function start()
   -- first place: down the right side under the minimap, clear of the target frame (2026-11-16)
   header:SetPoint(db.point or 'TOPRIGHT', UIParent, db.rel or 'TOPRIGHT', db.x or -40, db.y or -330)
   -- the click buttons' parent: secure, shown in a fight (Blizzard's driver); the buttons sit over the rows
+  geo = CreateFrame('Frame', nil, UIParent); geo:SetSize(1, 1)
   holder = CreateFrame('Frame', 'OmaDoomedListClicks', UIParent, 'SecureHandlerStateTemplate')
   holder:SetAllPoints(UIParent)
   RegisterStateDriver(holder, 'visibility', '[combat] show; hide')
-  panel = CreateFrame('Frame', nil, header, BackdropTemplateMixin and 'BackdropTemplate' or nil)
+  -- sheet 78's panel: one rounded rectangle with a thin crisp warm line (our own art), stretched by slice margins so
+  -- the corners keep their shape (2026-11-16: Blizzard's tooltip border read generic and beveled)
+  panel = CreateFrame('Frame', nil, header)
   panel:SetPoint('TOPLEFT', header, 'TOPLEFT'); panel:SetPoint('TOPRIGHT', header, 'TOPRIGHT')
-  if panel.SetBackdrop then
-    panel:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8', edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border', edgeSize = 14,
-      insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-    panel:SetBackdropColor(.043, .035, .035, .9); panel:SetBackdropBorderColor(.55, .42, .2, 1)
-  end
+  local pt = panel:CreateTexture(nil, 'BACKGROUND'); pt:SetAllPoints(panel); pt:SetTexture(ART .. 'list_panel')
+  if not (pt.SetTextureSliceMargins and pcall(pt.SetTextureSliceMargins, pt, 12, 12, 12, 12)) then
+    pt:SetTexture(nil); pt:SetColorTexture(.043, .035, .035, .9)
+  else pcall(pt.SetTextureSliceMode, pt, Enum and Enum.UITextureSliceMode and Enum.UITextureSliceMode.Stretched or 0) end
   panel:SetFrameLevel(header:GetFrameLevel()); panel:Hide()
   for k = 1, TOKENS do rows[k] = newRow(k); rows[k]:SetFrameLevel(header:GetFrameLevel() + 2) end
   layout()
   unlock(db.unlocked == true)
-  buildPairs()
+  R.whenGlyph(buildPairs)   -- the list's rings wait for the ring font too
   ns.bus:On('DOTS', function() for k = 1, TOKENS do local r = rows[k]; if r and r.shown then killbar(r) end end end)
   local function plateEvent(u)
     local k = type(u) == 'string' and tonumber(u:match('^nameplate(%d+)$'))
