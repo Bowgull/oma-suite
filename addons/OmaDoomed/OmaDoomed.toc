@@ -39,6 +39,7 @@ BlizzardControls.lua
 RingsLook.lua
 RingsFade.lua
 Rings.lua
+MobList.lua
 CrowdControl.lua
 Preview.lua
 Settings.lua

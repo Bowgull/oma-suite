@@ -26,7 +26,7 @@ ns.settings = Core.NewSettings({
     { key = 'tick', default = 'ember', control = 'dropdown', label = 'Tick light', parent = BAR,
       choices = { { 'ember', 'Ember' }, { 'cinders', 'Cinders' }, { 'essence', 'Essence' }, { 'plain', 'Plain' } },
       tip = "What happens when a DoT ticks:\n|cffffd100Ember:|r the bitten part glows in its own colour and settles.\n|cffffd100Cinders:|r the same glow, and small embers lift off it.\n|cffffd100Essence:|r a soft curl of shadow haze rises from it.\n|cffffd100Plain:|r it just slides shut." },
-    { key = 'low', default = 3, control = 'slider', label = 'Ending soon', parent = BAR, min = 2, max = 5, step = 1,
+    { key = 'low', default = 5, control = 'slider', label = 'Ending soon', parent = BAR, min = 2, max = 8, step = 1,
       format = function(v) return ('%d s'):format(v) end,
       tip = "In a DoT's last seconds its piece on your target's kill bar, and its ring, turn gold." },
     { key = 'lowlook', default = 'breathe', control = 'dropdown', label = 'Ending soon look', parent = BAR,

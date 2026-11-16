@@ -34,6 +34,7 @@ local function slash()
     if p and p.slash then return p.slash(m) end
   end, function(err) ns.error('slash: ' .. tostring(err)) end)
   s:Word('rings', function(rest) return ns.ringsSlash and ns.ringsSlash(rest) end)
+  s:Word('list', function(rest) return ns.moblist and ns.moblist.slash(rest) end)
   s:Word('cc', function(rest) return ns.ccSlash and ns.ccSlash(rest) end)
   s:Exact('report', function() return ns.saveReport and ns.saveReport('command') end)
   s:Exact('report show', function() return ns.showReport and ns.showReport() end)

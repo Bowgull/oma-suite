@@ -11,6 +11,10 @@ local KNOWN = {
 
 local files = {}
 for f in io.popen('ls tests/test_*.lua 2>/dev/null'):lines() do files[#files + 1] = f end
+if #files == 0 then   -- Windows (cmd has no ls)
+  for f in io.popen('dir /b tests\\test_*.lua 2>nul'):lines() do files[#files + 1] = 'tests/' .. f end
+  table.sort(files)
+end
 local pass, fail, known = 0, 0, 0
 local T = {}
 function T.eq(a, b, msg) if a ~= b then error((msg or 'eq') .. ': expected ' .. tostring(b) .. ', got ' .. tostring(a), 2) end end

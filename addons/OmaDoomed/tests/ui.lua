@@ -107,9 +107,9 @@ function M.SetFrameLevel(self, l) rawset(self, '_level', l) end
 function M.GetFrameLevel(self) return rawget(self, '_level') or 0 end
 function M.SetFrameStrata(self, s) rawset(self, '_strata', s) end
 function M.GetFrameStrata(self) return rawget(self, '_strata') or 'MEDIUM' end
-function M.SetPoint(self, point, rel, relPoint)
+function M.SetPoint(self, point, rel, relPoint, x, y)
   rawset(self, '_anchor', rel); rawset(self, '_points', (rawget(self, '_points') or 0) + 1)
-  local pts = rawget(self, '_pts') or {}; rawset(self, '_pts', pts); pts[point] = { rel, relPoint or point }   -- every point, by name
+  local pts = rawget(self, '_pts') or {}; rawset(self, '_pts', pts); pts[point] = { rel, relPoint or point, x or 0, y or 0 }   -- every point, by name (with its offset)
 end
 function M.SetAllPoints(self, rel) rawset(self, '_anchor', rel); rawset(self, '_points', 2) end
 function M.ClearAllPoints(self) rawset(self, '_points', 0); rawset(self, '_pts', nil) end
@@ -323,6 +323,23 @@ function C.AddAuraGroup(self, key, filter, opts)
   end
   self.built = self.built + BATCH; UI.aura.buttons = UI.aura.buttons + BATCH
   self.groups[#self.groups + 1] = g; self.groupByKey[key] = g
+end
+-- AddAuraSlot: ONE button showing the first matching aura, outside the flow layout (the add-on anchors it itself)
+function C.AddAuraSlot(self, key, filter, opts)
+  if type(key) ~= 'string' or self.groupByKey[key] then error('AuraContainer:AddAuraSlot: bad or repeated key ' .. tostring(key), 2) end
+  if type(filter) ~= 'string' then error('AuraContainer:AddAuraSlot: filter must be a string', 2) end
+  if type(opts) ~= 'table' or type(opts.initializeFrame) ~= 'function' then error('AuraContainer:AddAuraSlot: needs initializeFrame', 2) end
+  local g = { key = key, filter = filter, opts = opts, enabled = true, filters = opts.candidateFilters, max = 1, slot = true, buttons = {} }
+  local b = obj('AuraButton'); b.shown = false; link(b, self)
+  opts.initializeFrame(b)
+  g.buttons[1] = b
+  self.built = self.built + 1; UI.aura.buttons = UI.aura.buttons + 1
+  self.groups[#self.groups + 1] = g; self.groupByKey[key] = g
+end
+function C.SetAuraSlotCandidateFilters(self, key, filters)
+  if type(filters) ~= 'table' then error('AuraContainer:SetAuraSlotCandidateFilters wants a table', 2) end
+  local g = group(self, key); if not g.slot then error('AuraContainer: "' .. key .. '" is not a slot', 2) end
+  g.filters = filters; reread(self, 'SetAuraSlotCandidateFilters')
 end
 function C.SetAuraGroupEnabled(self, key, on) group(self, key).enabled = on and true or false; reread(self, 'SetAuraGroupEnabled') end
 function C.SetAuraGroupCandidateFilters(self, key, filters)

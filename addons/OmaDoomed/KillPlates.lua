@@ -184,18 +184,13 @@ local function chargeStep()
   end
 end
 
-local function paint(unit)
-  local found = PM.barOf(unit)
-  local hb = found and found.bar
-  if not hb or found.hidden then   -- no bar on screen: nothing to draw on (Blizzard's only if it really shows)
-    if not hb and not foundLogged then foundLogged = true; ns.err('platebar: no health bar on the nameplate') end
-    return nil
-  end
+-- one unit's pieces on one health bar (a plate's, or a row of the mob list: MobList.lua)
+local function paintOn(unit, hb, addon, reversed)
   -- the model's list for this plate: one entry per DoT with damage left, the one ending first nearest the green
   local ok = pcall(ns.model.listInto, unit, true, list, seenName)
   if not ok then wipe(list) end
   if #list == 0 then if shown[hb] then clear(hb) end; return hb end
-  local set = piecesFor(hb, found.addon, found.addon and PM.reversed(hb)); if not set then return hb end
+  local set = piecesFor(hb, addon, reversed); if not set then return hb end
   local w = hb:GetWidth()
   local maxv = UnitHealthMax(unit)
   -- precast ("I don't see the precast" on these bars; "whatever look I chose from settings"):
@@ -240,6 +235,20 @@ local function paint(unit)
   return hb
 end
 
+local function paint(unit)
+  local found = PM.barOf(unit)
+  local hb = found and found.bar
+  if not hb or found.hidden then   -- no bar on screen: nothing to draw on (Blizzard's only if it really shows)
+    if not hb and not foundLogged then foundLogged = true; ns.err('platebar: no health bar on the nameplate') end
+    return nil
+  end
+  return paintOn(unit, hb, found.addon, found.addon and PM.reversed(hb))
+end
+
+-- the mob list's rows: draw (or clear) one row's bar for its unit; the list calls it on DOTS and its own changes
+local rowBars = setmetatable({}, { __mode = 'k' })   -- the list's bars: the plates' sweep never clears them
+function K.paintRow(unit, hb) rowBars[hb] = true; if unit then return paintOn(unit, hb, nil, false) end; if shown[hb] then clear(hb) end end
+
 local dirty = true
 local live = {}
 local PER_FRAME = 12
@@ -277,7 +286,7 @@ local function refresh()
     else painted[u] = nil end
   end
   for u in pairs(painted) do if not PM.live[u] then painted[u] = nil end end
-  for hb in pairs(shown) do if not live[hb] then pcall(clear, hb) end end   -- plates that left, died or changed mob
+  for hb in pairs(shown) do if not live[hb] and not rowBars[hb] then pcall(clear, hb) end end   -- plates that left, died or changed mob
 end
 
 function K.setOf(hb) return made[hb] end   -- tests and /omadoomed plates

@@ -12,9 +12,10 @@ local PM = ns.plates                -- PlateManager.lua: the live plates and whi
 
 local SORT = (AuraContainerSortMethod and AuraContainerSortMethod.AuraInstanceIDOnly) or 8   -- oldest first
 
--- 12 to start (each pair is about 160 of Blizzard's aura buttons); 6 kept spare out of combat for the next pull;
--- 42 = one pair for each of the 40 plates, plus the target frame and channel rows.
-local POOL_START, POOL_MIN_FREE, POOL_MAX = 12, 6, 42
+-- 2026-11-16: seats made a plate's pair half the cost (90 aura buttons, was 180: each DoT is one slot, not a group
+-- of 10), so 20 to start and 10 kept spare out of combat: big pulls ran out at 12/6 ("no free container for
+-- nameplate3 (in combat)"). 42 = one pair for each of the 40 plates, plus the target frame and channel rows.
+local POOL_START, POOL_MIN_FREE, POOL_MAX = 20, 10, 42
 R.POOL_START, R.POOL_MIN_FREE, R.POOL_MAX = POOL_START, POOL_MIN_FREE, POOL_MAX
 
 local db
@@ -29,13 +30,21 @@ local holder                        -- parent of every spare row (made at start)
 local pairsAll, free, active = {}, {}, {}
 R.pairsAll, R.free, R.active = pairsAll, free, active
 
-local function setupContainer(c, kind, gap)   -- gap: space between rings (the target frame row only)
+-- gap: space between rings (the target frame row only). seats: a plate row, whose DoTs each get a fixed seat (one
+-- aura slot, placed on the row's anchor; RingsLook.lua R.placeSeats); seatBtns collects those buttons -> spell key.
+local function setupContainer(c, kind, gap, seats, anchor)
   pcall(c.SetEditModePreviewEnabled, c, false)    -- no fake auras on every plate when Edit Mode opens
   c:SetFlowLayoutAnchorPoint('BOTTOMLEFT')
   c:SetFlowLayoutGrowthDirection(1, 1)             -- AnchorUtil.FlowDirection.Right, .Up: left to right, then upward
   c:SetFlowLayoutMaximumLineSize(S * R.PER_ROW + 0.01)
   for _, g in ipairs(R.GROUPS) do
-    if g.key ~= 'others' or R.othersOK then
+    if seats and g.seat then
+      local init = g[kind]
+      local ok, err = pcall(c.AddAuraSlot, c, g.key, g.filter, {
+        initializeFrame = function(b) init(b); seats[b] = g.key; R.placeSeats({ [b] = g.key }, anchor) end,
+        candidateFilters = R.filtersFor(g.key), sortMethod = SORT })
+      if not ok then log(kind .. ' seat ' .. g.key .. ' failed: ' .. tostring(err)); error(err) end
+    elseif g.key ~= 'others' or R.othersOK then
       local ok, err = pcall(c.AddAuraGroup, c, g.key, g.filter, {
         initializeFrame = (gap and kind == 'main' and g.mainFrame) or g[kind], candidateFilters = R.filtersFor(g.key), sortMethod = SORT,
         maxFrameCount = g.max, layout = g.layout or (gap and { groupSpacing = gap }) or nil })
@@ -51,20 +60,25 @@ end
 -- what building the ring pool costs on this machine (bug reports print it): pairs built, total and worst ms
 local built = { n = 0, total = 0, worst = 0 }
 R.built = built
-local function newPair(gap, spare)
-  if InCombatLockdown() or #pairsAll >= POOL_MAX then return nil end
+-- flow: a row that follows your target (target frame, Haunt's channel row): no seats, every group in the flow
+local listPairs = 0                 -- the mob list's rows (MobList.lua): outside the pool, never handed to a plate
+local function newPair(gap, spare, flow, list)
+  if InCombatLockdown() or (not list and #pairsAll - listPairs >= POOL_MAX) then return nil end
   local t0 = debugprofilestop and debugprofilestop()
   local ok, p = pcall(function()
     local anchor = CreateFrame('Frame', nil, holder); anchor:SetSize(1, 1); anchor:Hide()
+    local seats = not flow and {} or nil
     local ring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
-    setupContainer(ring, 'ring', gap)
+    setupContainer(ring, 'ring', gap, seats, anchor)
     -- main is a CHILD of ring: that alone keeps every main button drawn above the ring's backing disc
     local main = CreateFrame('AuraContainer', nil, ring, 'CustomAuraContainerTemplate')
-    setupContainer(main, 'main', gap)
+    setupContainer(main, 'main', gap, seats, anchor)
     if not R.othersOK then pcall(ring.SetAuraGroupEnabled, ring, 'others', false)       -- keep both layouts identical
     elseif not db.others then pcall(ring.SetAuraGroupEnabled, ring, 'others', false); pcall(main.SetAuraGroupEnabled, main, 'others', false) end
-    ring:SetPoint('BOTTOM', anchor, 'BOTTOM'); main:SetPoint('BOTTOM', anchor, 'BOTTOM')
-    return { anchor = anchor, ring = ring, main = main }
+    -- on a plate the flowing rings (crowd control, channel, your other debuffs, others' DoTs) ride above the seats
+    local up = seats and R.ABOVE_SEATS or 0
+    ring:SetPoint('BOTTOM', anchor, 'BOTTOM', 0, up); main:SetPoint('BOTTOM', anchor, 'BOTTOM', 0, up)
+    return { anchor = anchor, ring = ring, main = main, seats = seats, up = up }
   end)
   if not ok then log('new pair failed: ' .. tostring(p)); return nil end
   if t0 then
@@ -73,6 +87,20 @@ local function newPair(gap, spare)
     if ms > built.worst then built.worst = ms end
   end
   pairsAll[#pairsAll + 1] = p; if spare then free[#free + 1] = p end
+  return p
+end
+
+-- a row of seats for the mob list (MobList.lua): your DoTs only, no flowing rings. parent: the list row. Out of
+-- combat, at the list's start. Filter and seat updates reach it like any plate's row.
+function R.newListPair(parent)
+  local p = newPair(nil, false, false, true); if not p then return nil end
+  listPairs = listPairs + 1
+  for _, g in ipairs(R.GROUPS) do
+    if not g.seat then pcall(p.ring.SetAuraGroupEnabled, p.ring, g.key, false); pcall(p.main.SetAuraGroupEnabled, p.main, g.key, false) end
+  end
+  p.anchor:SetParent(parent); p.anchor:SetFrameLevel(parent:GetFrameLevel() + 5)
+  p.list = true   -- its size is the list's own (look leaves it at 1)
+  p.anchor:Show(); p.want = true
   return p
 end
 
@@ -86,7 +114,7 @@ end
 local function fill()
   -- one pair per frame, out of combat, so nothing hitches
   filler:SetScript('OnUpdate', function(self)
-    if InCombatLockdown() or #pairsAll >= wanted() or not newPair(nil, true) then self:SetScript('OnUpdate', nil) end
+    if InCombatLockdown() or #pairsAll - listPairs >= wanted() or not newPair(nil, true) then self:SetScript('OnUpdate', nil) end
   end)
 end
 R.fill = fill
@@ -178,7 +206,7 @@ end
 
 -- ---------- settings: size, opacity, where, which ----------
 look = function(p)
-  p.anchor:SetScale((db.size or 40) / 40 * (p.frameScale or 1)); if p.curA then p.anchor:SetAlpha(p.curA * (db.alpha or 100) / 100) end
+  p.anchor:SetScale(p.list and 1 or (db.size or 40) / 40 * (p.frameScale or 1)); if p.list then return end; if p.curA then p.anchor:SetAlpha(p.curA * (db.alpha or 100) / 100) end
 end
 -- which plate is your target: compare nameplate FRAMES, not units. Frames are never secret, so this keeps working in
 -- combat, where Forever can hide unit comparisons (Haunt would otherwise show your target's rings in both places)
@@ -224,7 +252,7 @@ local function channelGroup(p, on)
 end
 local function makeFramePair()
   if framePair or InCombatLockdown() or not TargetFrame then return end
-  local p = newPair(R.FRAME_SPACE); if not p then return end
+  local p = newPair(R.FRAME_SPACE, nil, true); if not p then return end
   framePair = p; R.framePair = p
   p.anchor:SetParent(TargetFrame); p.anchor:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
   -- sheet 42 B: a row UNDER the bars, where WoW itself puts your debuffs on a target, 40 px. Hung on the mana bar's
@@ -249,7 +277,7 @@ end
 -- (OVERHEAD), unit 'target', that rides your target's plate. Moving our own frames between plates is allowed in combat.
 local function makeChanPair()
   if chanPair or InCombatLockdown() then return end
-  local p = newPair(); if not p then return end
+  local p = newPair(nil, nil, true); if not p then return end
   chanPair = p; R.chanPair = p
   for _, g in ipairs(R.GROUPS) do if not OVERHEAD[g.key] then pcall(p.ring.SetAuraGroupEnabled, p.ring, g.key, false); pcall(p.main.SetAuraGroupEnabled, p.main, g.key, false) end end
   p.ring:SetUnit('target'); p.main:SetUnit('target')
@@ -277,6 +305,12 @@ end
 attachAll = function() for u in pairs(PM.live) do attach(u) end end
 local function releaseAll() local us = {}; for u in pairs(active) do us[#us + 1] = u end; for _, u in ipairs(us) do release(u) end end
 
+-- a seat learned or lost (Siphon Life at 30): every row's seats move so the row stays centred. Out of combat only.
+local function placeAllSeats()
+  for _, p in ipairs(pairsAll) do if p.seats then R.placeSeats(p.seats, p.anchor) end end
+end
+R.placeAllSeats = placeAllSeats
+
 local filtersDirty = false
 local function refreshFilters()
   if InCombatLockdown() then filtersDirty = true; return end
@@ -284,7 +318,8 @@ local function refreshFilters()
   for _, p in ipairs(pairsAll) do
     for _, c in ipairs({ p.ring, p.main }) do
       for _, g in ipairs(R.GROUPS) do
-        if g.key ~= 'others' or R.othersOK then pcall(c.SetAuraGroupCandidateFilters, c, g.key, R.filtersFor(g.key)) end
+        if p.seats and g.seat then pcall(c.SetAuraSlotCandidateFilters, c, g.key, R.filtersFor(g.key))
+        elseif g.key ~= 'others' or R.othersOK then pcall(c.SetAuraGroupCandidateFilters, c, g.key, R.filtersFor(g.key)) end
       end
     end
   end
@@ -293,8 +328,10 @@ end
 local function setOthers(on)
   db.others = on
   for _, p in ipairs(pairsAll) do
-    pcall(p.ring.SetAuraGroupEnabled, p.ring, 'others', on and R.othersOK)
-    pcall(p.main.SetAuraGroupEnabled, p.main, 'others', on and R.othersOK)
+    if not p.list then   -- the mob list's rows show your DoTs only
+      pcall(p.ring.SetAuraGroupEnabled, p.ring, 'others', on and R.othersOK)
+      pcall(p.main.SetAuraGroupEnabled, p.main, 'others', on and R.othersOK)
+    end
   end
 end
 
@@ -374,14 +411,14 @@ onEvent = (function(_, e, a1, _, a3)
     for u, p in pairs(active) do local plate = PM.live[u]; if plate then place(p.anchor, plate, u) end end
   elseif e == 'PLAYER_REGEN_DISABLED' then visible()
   elseif e == 'PLAYER_REGEN_ENABLED' then
-    if filtersDirty then refreshFilters() end
+    if filtersDirty then refreshFilters(); placeAllSeats() end
     if curvesDirty then applyCurves() end
     fill(); attachAll()                                  -- plates that showed up in combat with no spare container
     if db.where ~= 'enemy' then makeFramePair() end
     if db.where == 'split' then ns.makeChanPair() end
     channelGroup(framePair, db.where ~= 'split')
     visible()
-  elseif e == 'SPELLS_CHANGED' then if not InCombatLockdown() then refreshFilters() else filtersDirty = true end
+  elseif e == 'SPELLS_CHANGED' then if not InCombatLockdown() then refreshFilters(); placeAllSeats() else filtersDirty = true end
   elseif e == 'UNIT_SPELLCAST_SUCCEEDED' then learn(a3)
   end
 end)

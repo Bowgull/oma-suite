@@ -24,7 +24,7 @@ local function fadeStep(p, now)
   end
   p.curA = alpha
   p.anchor:SetAlpha(alpha * base)
-  local pt = p.pt or 'BOTTOM'; p.ring:ClearAllPoints(); p.ring:SetPoint(pt, p.anchor, pt, 0, dy)
+  local pt = p.pt or 'BOTTOM'; p.ring:ClearAllPoints(); p.ring:SetPoint(pt, p.anchor, pt, 0, (p.up or 0) + dy)   -- up: a plate row's flow sits above its seats
   return done
 end
 local function fadeAll()
@@ -47,7 +47,7 @@ function R.setVis(p, show)
 end
 ns.ringsSetVis = R.setVis
 -- a row going back to the pool: no fade left over
-function R.unfade(p) fading[p] = nil; p.want = nil; p.curA = nil; local pt = p.pt or 'BOTTOM'; p.ring:ClearAllPoints(); p.ring:SetPoint(pt, p.anchor, pt) end
+function R.unfade(p) fading[p] = nil; p.want = nil; p.curA = nil; local pt = p.pt or 'BOTTOM'; p.ring:ClearAllPoints(); p.ring:SetPoint(pt, p.anchor, pt, 0, p.up or 0) end
 ns.ringsUnfade = R.unfade
 
 function R.fadeStart()

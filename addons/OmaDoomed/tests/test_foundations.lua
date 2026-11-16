@@ -128,7 +128,7 @@ return {
     local ns = require('load').addon({ before = function() OmaDoomedDB = { cast = 'motes', rings = { size = 52 } } end })
     ns.saveReport('command')
     local r = OmaDoomedDB.reports[1]
-    T.eq(r.bar.cast, 'motes'); T.eq(r.bar.low, 3); T.eq(r.bar.v, #ns.MIGRATIONS); T.eq(r.rings.size, 52); T.eq(r.rings.where, 'enemy')
+    T.eq(r.bar.cast, 'motes'); T.eq(r.bar.low, 5); T.eq(r.bar.v, #ns.MIGRATIONS); T.eq(r.rings.size, 52); T.eq(r.rings.where, 'enemy')
   end,
 
   ['bus: a kill bar tick pulses its ring on the target plate'] = function(W, T)

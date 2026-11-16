@@ -42,6 +42,15 @@ R.OTHERS_ALPHA = 0.55               -- and 55% alpha (settings 'Other players' D
 local OTHERS_GAP = S * 6 / 70       -- mockup: 6 units gap on a 70-unit cell
 R.GAP = 6.5   -- sheet 55 (2026-11-13): 6 px of air above the name on his screen (was 4: 3 px, the row read as part of the name)
 R.GAP_OLD = 4                           -- row bottom sits this far above the name (mockup: ~5 of 70)
+-- Seats (sheets 69/70 A, 73, approved 2026-11-16 "build it"): over a mob each DoT has its own fixed spot, so where a
+-- ring sits tells you which DoT it is, and a missing one leaves its spot blank (nothing drawn). Order as on the
+-- sheets: Corruption, Agony, the curse, Immolate, then Siphon Life. Only the seats you know take a spot, so the row
+-- stays centred over the bar (4 now, 5 once Siphon Life is learned). Rings sit 20% of a ring apart (sheet 73:
+-- an ending ring's glow stays in its own gap). Each seat is one Blizzard aura slot (1 button, not 10).
+R.SEATS = { 'corruption', 'agony', 'curse', 'immolate', 'siphon' }
+R.SEAT_GAP = 0.2 * S
+-- your other rings (crowd control, channel, your other debuffs, other players' DoTs) flow in a row above the seats
+R.ABOVE_SEATS = S + R.SEAT_GAP
 local BREATH, LOW_ALPHA = 1.5, 0.3  -- a DoT's last seconds ('Ending soon'): gold, one breath every 1.5 s, down to 30%
 -- How often Blizzard re-draws each countdown number and ring colour, in seconds (0 = every frame). The number changes
 -- once a second; the breath is the only thing that needs speed. Set back to 0 if the breath looks stepped in game.
@@ -84,7 +93,9 @@ local function breathes() return not (ns.db and ns.db.lowlook == 'steady') end
 -- Blizzard re-evaluates a curve on the seconds left (DurationTextBinding:SetTextColorCurve). Linear with a point
 -- every 1/60 of the gold time draws the breath; the low -> low + 0.001 pair is the step into gold.
 -- light: the whole-band light (sheet 58 C): nothing until the last seconds, then it rises and falls with the breath
-local LIGHT_A = 0.45
+-- sheet 64 B (2026-11-15, "B: white-hot"): in a big pull the ending ring must be unmissable, so the whole band
+-- flares most of the way to white in its own colour (was 0.45 strength, 22% lift)
+local LIGHT_A = 0.85
 local function fillCurve(c, normal, low, lowBreathes, light)
   local LOW = lowSecs()
   local breathe = lowBreathes and breathes()
@@ -109,7 +120,7 @@ end
 -- Sheet 58 C (approved 2026-11-13, "C, own colour"): a DoT that is ending flares in its OWN colour, lifted towards
 -- white: the ring by 22%, the number by 45%. No gold on the rings any more (the kill bar keeps its gold).
 local function lit(c, k) return { c[1] + (1 - c[1]) * k, c[2] + (1 - c[2]) * k, c[3] + (1 - c[3]) * k } end
-R.lit, R.LIT_RING, R.LIT_NUM = lit, 0.22, 0.45
+R.lit, R.LIT_RING, R.LIT_NUM = lit, 0.6, 0.7   -- white-hot (sheet 64 B): ring 60% to white, number 70%
 
 -- the 'Ending soon' settings changed: every curve again, in place (buttons keep the curve they were given).
 -- Out of combat only. False when the client can't clear a curve: then the change shows after a /reload.
@@ -392,6 +403,40 @@ local function ringOthers(b)
   local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (R.flat() and 'backing_flat' or 'backing')); back:SetAllPoints(b)
 end
 
+-- ---------- seats ----------
+R.SEAT_OF = {}; for i, k in ipairs(R.SEATS) do R.SEAT_OF[k] = i end
+-- do you know this spell (any rank)? Without the API (or before spells load) every seat counts.
+local function knows(sp)
+  if not (IsPlayerSpell or IsSpellKnown) then return true end
+  for _, id in ipairs(sp.ids) do
+    local ok, v = pcall(IsPlayerSpell or IsSpellKnown, id)
+    if ok and v == true then return true end
+  end
+  return false
+end
+-- key -> its spot (1..n) among the seats you know, and n. A seat you don't know gets no spot (hidden).
+function R.seatSpots()
+  local spots, n = {}, 0
+  for _, k in ipairs(R.SEATS) do
+    local sp = Spells.byKey[k]
+    if sp and knows(sp) then n = n + 1; spots[k] = n end
+  end
+  if n == 0 then for i, k in ipairs(R.SEATS) do spots[k] = i end; n = #R.SEATS end
+  return spots, n
+end
+-- x of a spot's centre from the row's centre, in the row's own units
+function R.seatX(i, n) return (i - (n + 1) / 2) * (S + R.SEAT_GAP) end
+-- put every seat button of a row in its spot; out of combat only (Rings.lua calls it on build and SPELLS_CHANGED)
+function R.placeSeats(btns, anchor)
+  local spots, n = R.seatSpots()
+  for b, key in pairs(btns) do
+    b:ClearAllPoints()
+    local i = spots[key]
+    -- a seat you don't know never has an aura to show, so it just waits in the middle
+    b:SetPoint('BOTTOM', anchor, 'BOTTOM', i and R.seatX(i, n) or 0, 0)
+  end
+end
+
 -- group order is layout order: crowd control first (sheet 48), the four DoTs (fixed order, one group each so each can carry its own colour), the
 -- curses and the channels (each their own colour too, and Haunt keeps the channel and curse groups over the mob), your other
 -- debuffs (neutral ring), then other players' DoTs to the right. Within a group: oldest first.
@@ -400,7 +445,7 @@ function R.buildGroups()
   local G = {}
   for _, sp in ipairs(SPELLS) do
     local main, mainFrame = mainsFor(sp.key, sp.kind == 'curse')
-    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = main, mainFrame = mainFrame,
+    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = main, mainFrame = mainFrame, seat = R.SEAT_OF[sp.key],
       ring = ringOwn(sp.color, ringCurves[sp.key], sp.key, lightCurves[sp.key]) }
   end
   local mine, mineFrame = mainsFor('mine', false)
