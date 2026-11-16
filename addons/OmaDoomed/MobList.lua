@@ -256,14 +256,20 @@ local function newRow(k)
   r.name:SetTextColor(1, .82, 0); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
   r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', 0, NB); r.name:SetWidth(BW + GB - 6); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
   -- the click: an invisible secure button over the row, for this row's token, never changed
-  local b = CreateFrame('Button', 'OmaDoomedListClick' .. k, holder, 'SecureUnitButtonTemplate')
-  b:SetAttribute('type1', 'target'); b:SetAttribute('unit', tok(k))
-  b:RegisterForClicks('AnyUp')
+  -- 2026-11-16 (clicks never targeted): secure buttons fire on the PRESS by default (CVar ActionButtonUseKeyDown), and
+  -- this one only listened for the release. Now both, acting on the release (BetterBlizzFrames' working setup), the
+  -- template every working Forever example uses, and '*type1' so modifier clicks target too.
+  local b = CreateFrame('Button', 'OmaDoomedListClick' .. k, holder, 'SecureActionButtonTemplate')
+  b:SetAttribute('*type1', 'target'); b:SetAttribute('type1', 'target'); b:SetAttribute('unit', tok(k))
+  b:SetAttribute('useOnKeyDown', false)
+  b:RegisterForClicks('AnyUp', 'AnyDown')
   -- NOT anchored to the row: a secure button anchored to a frame makes that frame secure too, and then showing or
   -- hiding the row in combat is blocked (seen 2026-11-16: ADDON_ACTION_BLOCKED Frame:SetShown). Warlock All-in-One's
   -- way: placed by screen position on its own secure holder, out of combat (placeClicks).
   local hl = b:CreateTexture(nil, 'HIGHLIGHT'); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, .06)
-  RegisterStateDriver(b, 'visibility', ('[@%s,exists,harm,nodead] show; hide'):format(tok(k)))   -- enemies only
+  -- 'exists' only: 'harm' and 'nodead' may test false in combat on Forever and keep the button hidden (Warlock
+  -- All-in-One's driver uses exists alone)
+  RegisterStateDriver(b, 'visibility', ('[@%s,exists] show; hide'):format(tok(k)))
   r.click = b
   return r
 end
@@ -379,6 +385,7 @@ local function start()
   geo = CreateFrame('Frame', nil, UIParent); geo:SetSize(1, 1)
   holder = CreateFrame('Frame', 'OmaDoomedListClicks', UIParent, 'SecureHandlerStateTemplate')
   holder:SetAllPoints(UIParent)
+  holder:SetFrameStrata('HIGH')   -- above the list's own art, which sat over the buttons
   RegisterStateDriver(holder, 'visibility', '[combat] show; hide')
   -- sheet 78's panel: one rounded rectangle with a thin crisp warm line (our own art), stretched by slice margins so
   -- the corners keep their shape (2026-11-16: Blizzard's tooltip border read generic and beveled)

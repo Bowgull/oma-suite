@@ -14,7 +14,7 @@ local function secure(W)
   end
   local function eval(cond)
     if cond == '[combat] show; hide' then return W.combat and 'show' or 'hide' end
-    local t = cond:match('^%[@(nameplate%d+),exists,harm,nodead%]')
+    local t = cond:match('^%[@(nameplate%d+),exists')
     local u = t and W.units[t]
     return (u and u.enemy and not u.dead) and 'show' or 'hide'
   end
@@ -55,7 +55,7 @@ return {
     T.eq(shownRows(ns), '2,5', 'the two enemies show; the friendly guard has no row')
     T.eq(L.slotOf[2], 1, 'packed: the first enemy at the top'); T.eq(L.slotOf[5], 2, 'the second just under it')
     local b = L.rows[2].click
-    T.eq(b._template, 'SecureUnitButtonTemplate', 'a secure unit button')
+    T.eq(b._template, 'SecureActionButtonTemplate', 'a secure action button')
     T.eq(b:GetAttribute('type1'), 'target', 'a click targets'); T.eq(b:GetAttribute('unit'), 'nameplate2', 'its own token, for good')
     T.ok(b._anchor ~= L.rows[2], 'placed by screen position, never anchored to its row (that made the row secure: ADDON_ACTION_BLOCKED)')
     T.ok(b._anchor ~= nil, 'and it IS placed, though the list is hidden out of combat (2026-11-16: clicking stopped working)')
