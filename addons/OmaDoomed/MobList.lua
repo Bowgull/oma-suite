@@ -132,12 +132,25 @@ local function fill(r)
   r.tgt:SetShown(isTarget(u))
 end
 
+-- sheet 75's panel: ONE dark panel with a thin warm border and rounded corners behind the rows that show (2026-11-16:
+-- a black block per row read as a slab). Blizzard's own soft tooltip border, tinted. It reaches down to the lowest row
+-- showing; plain frame, so it can grow and shrink in combat.
+local panel
+local function fitPanel()
+  if not panel then return end
+  local low = 0
+  for k = 1, TOKENS do local r = rows[k]; if r and r.shown and (slotOf[k] or k) > low then low = slotOf[k] or k end end
+  if low == 0 and not db.unlocked then panel:Hide(); return end
+  panel:SetHeight(PADY * 2 + RH * math.max(low, 1)); panel:Show()
+end
+
 local function refreshRow(k)
   local r = rows[k]; if not r then return end
   local on = wanted(k)
   r.shown = on
   r:SetShown(on)
   if on then fill(r) else killbar(r) end
+  fitPanel()
 end
 
 -- ---------- places ----------
@@ -145,6 +158,25 @@ local function place(r)
   r:ClearAllPoints()
   r:SetPoint('TOPLEFT', header, 'TOPLEFT', 0, -PADY - ((slotOf[r.k] or r.k) - 1) * RH)
 end
+-- the click buttons over the rows, by screen position (UIParent units); out of combat only, and in the moment a
+-- fight starts. Each button follows its row's rectangle; the rows themselves stay plain frames.
+local function placeClicks()
+  if InCombatLockdown() and fighting then return end
+  local us = UIParent:GetEffectiveScale()
+  for k = 1, TOKENS do
+    local r = rows[k]
+    if r and r.click then
+      local ok, l, b, w, h = pcall(function() return r:GetLeft(), r:GetBottom(), r:GetWidth(), r:GetHeight() end)
+      if ok and type(l) == 'number' and type(b) == 'number' and type(w) == 'number' and w > 0 then
+        local k2 = r:GetEffectiveScale() / us
+        r.click:ClearAllPoints()
+        r.click:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', l * k2, b * k2)
+        r.click:SetSize(w * k2, h * k2)
+      end
+    end
+  end
+end
+
 -- packs the rows top-down: enemies up now first, then every other token in order. Out of combat only (and in the
 -- moment a fight starts, before Blizzard locks the secure buttons).
 local function pack()
@@ -153,6 +185,7 @@ local function pack()
   for k = 1, TOKENS do if wanted(k) then n = n + 1; slotOf[k] = n end end
   for k = 1, TOKENS do if not wanted(k) then n = n + 1; slotOf[k] = n end end
   for k = 1, TOKENS do if rows[k] then place(rows[k]) end end
+  fitPanel(); placeClicks()
 end
 
 -- ---------- building ----------
@@ -161,8 +194,6 @@ local function newRow(k)
   r.k, r.unit, r.shown, r.pair = k, tok(k), false, false
   r:SetSize(width(), RH)
   r:Hide()
-  -- the row's panel: sheet 73/75's plain dark panel, no dividers
-  local bg = r:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(r); bg:SetColorTexture(.043, .035, .035, .9)
   r.tgt = r:CreateTexture(nil, 'BACKGROUND', nil, 1); r.tgt:SetPoint('TOPLEFT', 6, -3); r.tgt:SetPoint('BOTTOMRIGHT', -6, 3)
   r.tgt:SetColorTexture(1, .9, 0, .08); r.tgt:Hide()
   -- portrait; Blizzard's aggro colour breathes around it when your threat climbs; the skull on its top edge
@@ -204,7 +235,9 @@ local function newRow(k)
   local b = CreateFrame('Button', 'OmaDoomedListClick' .. k, holder, 'SecureUnitButtonTemplate')
   b:SetAttribute('type1', 'target'); b:SetAttribute('unit', tok(k))
   b:RegisterForClicks('AnyUp')
-  b:SetAllPoints(r)
+  -- NOT anchored to the row: a secure button anchored to a frame makes that frame secure too, and then showing or
+  -- hiding the row in combat is blocked (seen 2026-11-16: ADDON_ACTION_BLOCKED Frame:SetShown). Warlock All-in-One's
+  -- way: placed by screen position on its own secure holder, out of combat (placeClicks).
   local hl = b:CreateTexture(nil, 'HIGHLIGHT'); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, .06)
   RegisterStateDriver(b, 'visibility', ('[@%s,exists,harm,nodead] show; hide'):format(tok(k)))   -- enemies only
   r.click = b
@@ -265,7 +298,7 @@ local function makeMover()
     l:SetPoint(e[1]); l:SetPoint(e[2]); if e[3] == 'w' then l:SetWidth(2) else l:SetHeight(2) end
   end
   mover:SetScript('OnMouseDown', function(_, b) if b == 'LeftButton' and not InCombatLockdown() then header:StartMoving() end end)
-  mover:SetScript('OnMouseUp', function() header:StopMovingOrSizing(); savePos() end)
+  mover:SetScript('OnMouseUp', function() header:StopMovingOrSizing(); savePos(); placeClicks() end)
   -- the corner sizes the whole window (its scale), so every distance keeps its grid
   local grip = CreateFrame('Frame', nil, mover); grip:SetSize(22, 22); grip:SetPoint('BOTTOMRIGHT'); grip:EnableMouse(true)
   local gt = grip:CreateTexture(nil, 'OVERLAY'); gt:SetAllPoints(); gt:SetTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up')
@@ -277,7 +310,7 @@ local function makeMover()
       header:SetScale(math.max(.6, math.min(2, start * (1 + (GetCursorPosition() - from) / w))))
     end)
   end)
-  grip:SetScript('OnMouseUp', function() grip:SetScript('OnUpdate', nil); db.scale = header:GetScale(); savePos() end)
+  grip:SetScript('OnMouseUp', function() grip:SetScript('OnUpdate', nil); db.scale = header:GetScale(); savePos(); placeClicks() end)
   mover:Hide()
 end
 
@@ -286,7 +319,7 @@ local function unlock(on)
   db.unlocked = on
   if on and not mover then makeMover() end
   if mover then mover:SetShown(on) end
-  visible()
+  visible(); fitPanel()
 end
 
 -- ---------- the ticker: threat, your target, health, the skull ----------
@@ -320,7 +353,15 @@ local function start()
   holder = CreateFrame('Frame', 'OmaDoomedListClicks', UIParent, 'SecureHandlerStateTemplate')
   holder:SetAllPoints(UIParent)
   RegisterStateDriver(holder, 'visibility', '[combat] show; hide')
-  for k = 1, TOKENS do rows[k] = newRow(k) end
+  panel = CreateFrame('Frame', nil, header, BackdropTemplateMixin and 'BackdropTemplate' or nil)
+  panel:SetPoint('TOPLEFT', header, 'TOPLEFT'); panel:SetPoint('TOPRIGHT', header, 'TOPRIGHT')
+  if panel.SetBackdrop then
+    panel:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8', edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border', edgeSize = 14,
+      insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+    panel:SetBackdropColor(.043, .035, .035, .9); panel:SetBackdropBorderColor(.55, .42, .2, 1)
+  end
+  panel:SetFrameLevel(header:GetFrameLevel()); panel:Hide()
+  for k = 1, TOKENS do rows[k] = newRow(k); rows[k]:SetFrameLevel(header:GetFrameLevel() + 2) end
   layout()
   unlock(db.unlocked == true)
   buildPairs()
@@ -375,7 +416,7 @@ function L.slash(msg)
   elseif cmd == 'reset' then
     if InCombatLockdown() then return end
     db.point, db.rel, db.x, db.y, db.scale = nil, nil, nil, nil, nil
-    header:ClearAllPoints(); header:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -40, -330); header:SetScale(1); say('list back in its first place.')
+    header:ClearAllPoints(); header:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -40, -330); header:SetScale(1); placeClicks(); say('list back in its first place.')
   else
     local n = 0; for k = 1, TOKENS do if rows[k] and rows[k].shown then n = n + 1 end end
     say(('mob list: %d shown of up to %d. /omadoomed list unlock | lock | rows 4-16 | reset'):format(n, db.rows))

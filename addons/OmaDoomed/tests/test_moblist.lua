@@ -57,6 +57,7 @@ return {
     local b = L.rows[2].click
     T.eq(b._template, 'SecureUnitButtonTemplate', 'a secure unit button')
     T.eq(b:GetAttribute('type1'), 'target', 'a click targets'); T.eq(b:GetAttribute('unit'), 'nameplate2', 'its own token, for good')
+    T.ok(b._anchor ~= L.rows[2], 'placed by screen position, never anchored to its row (that made the row secure: ADDON_ACTION_BLOCKED)')
     W.combat = true; pump()
     T.ok(b:IsShown() or b.shown, "an enemy's button shows in a fight")
     T.ok(not (L.rows[3].click.shown), "a friendly plate's button stays hidden")
