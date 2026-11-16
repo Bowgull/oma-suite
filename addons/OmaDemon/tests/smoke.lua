@@ -58,7 +58,7 @@ W.units.party2 = { guid = 'P-3', name = 'Zugzug', player = true }
 UnitExists = function(u) return u == 'pet' or W.units[u] ~= nil end
 local sent = {}
 SendChatMessage = function(m, ch) sent[#sent + 1] = ch .. ':' .. m end
-local SPELL = { [1] = 'Soulstone Resurrection', [2] = 'Ritual of Summoning', [3] = 'Create Healthstone (Minor)', [4] = 'Demon Skin' }
+local SPELL = { [1] = 'Soulstone Resurrection', [2] = 'Ritual of Summoning', [3] = 'Create Healthstone (Minor)', [4] = 'Demon Skin', [5] = 'Ritual of Souls' }
 C_Spell = C_Spell or {}; C_Spell.GetSpellName = function(id) return SPELL[id] end
 local auras = {}
 C_UnitAuras = C_UnitAuras or {}
@@ -71,8 +71,9 @@ cast(1, 'Lindarra'); check(#sent == 0, 'lines off by default send nothing')
 G.sayStone, G.saySummon, G.sayStones = true, true, true
 cast(1, 'Lindarra'); check(sent[#sent] == 'PARTY:Soulstone on Lindarra.', 'soulstone line: ' .. tostring(sent[#sent]))
 cast(2, 'Zugzug'); check(sent[#sent] == 'PARTY:summoning Zugzug, click the portal pls', 'summon line: ' .. tostring(sent[#sent]))
-cast(3); check(sent[#sent] == 'PARTY:healthstones ready, grab one', 'healthstones line: ' .. tostring(sent[#sent]))
-local n = #sent; cast(3); check(#sent == n, 'healthstones line at most once a minute')
+local n0 = #sent; cast(3); check(#sent == n0, 'Create Healthstone (just yours) says nothing')
+cast(5); check(sent[#sent] == 'PARTY:healthstones ready, grab one', 'healthstones line: ' .. tostring(sent[#sent]))
+local n = #sent; cast(5); check(#sent == n, 'healthstones line at most once a minute')
 W.group = false; cast(1, 'Lindarra'); check(#sent == n, 'never sent when alone')
 W.group = true
 local pf = CreateFrame('Frame', 'CompactPartyFrameMember2', UIParent); pf.unit = 'party1'; pf:Show()

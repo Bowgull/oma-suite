@@ -76,7 +76,7 @@ ns.settings = Core.NewSettings({
     { key = 'saySummon', store = R, default = false, control = 'check', label = 'Say summons in chat',
       tip = '"summoning <name>, click the portal pls" when you start Ritual of Summoning.' },
     { key = 'sayStones', store = R, default = false, control = 'check', label = 'Say Healthstones in chat',
-      tip = '"healthstones ready, grab one" when you make them.' },
+      tip = '"healthstones ready, grab one" when you cast Ritual of Souls. Your own Create Healthstone stays quiet.' },
 
     { header = 'Reminders' },
     { key = 'armor', store = R, default = true, control = 'check', label = 'Armor missing',

@@ -167,7 +167,7 @@ local function onCast(id)
   elseif name == 'Ritual of Summoning' then
     local who = sentTarget or UnitName('target')
     if d.saySummon and who and who ~= '' then say(('summoning %s, click the portal pls'):format(short(who))) end
-  elseif name:find('^Create Healthstone') or name == 'Ritual of Souls' then
+  elseif name == 'Ritual of Souls' then   -- only the group stones; a Create Healthstone is just for you
     if d.sayStones and GetTime() - lastStones > 60 then lastStones = GetTime(); say('healthstones ready, grab one') end
   end
 end
