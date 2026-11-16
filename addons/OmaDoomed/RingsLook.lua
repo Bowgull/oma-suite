@@ -338,7 +338,9 @@ function ns.ringsPulse(unit, name, key)
   if unit == 'target' and db and (db.where == 'split' or db.where == 'frame') and R.framePair then plate = R.framePair.anchor end
   if not plate then return end
   for b, k in pairs(pulseRings) do
-    if k == key and b:IsVisible() then
+    -- Forever can answer IsVisible with a hidden value (seen 2026-11-16: 'boolean test on a secret boolean'): skip those
+    local okV, vis = pcall(b.IsVisible, b)
+    if k == key and okV and not Secret.is(vis) and vis == true then
       local p = b; for _ = 1, 12 do p = p and p:GetParent(); if p == plate then break end end
       if p == plate and b.omPulse then b.omPulse:Stop(); b.omPulse:Play() end
     end
