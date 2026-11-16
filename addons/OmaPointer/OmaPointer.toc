@@ -1,0 +1,5 @@
+## Interface: 16001
+## Title: OmaPointer
+## Notes: A mouse pointer for the controller: right stick moves, D-pad steps between buttons, A clicks, X right-clicks, Y player menu, B away. Test build.
+## SavedVariables: OmaPointerDB
+OmaPointer.lua
