@@ -125,4 +125,36 @@ return {
     T.eq(shownRows(ns), '3', 'the dead hyena leaves (it drops off the threat list)')
     noErrors(T)
   end,
+  ['list: a mob casting gets a line under its bar, red when you can interrupt it, gone when it stops'] = function(W, T)
+    local ns, F, UI = setup(W)
+    mob(W, F, 1, 'Shaman'); W.advance(.3)
+    local r = ns.moblist.rows[1]
+    local col; r.cast.SetStatusBarColor = function(_, a, b, c) col = { a, b, c } end
+    local t0 = GetTime()
+    UnitCastingInfo = function(u) if u == 'nameplate1' then return 'Lightning Bolt', nil, nil, t0 * 1000, (t0 + 2) * 1000, false, 1, false end end
+    W.fire('UNIT_SPELLCAST_START', 'nameplate1')
+    T.ok(r.cast:IsShown(), 'the cast line shows')
+    T.ok(col and col[1] > .8 and col[2] < .3, 'red: you can interrupt it')
+    UnitCastingInfo = function() return nil end; UnitChannelInfo = function() return nil end
+    W.fire('UNIT_SPELLCAST_STOP', 'nameplate1')
+    T.ok(not r.cast:IsShown(), 'gone when it stops')
+    noErrors(T)
+  end,
+  ['list: a tick (same DoTs, less damage left) flashes the row; a DoT ending does not'] = function(W, T)
+    local ns, F, UI = setup(W)
+    mob(W, F, 1, 'Raptor'); W.advance(.3)
+    local r = ns.moblist.rows[1]
+    local dots = { { name = 'Corruption', damage = 40 }, { name = 'Curse of Agony', damage = 80 } }
+    local real = ns.model.listInto
+    ns.model.listInto = function(u, _, out) for i = #out, 1, -1 do out[i] = nil end; for i, d in ipairs(dots) do out[i] = d end; return out end
+    ns.bus:Fire('DOTS'); W.advance(.6)
+    T.ok(not ns.motion.running('bite1'), 'first look: nothing to compare')
+    dots[1] = { name = 'Corruption', damage = 30 }
+    ns.bus:Fire('DOTS'); T.ok(ns.motion.running('bite1'), 'a tick: the row flashes')
+    W.advance(1)
+    dots[2] = nil; ns.bus:Fire('DOTS')
+    T.ok(not ns.motion.running('bite1'), 'a DoT ended: no flash')
+    ns.model.listInto = real
+    noErrors(T)
+  end,
 }

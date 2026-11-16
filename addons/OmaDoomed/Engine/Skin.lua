@@ -28,6 +28,8 @@ K.white = { 1, 1, 1 }
 K.gold = { 1, .82, 0 }
 K.healthRed = { .77, .07, .07 }
 K.teal = { .18, .72, .65 }
+K.castRed = { .9, .16, .1 }       -- a cast you can interrupt
+K.castGrey = { .55, .55, .55 }    -- one you can't (or the game won't say)
 K.empty = { .07, .03, .03, 1 }
 -- Blizzard's threat colours: 1 yellow (above the tank), 2 orange (about to pull), 3 red (it's on you)
 K.threat = { [1] = { 1, .82, 0 }, [2] = { 1, .5, .02 }, [3] = { .95, .12, .12 } }

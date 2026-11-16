@@ -91,6 +91,14 @@ local function newRow(k)
   r.tgt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 3); r.tgt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.tgt, K.plateTarget)
   r.tgt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -4, 4); r.tgt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 4, -4); r.tgt:Hide()
   r.hp = r.bar:CreateFontString(nil, 'OVERLAY', nil, 7); r.hp:SetFont(K.font, 10, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
+  -- a tick: the DoT pieces flash (a soft white light over the bar) as they shrink (sheet 83, row 1)
+  r.bite = r.bar:CreateTexture(nil, 'OVERLAY', nil, 1); r.bite:SetTexture(K.statusbar); r.bite:SetAllPoints(r.bar)
+  r.bite:SetVertexColor(1, .93, .8); r.bite:SetBlendMode('ADD'); r.bite:SetAlpha(0)
+  r.dmg, r.nd = false, false
+  -- the mob's cast: a thin line under its bar, red when you can interrupt it (Spell Lock), grey when you can't
+  r.cast = CreateFrame('StatusBar', nil, r); r.cast:SetSize(BAR - 4, 3); r.cast:SetPoint('TOPLEFT', r.bar, 'BOTTOMLEFT', 0, -3)
+  r.cast:SetStatusBarTexture(K.statusbar); r.cast:SetMinMaxValues(0, 1); r.cast:SetValue(0); r.cast:Hide()
+  local cb = r.cast:CreateTexture(nil, 'BACKGROUND'); cb:SetAllPoints(); cb:SetColorTexture(0, 0, 0, .7)
   r.name = r:CreateFontString(nil, 'OVERLAY'); r.name:SetFont(K.font, NAME, 'OUTLINE')
   r.name:SetTextColor(1, 1, 1); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
   r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 6); r.name:SetWidth(BAR); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
@@ -122,11 +130,44 @@ local function health(r)
   if okM then pcall(r.bar.SetMinMaxValues, r.bar, 0, mx) end
   if okH then pcall(r.bar.SetValue, r.bar, h); if db.hp ~= false then pcall(r.hp.SetText, r.hp, h) else r.hp:SetText('') end end
 end
+local dl, ds = {}, {}
+-- a tick: the same DoTs, less damage left. A DoT ending or a new one landing is not a tick.
+local function tickLook(r)
+  if not r.shown then r.dmg, r.nd = false, false; return end
+  local ok = pcall(ns.model.listInto, r.unit, true, dl, ds)
+  if not ok then return end
+  local sum, n = 0, #dl
+  for _, d in ipairs(dl) do if type(d.damage) == 'number' then sum = sum + d.damage end end
+  if r.dmg and r.nd == n and sum < r.dmg - .5 and ns.db.tick ~= 'plain' then
+    M.flash('bite' .. r.k, .45, function(v) r.bite:SetAlpha(v * .55) end)
+  end
+  r.dmg, r.nd = sum, n
+end
 local function killbar(r)
   local KP = ns.parts.platebar
   if KP and KP.paintRow then pcall(KP.paintRow, r.shown and r.unit or nil, r.bar) end
+  pcall(tickLook, r)
 end
-local dl, ds = {}, {}
+-- the mob's cast line (UNIT_SPELLCAST_* on its token)
+local plain = function(v) return v ~= nil and not ns.core.Secret.is(v) end
+local function castStep(self)
+  local now = GetTime() * 1000
+  if self.e and plain(self.e) and now >= self.e then self:SetScript('OnUpdate', nil); self:Hide(); return end
+  pcall(self.SetValue, self, self.chan and (self.e and plain(self.e) and self.e - now + self.s or now) or now)
+end
+local function castLook(r)
+  if not r.shown then r.cast:SetScript('OnUpdate', nil); r.cast:Hide(); return end
+  local chan = false
+  local ok, name, _, _, s, e, _, _, noInt = pcall(UnitCastingInfo, r.unit)
+  if not (ok and name) then chan = true; ok, name, _, _, s, e, _, noInt = pcall(UnitChannelInfo, r.unit) end
+  if not (ok and name and s and e) then r.cast:SetScript('OnUpdate', nil); r.cast:Hide(); return end
+  local stoppable = plain(noInt) and noInt == false
+  local c = stoppable and K.castRed or K.castGrey
+  r.cast:SetStatusBarColor(c[1], c[2], c[3])
+  pcall(r.cast.SetMinMaxValues, r.cast, s, e)
+  r.cast.s, r.cast.e, r.cast.chan = s, e, chan
+  r.cast:Show(); r.cast:SetScript('OnUpdate', castStep); castStep(r.cast)
+end
 local function skull(r)
   if ns.db.skull == false then r.skullWin:Hide(); return end
   r.skullWin:Show()
@@ -237,13 +278,13 @@ local function setShown(r, on)
   if r.shown == on then return end
   r.shown = on
   if on then
-    r:Show(); r.wantA = false; killbar(r)
+    r:Show(); r.wantA = false; r.dmg, r.nd = false, false; killbar(r); pcall(castLook, r)
     M.tween('in' .. r.k, 12, 0, .22, function(v) r:SetPoint('TOPLEFT', header, 'TOPLEFT', v, r.y or slotY(slotOf[r.k] or r.k)) end, M.ease.out)
   else
     M.stop('thr' .. r.k); r.lv = false
     M.tween('a' .. r.k, r:GetAlpha(), 0, .2, function(v) r:SetAlpha(v) end, nil, function() if not r.shown then r:Hide() end end)
     r.wantA = 0
-    killbar(r)
+    killbar(r); pcall(castLook, r)
   end
 end
 
@@ -362,7 +403,11 @@ local function start()
   end)
   ns.bus:On('DOTS', function() for k = 1, TOKENS do local r = rows[k]; if r and r.shown then killbar(r) end end end)
   local ev = CreateFrame('Frame')
+  local CASTS = { UNIT_SPELLCAST_START = 1, UNIT_SPELLCAST_STOP = 1, UNIT_SPELLCAST_FAILED = 1, UNIT_SPELLCAST_INTERRUPTED = 1,
+    UNIT_SPELLCAST_DELAYED = 1, UNIT_SPELLCAST_CHANNEL_START = 1, UNIT_SPELLCAST_CHANNEL_STOP = 1, UNIT_SPELLCAST_CHANNEL_UPDATE = 1,
+    UNIT_SPELLCAST_INTERRUPTIBLE = 1, UNIT_SPELLCAST_NOT_INTERRUPTIBLE = 1 }
   for _, e in ipairs({ 'PLAYER_REGEN_DISABLED', 'PLAYER_REGEN_ENABLED', 'SPELLS_CHANGED', 'UNIT_HEALTH' }) do pcall(ev.RegisterEvent, ev, e) end
+  for e in pairs(CASTS) do pcall(ev.RegisterEvent, ev, e) end
   ev:SetScript('OnEvent', function(_, e, unit)
     if e == 'PLAYER_REGEN_DISABLED' then
       RO.refreshAll(); pack(true)        -- the places for this fight, set before Blizzard locks the buttons
@@ -373,6 +418,9 @@ local function start()
     elseif e == 'UNIT_HEALTH' then
       local k = type(unit) == 'string' and tonumber(unit:match('^nameplate(%d+)$'))
       if k and rows[k] and rows[k].shown then pcall(health, rows[k]) end
+    elseif CASTS[e] then
+      local k = type(unit) == 'string' and tonumber(unit:match('^nameplate(%d+)$'))
+      if k and rows[k] and rows[k].shown then pcall(castLook, rows[k]) end
     end
   end)
   L.header = header
