@@ -55,8 +55,8 @@ return {
     T.eq(shownRows(ns), '2,5', 'the two enemies show; the friendly guard has no row')
     T.eq(L.slotOf[2], 1, 'packed: the first enemy at the top'); T.eq(L.slotOf[5], 2, 'the second just under it')
     local b = L.rows[2].click
-    T.eq(b._template, 'SecureActionButtonTemplate', 'a secure action button')
-    T.eq(b:GetAttribute('type1'), 'target', 'a click targets'); T.eq(b:GetAttribute('unit'), 'nameplate2', 'its own token, for good')
+    T.eq(b._template, 'SecureUnitButtonTemplate', 'a secure unit button: hovering it makes it your mouseover')
+    T.eq(b:GetAttribute('*type1'), 'macro', 'a click runs the macro'); T.eq(b:GetAttribute('*macrotext1'), '/target [@mouseover,harm,nodead]', 'which targets the hovered mob'); T.eq(b:GetAttribute('unit'), 'nameplate2', 'its own token, for good')
     T.ok(b._anchor ~= L.rows[2], 'placed by screen position, never anchored to its row (that made the row secure: ADDON_ACTION_BLOCKED)')
     T.ok(b._anchor ~= nil, 'and it IS placed, though the list is hidden out of combat (2026-11-16: clicking stopped working)')
     W.combat = true; pump()

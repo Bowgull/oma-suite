@@ -385,11 +385,19 @@ function R.haloFor(key)
     if not (R.GLYPH and curve and color) then return end
     local k = R.HALO_K
     local fs = b:CreateFontString(nil, 'ARTWORK')
-    fs:SetFont(RING_FONT, S * k, ''); fs:SetSize(S * k * 2, S * k * 2); fs:SetPoint('CENTER', b, 'CENTER')
+    R.ringFont(fs, S * k); fs:SetSize(S * k * 2, S * k * 2); fs:SetPoint('CENTER', b, 'CENTER')
     fs:SetJustifyH('CENTER'); fs:SetJustifyV('MIDDLE'); pcall(fs.SetWordWrap, fs, false)
     fs:SetTextColor(color[1], color[2], color[3], 0)
     b:SetDurationText(fs, textOpts(RING_FMT, curve))
   end
+end
+
+function R.ringFont(fs, size)
+  local ok, set = pcall(fs.SetFont, fs, RING_FONT, size, '')
+  if ok and set then return true end
+  local obj = size > S * 1.2 and _G.OmaDoomedRingFontBig or _G.OmaDoomedRingFont
+  if obj then return (pcall(fs.SetFontObject, fs, obj)) end
+  return false
 end
 
 local function ringOwn(color, curve, key, light)
@@ -398,14 +406,9 @@ local function ringOwn(color, curve, key, light)
     local flat = R.flat()
     if not flat then local shadow = b:CreateTexture(nil, 'BACKGROUND', nil, -8); shadow:SetTexture(ART .. 'ring_shadow', nil, nil, 'TRILINEAR'); shadow:SetAllPoints(b) end   -- sheet 41: sits in the world
     local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (flat and 'backing_flat' or 'backing'), nil, nil, 'TRILINEAR'); back:SetAllPoints(b)
-    if R.GLYPH and curve then
-      local fs = b:CreateFontString(nil, 'ARTWORK')
-      fs:SetFont(RING_FONT, S, ''); fs:SetSize(S * 2, S * 2); fs:SetPoint('CENTER', b, 'CENTER')
-      fs:SetJustifyH('CENTER'); fs:SetJustifyV('MIDDLE'); pcall(fs.SetWordWrap, fs, false)
-      fs:SetTextColor(color[1], color[2], color[3], 1)
-      b:SetDurationText(fs, textOpts(RING_FMT, curve))
-    else
-      -- sheet 39 A: twice as thick. Modern's band is hard-edged (sheet 55): its soft halo read as airbrushed
+    -- The band is ALWAYS the art (2026-11-16: drawn with the ring font, the bands went blank in game once the font
+    -- loaded). The font only adds the ending light above it (below), so a font problem can never blank a ring.
+    do
       local t = b:CreateTexture(nil, 'ARTWORK'); t:SetTexture(ART .. (flat and 'ring_bold' or 'ring_bold_hard'), nil, nil, 'TRILINEAR'); t:SetAllPoints(b)
       t:SetVertexColor(color[1], color[2], color[3])
     end
@@ -426,7 +429,7 @@ local function ringOwn(color, curve, key, light)
     if R.GLYPH and light then
       top = top or CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
       local fl = top:CreateFontString(nil, 'ARTWORK')
-      fl:SetFont(RING_FONT, S, ''); fl:SetSize(S * 2, S * 2); fl:SetPoint('CENTER', b, 'CENTER')
+      R.ringFont(fl, S); fl:SetSize(S * 2, S * 2); fl:SetPoint('CENTER', b, 'CENTER')
       fl:SetJustifyH('CENTER'); fl:SetJustifyV('MIDDLE'); pcall(fl.SetWordWrap, fl, false)
       fl:SetTextColor(color[1], color[2], color[3], 0)
       b:SetDurationText(fl, textOpts(RING_FMT, light))

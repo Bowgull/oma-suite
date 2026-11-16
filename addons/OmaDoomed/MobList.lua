@@ -259,8 +259,13 @@ local function newRow(k)
   -- 2026-11-16 (clicks never targeted): secure buttons fire on the PRESS by default (CVar ActionButtonUseKeyDown), and
   -- this one only listened for the release. Now both, acting on the release (BetterBlizzFrames' working setup), the
   -- template every working Forever example uses, and '*type1' so modifier clicks target too.
-  local b = CreateFrame('Button', 'OmaDoomedListClick' .. k, holder, 'SecureActionButtonTemplate')
-  b:SetAttribute('*type1', 'target'); b:SetAttribute('type1', 'target'); b:SetAttribute('unit', tok(k))
+  -- 2026-11-16 research: the game refuses targeting a nameplate token directly (since 7.1, in the engine), but a
+  -- secure UNIT button for nameplateN becomes your 'mouseover' when hovered (MPlusKick, confirmed on a Midnight
+  -- client), and '/target [@mouseover]' is allowed. So the click runs that macro, and mouseover DoT macros and
+  -- Blizzard's Mouseover Cast work straight from the list too.
+  local b = CreateFrame('Button', 'OmaDoomedListClick' .. k, holder, 'SecureUnitButtonTemplate')
+  b:SetAttribute('unit', tok(k))
+  b:SetAttribute('*type1', 'macro'); b:SetAttribute('*macrotext1', '/target [@mouseover,harm,nodead]')
   b:SetAttribute('useOnKeyDown', false)
   b:RegisterForClicks('AnyUp', 'AnyDown')
   -- NOT anchored to the row: a secure button anchored to a frame makes that frame secure too, and then showing or
