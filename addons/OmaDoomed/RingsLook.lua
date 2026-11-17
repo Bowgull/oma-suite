@@ -620,3 +620,25 @@ function R.buildGroups()
     main = mainOthers, ring = ringOthers, layout = { groupSpacing = OTHERS_GAP } }
   R.GROUPS = G
 end
+
+-- /omadoomed glyph: measure the ring font against the ring art (2026-11-16: the font-drawn ending light came out huge
+-- and off-centre). Three pairs in the middle of the screen at 34, 64 and 128: the band art in blue, the font's ring at
+-- the same size in red on top, each in a thin white box of its size. Prints what the game says the string measures.
+-- Run it again to take it away.
+local gt
+function R.glyphTest()
+  if gt then gt:SetShown(not gt:IsShown()); return end
+  gt = CreateFrame('Frame', nil, UIParent); gt:SetAllPoints(UIParent); gt:SetFrameStrata('TOOLTIP')
+  local x = -220
+  for _, size in ipairs({ 34, 64, 128 }) do
+    local box = gt:CreateTexture(nil, 'BACKGROUND'); box:SetColorTexture(1, 1, 1, .25); box:SetSize(size + 2, size + 2); box:SetPoint('CENTER', UIParent, 'CENTER', x, 0)
+    local inner = gt:CreateTexture(nil, 'BORDER'); inner:SetColorTexture(0, 0, 0, .85); inner:SetSize(size, size); inner:SetPoint('CENTER', box, 'CENTER')
+    local art = gt:CreateTexture(nil, 'ARTWORK'); art:SetTexture(ART .. 'ring_bold', nil, nil, 'TRILINEAR'); art:SetSize(size, size); art:SetPoint('CENTER', box, 'CENTER'); art:SetVertexColor(.3, .5, 1)
+    local fs = gt:CreateFontString(nil, 'OVERLAY')
+    local ok = R.ringFont(fs, size)
+    fs:SetSize(size * 2, size * 2); fs:SetPoint('CENTER', box, 'CENTER'); fs:SetJustifyH('CENTER'); fs:SetJustifyV('MIDDLE')
+    fs:SetTextColor(1, .15, .1, .75); fs:SetText('O')
+    print(('|cffb48cffOmaDoomed glyph|r size %d: font %s, string %.1f x %.1f'):format(size, tostring(ok), fs:GetStringWidth() or -1, fs:GetStringHeight() or -1))
+    x = x + size + 120
+  end
+end
