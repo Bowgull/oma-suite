@@ -53,6 +53,7 @@ function Frame:IsEventRegistered(e) return self.events[e] ~= nil end
 function Frame:SetScript(k, f) self.scripts[k] = f; if k == 'OnUpdate' and f then enlist(updating, self, '_updates') end end
 function Frame:GetScript(k) return self.scripts[k] end
 function Frame:HookScript(k, f) local old = self.scripts[k]; self:SetScript(k, function(...) if old then old(...) end; f(...) end) end
+function Frame:Click(button) local f = self.scripts.OnClick; if f then f(self, button or 'LeftButton', false) end end   -- like the game: runs OnClick
 function Frame:Show() self.shown = true end
 function Frame:Hide() self.shown = false end
 function Frame:IsShown() return self.shown end

@@ -1,97 +1,96 @@
--- OmaDemon: debuffs on you (sheet 78, approved 2026-11-16; plan phase 7).
--- "Debuffs on you: soft squares just above your bars, glowing in their type's colour; the magic one breathes because
--- your Felhunter can take it off."
--- Blizzard's own AuraContainer (CustomAuraContainerTemplate) on 'player', HARMFUL, reads the auras and shows and hides
--- the squares; this file only builds each square's look once, in initializeFrame (aura buttons are locked after it).
--- Nothing hidden is ever read here: the GAME tints each glow by the debuff's type (AddDispelTypeTexture with a colour
--- map, the same route as OmaDoomed's soft squares, RingsLook.lua glowBehind). The breathing light is a second
--- type-tinted texture whose map is clear for every type except Magic, so only magic debuffs breathe.
--- The container is made out of combat (containers can't be made in combat) and placed just above your action bars.
+-- OmaDemon: debuffs on you (sheet 104 v7 + sheet 103 Plasma, approved 2026-11-17 "Yes, build it").
+-- Centred above your action bars, one fixed spot per type: magic, curse, poison, disease, then anything else. Each is
+-- Blizzard's own action-button frame (the game's atlas, nothing shipped) with the Plasma you picked flowing round it in
+-- the type's colour. The spot says the type, so a click knows what it was without reading anything hidden: click one
+-- and OmaDemon asks the groupmate who can remove it, in your voice (Lines.lua ns.helpLine). The click is your own
+-- press, so the game lets the line go out even in a dungeon fight.
+-- Blizzard's own AuraContainer reads the auras and shows and hides each spot (AddAuraSlot, one per type, filtered by
+-- dispel type inside the game's code). This file only builds each spot's look once, in initializeFrame (aura buttons
+-- are locked after it), and our own click buttons sit on top.
 local _, ns = ...
 
 local ART = 'Interface\\AddOns\\OmaDemon\\art\\'
-local SIZE = 44
-local GAP = 6
-local MAX = 8
-local DISPEL_RGB = { Magic = { .24, .61, 1 }, Curse = { .64, .21, .93 }, Disease = { .6, .4, 0 }, Poison = { .12, .75, .12 },
-  Bleed = { .82, .1, .1 }, None = { .82, .1, .1 } }
-local D = { size = SIZE, max = MAX }
+local AB = 'Interface\\HUD\\UIActionBar2x'          -- Blizzard's action-button frame and hover (the game's own file)
+local FRAME_TC = { 358 / 512, 456 / 512, 432 / 2048, 539 / 2048 }
+local HOVER_TC = { 358 / 512, 456 / 512, 546 / 2048, 640 / 2048 }
+local SIZE, GAP = 44, 6
+local PLASMA = SIZE * 78.6 / 44                      -- the loop's canvas (sheet 103), centred on the square
+local TYPES = {
+  { key = 'magic', dispel = 'Magic' }, { key = 'curse', dispel = 'Curse' }, { key = 'poison', dispel = 'Poison' },
+  { key = 'disease', dispel = 'Disease' }, { key = 'other' },
+}
+local D = { size = SIZE, types = TYPES }
 ns.debuffs = D
 
-local maps = {}
-local function colorMap(which)
-  if maps[which] or not CreateColor then return maps[which] end
-  local m = {}
-  for k, c in pairs(DISPEL_RGB) do
-    -- 'breath': only Magic has any light; every other type is fully clear
-    local a = (which == 'breath' and k ~= 'Magic') and 0 or 1
-    m[k] = CreateColor(c[1], c[2], c[3], a)
+local function spotX(i) return (i - (#TYPES + 1) / 2) * (SIZE + GAP) end
+
+-- one spot's look: plasma behind, the icon, Blizzard's frame over it, the game's own countdown and stacks
+function D.slotInit(t, i, holder)
+  return function(b)
+    b:SetSize(SIZE, SIZE); pcall(b.EnableMouse, b, false)
+    b:ClearAllPoints(); b:SetPoint('CENTER', holder, 'CENTER', spotX(i), 0)
+    if t.dispel then
+      local p = b:CreateTexture(nil, 'BACKGROUND', nil, -6)
+      p:SetTexture(ART .. 'plasma_' .. t.key, nil, nil, 'TRILINEAR'); p:SetSize(PLASMA, PLASMA); p:SetPoint('CENTER', b, 'CENTER')
+      local ag = p:CreateAnimationGroup(); ag:SetLooping('REPEAT')
+      local ok, fb = pcall(ag.CreateAnimation, ag, 'FlipBook')
+      if ok and fb then
+        pcall(fb.SetFlipBookRows, fb, 4); pcall(fb.SetFlipBookColumns, fb, 4); pcall(fb.SetFlipBookFrames, fb, 16)
+        pcall(fb.SetDuration, fb, 2.2)
+        if ns.reduced and ns.reduced() then p:SetTexCoord(0, .25, 0, .25) else ag:Play() end   -- started once: allowed
+      else p:SetTexCoord(0, .25, 0, .25) end
+      b.omPlasma = ag
+    end
+    local icon = b:CreateTexture(nil, 'ARTWORK', nil, 0)
+    icon:SetSize(SIZE, SIZE); icon:SetPoint('CENTER', b, 'CENTER'); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local fr = b:CreateTexture(nil, 'OVERLAY', nil, 1)
+    fr:SetTexture(AB); fr:SetTexCoord(FRAME_TC[1], FRAME_TC[2], FRAME_TC[3], FRAME_TC[4])
+    fr:SetSize(SIZE * 98 / 77, SIZE * 107 / 77); fr:SetPoint('TOPLEFT', icon, 'TOPLEFT', -SIZE * 8 / 77, SIZE * 16 / 77)
+    local cd = CreateFrame('Cooldown', nil, b); cd:SetAllPoints(b)
+    pcall(cd.SetDrawSwipe, cd, false); pcall(cd.SetDrawEdge, cd, false); pcall(cd.SetUseAuraDisplayTime, cd, true)
+    pcall(b.SetIcon, b, icon); pcall(b.SetDurationCooldown, b, cd)
+    if b.SetApplicationCount then   -- the stack count (the game's name for it; SetApplicationsText never existed)
+      local top = CreateFrame('Frame', nil, b); top:SetAllPoints(b); top:SetFrameLevel(b:GetFrameLevel() + 3)
+      local n = top:CreateFontString(nil, 'OVERLAY'); n:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 14, 'OUTLINE')
+      n:SetPoint('BOTTOMRIGHT', b, 'BOTTOMRIGHT', -2, 2)
+      pcall(b.SetApplicationCount, b, n)
+    end
   end
-  maps[which] = m; return m
-end
--- Blizzard's style that keeps our own glow art and only tints it ('PreserveAsset'); found by name, any enum spelling
-local function preserveStyle()
-  for _, t in pairs(Enum or {}) do if type(t) == 'table' and t.PreserveAsset ~= nil then return t.PreserveAsset end end
-end
-local function tintByType(b, tex, which)
-  if not b.AddDispelTypeTexture then return false end
-  if which == 'breath' and not colorMap(which) then return false end   -- without our map every type would breathe
-  return (pcall(b.AddDispelTypeTexture, b, tex, { style = preserveStyle(), showWhenHarmful = true,
-    showWithoutDispelType = true, customDispelColorMap = colorMap(which) }))
 end
 
--- hover: Blizzard's own tooltip if the button has one, otherwise the aura by its instance on 'player'
-local function onEnter(self)
-  if not GameTooltip then return end
-  pcall(GameTooltip.SetOwner, GameTooltip, self, 'ANCHOR_TOP')
-  local ok = pcall(function()
-    local id = self.auraInstanceID or (self.GetAuraInstanceID and self:GetAuraInstanceID())
-    if id and GameTooltip.SetUnitDebuffByAuraInstanceID then GameTooltip:SetUnitDebuffByAuraInstanceID('player', id)
-    elseif id and GameTooltip.SetUnitAuraByAuraInstanceID then GameTooltip:SetUnitAuraByAuraInstanceID('player', id)
-    else error('no aura id') end
+-- ---------- our click buttons, one over each spot you can ask help for ----------
+-- out of combat the tooltip shows what is there (aura data is plain then); in a fight only the hint
+local function firstOfType(dispel)
+  if InCombatLockdown() or not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
+  for i = 1, 40 do
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, 'player', i, 'HARMFUL')
+    if not ok or not a then return end
+    if a.dispelName == dispel then return a, i end
+  end
+end
+D.firstOfType = firstOfType
+local function makeClick(t, i, holder)
+  local btn = CreateFrame('Button', 'OmaDemonHelp' .. t.key, holder)
+  btn:SetSize(SIZE, SIZE); btn:SetPoint('CENTER', holder, 'CENTER', spotX(i), 0)
+  btn:SetFrameLevel(holder:GetFrameLevel() + 30)
+  btn:RegisterForClicks('LeftButtonUp')
+  local hv = btn:CreateTexture(nil, 'HIGHLIGHT')
+  hv:SetTexture(AB); hv:SetTexCoord(HOVER_TC[1], HOVER_TC[2], HOVER_TC[3], HOVER_TC[4])
+  hv:SetSize(SIZE * 98 / 77, SIZE * 94 / 77); hv:SetPoint('CENTER', btn, 'CENTER'); hv:SetBlendMode('ADD')
+  btn:SetScript('OnClick', function()
+    if not InCombatLockdown() and not firstOfType(t.dispel) then return end   -- nothing there (we can tell out of a fight)
+    if ns.askHelp then ns.askHelp(t.key) end
   end)
-  if ok then pcall(GameTooltip.Show, GameTooltip) else pcall(GameTooltip.Hide, GameTooltip) end
-end
-local function onLeave() if GameTooltip then pcall(GameTooltip.Hide, GameTooltip) end end
-D.onEnter, D.onLeave = onEnter, onLeave
-
-function D.button(b)
-  b:SetSize(SIZE, SIZE)
-  -- the icon in a soft square (Blizzard's square, corners 20% of the side, no frame)
-  local icon = b:CreateTexture(nil, 'ARTWORK', nil, 0)
-  icon:SetSize(SIZE, SIZE); icon:SetPoint('CENTER', b, 'CENTER'); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  local m = b:CreateMaskTexture(); m:SetTexture(ART .. 'softsq_mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(icon)
-  icon:AddMaskTexture(m)
-  local edge = b:CreateTexture(nil, 'ARTWORK', nil, 2); edge:SetTexture(ART .. 'softsq_edge', nil, nil, 'TRILINEAR'); edge:SetAllPoints(icon)
-  -- the soft glow behind it, in the debuff's type colour (a quiet red if this client refuses the tint)
-  local glow = b:CreateTexture(nil, 'BACKGROUND', nil, -6); glow:SetTexture(ART .. 'softsq_glow', nil, nil, 'TRILINEAR')
-  glow:SetSize(SIZE * 1.5, SIZE * 1.5); glow:SetPoint('CENTER', b, 'CENTER'); glow:SetBlendMode('ADD')
-  glow:SetVertexColor(.82, .1, .1, .6)
-  tintByType(b, glow, 'glow')
-  -- the breath: a wider glow, clear unless the debuff is Magic, swelling in and out (2.4 s round, like the armor glow)
-  local breath = b:CreateTexture(nil, 'BACKGROUND', nil, -7); breath:SetTexture(ART .. 'softsq_glow', nil, nil, 'TRILINEAR')
-  breath:SetSize(SIZE * 1.9, SIZE * 1.9); breath:SetPoint('CENTER', b, 'CENTER'); breath:SetBlendMode('ADD')
-  breath:SetVertexColor(0, 0, 0, 0)
-  if tintByType(b, breath, 'breath') then
-    local ag = breath:CreateAnimationGroup(); ag:SetLooping('BOUNCE')
-    local a = ag:CreateAnimation('Alpha'); a:SetFromAlpha(.15); a:SetToAlpha(1); a:SetDuration(1.2); a:SetSmoothing('IN_OUT')
-    if not (ns.reduced and ns.reduced()) then ag:Play() else breath:SetAlpha(.6) end   -- a looping group keeps going; no OnShow hook (Forever blocks it on aura buttons)
-    b.omBreath = ag
-  end
-  -- time left: the game's own countdown on a clear cooldown (no swipe, no edge)
-  local cd = CreateFrame('Cooldown', nil, b); cd:SetAllPoints(b)
-  pcall(cd.SetDrawSwipe, cd, false); pcall(cd.SetDrawEdge, cd, false); pcall(cd.SetUseAuraDisplayTime, cd, true)
-  pcall(b.SetIcon, b, icon); pcall(b.SetDurationCooldown, b, cd)
-  -- stacks, bottom right, when the client offers them
-  if b.SetApplicationsText then
-    local top = CreateFrame('Frame', nil, b); top:SetAllPoints(b); top:SetFrameLevel(b:GetFrameLevel() + 3)
-    local n = top:CreateFontString(nil, 'OVERLAY'); n:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 14, 'OUTLINE')
-    n:SetPoint('BOTTOMRIGHT', b, 'BOTTOMRIGHT', -2, 2)
-    pcall(b.SetApplicationsText, b, n)
-  end
-  -- hover shows the game's own tooltip: the game sets the button's OnEnter after this, and ours would block it
-  -- ("cannot replace a forbidden script handler", BugSack 2026-11-17). Mouse motion only, so clicks pass through.
-  if b.EnableMouseMotion then pcall(b.EnableMouseMotion, b, true) else pcall(b.EnableMouse, b, true) end
+  btn:SetScript('OnEnter', function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+    local _, idx = firstOfType(t.dispel)
+    if idx and GameTooltip.SetUnitDebuff then pcall(GameTooltip.SetUnitDebuff, GameTooltip, 'player', idx) end
+    GameTooltip:AddLine('Click: ask for help in group chat', 1, .82, 0)
+    GameTooltip:Show()
+  end)
+  btn:SetScript('OnLeave', function() if GameTooltip then GameTooltip:Hide() end end)
+  return btn
 end
 
 -- just above the action bars: the highest bottom bar that is showing, else the screen's bottom centre
@@ -100,30 +99,38 @@ local function barTop()
   local best, top
   for _, n in ipairs(BARS) do
     local f = _G[n]
-    local ok, vis, t = pcall(function() return f:IsVisible(), f:GetTop() end)
+    local ok, vis, t = pcall(function() return f:IsVisible(), f:GetTop() and f:GetTop() * f:GetEffectiveScale() end)
     if ok and vis and type(t) == 'number' and (not top or t > top) then best, top = f, t end
   end
-  return best
+  return best, top
 end
 function D.place()
-  local c = D.container; if not c or InCombatLockdown() then return end
-  c:ClearAllPoints()
-  local bar = barTop()
-  if bar then c:SetPoint('BOTTOMLEFT', bar, 'TOPLEFT', 0, 12) else c:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOM', -(SIZE + GAP) * MAX / 2, 150) end
+  local h = D.holder; if not h or InCombatLockdown() then return end
+  h:ClearAllPoints()
+  local bar, top = barTop()
+  local s = UIParent:GetEffectiveScale() or 1
+  if bar and top then h:SetPoint('BOTTOM', UIParent, 'BOTTOM', 0, top / s + 12) else h:SetPoint('BOTTOM', UIParent, 'BOTTOM', 0, 150) end
   D.bar = bar
 end
 
 function D.build()
   if D.container or InCombatLockdown() then return D.container end
-  local ok, c = pcall(CreateFrame, 'AuraContainer', 'OmaDemonDebuffs', UIParent, 'CustomAuraContainerTemplate')
+  local h = CreateFrame('Frame', 'OmaDemonDebuffRow', UIParent); h:SetSize(#TYPES * (SIZE + GAP), SIZE)
+  pcall(h.SetFrameStrata, h, 'MEDIUM')
+  D.holder = h
+  local ok, c = pcall(CreateFrame, 'AuraContainer', 'OmaDemonDebuffs', h, 'CustomAuraContainerTemplate')
   if not ok or not c then D.failed = tostring(c); return nil end
   pcall(c.SetEditModePreviewEnabled, c, false)
-  c:SetFlowLayoutAnchorPoint('BOTTOMLEFT'); c:SetFlowLayoutGrowthDirection(1, 1)
-  c:SetFlowLayoutMaximumLineSize((SIZE + GAP) * MAX)
-  local okG, err = pcall(c.AddAuraGroup, c, 'debuffs', 'HARMFUL', { initializeFrame = D.button, maxFrameCount = MAX,
-    layout = { groupSpacing = GAP } })
-  if not okG then D.failed = tostring(err); c:Hide(); return nil end
-  pcall(c.SetFrameStrata, c, 'MEDIUM')
+  c:SetAllPoints(h)
+  local others = {}
+  for _, t in ipairs(TYPES) do if t.dispel then others[t.dispel] = true end end
+  D.clicks = {}
+  for i, t in ipairs(TYPES) do
+    local filters = t.dispel and { includeDispelTypes = { [t.dispel] = true } } or { excludeDispelTypes = others }
+    local okS, err = pcall(c.AddAuraSlot, c, t.key, 'HARMFUL', { initializeFrame = D.slotInit(t, i, h), candidateFilters = filters })
+    if not okS then D.failed = tostring(err); c:Hide(); return nil end
+    if t.dispel then D.clicks[t.key] = makeClick(t, i, h) end
+  end
   D.container = c
   D.place()
   c:SetUnit('player')

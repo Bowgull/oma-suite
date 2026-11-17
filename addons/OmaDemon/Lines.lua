@@ -49,6 +49,47 @@ local FUNNY = {
 }
 ns.lines = { plain = PLAIN, funny = FUNNY }
 
+-- Asking for help (sheet 101 lines): click your debuff, the line names the groupmate who can remove it (class and
+-- level, both plain), or says so cheekily when nobody can. Forever's dispel levels match Classic's (checked 2026-11-17).
+local CAN = {
+  curse = { { 'MAGE', 18 }, { 'DRUID', 24 } },
+  poison = { { 'DRUID', 14 }, { 'SHAMAN', 16 }, { 'PALADIN', 8 } },
+  magic = { { 'PRIEST', 18 }, { 'PALADIN', 42 } },
+  disease = { { 'PRIEST', 14 }, { 'PALADIN', 8 }, { 'SHAMAN', 22 } },
+}
+local HELP = {
+  magic = { 'magic debuff, %s dispel pls ^_^', 'magic debuff, no dispel here. pray for me T_T' },
+  curse = { 'cursed, %s decurse pls <3', 'cursed, no decurse here. its fine T_T' },
+  poison = { 'poisoned, %s cleanse pls :3', 'poisoned, no cleanse here. ill tough it out o7' },
+  disease = { 'diseased, %s cure pls ^-^', 'diseased, no cure here. stay back lol >_<' },
+}
+ns.lines.help, ns.lines.can = HELP, CAN
+function ns.helper(kind)
+  local can = CAN[kind]; if not can then return end
+  local units = {}
+  if IsInRaid and IsInRaid() then for i = 1, 40 do units[#units + 1] = 'raid' .. i end else for i = 1, 4 do units[#units + 1] = 'party' .. i end end
+  for _, u in ipairs(units) do
+    local ok, name, cls, lv = pcall(function() local _, c = UnitClass(u); return UnitName(u), c, UnitLevel(u) end)
+    if ok and name and not (UnitIsUnit and UnitIsUnit(u, 'player')) then
+      for _, need in ipairs(can) do
+        if cls == need[1] and type(lv) == 'number' and lv >= need[2] then
+          local short = (Ambiguate and select(2, pcall(Ambiguate, name, 'short'))) or name
+          return type(short) == 'string' and short or name
+        end
+      end
+    end
+  end
+end
+function ns.helpLine(kind)
+  local h = HELP[kind]; if not h then return end
+  local who = ns.helper(kind)
+  return who and h[1]:format(who) or h[2]
+end
+function ns.askHelp(kind)
+  if ns.groupDB().askHelp == false then return end
+  local m = ns.helpLine(kind); if m and ns.groupSay then ns.groupSay(m, true) end
+end
+
 local lastPick = {}
 function ns.line(kind, ...)
   local style = ns.groupDB and ns.groupDB().chatStyle

@@ -15,8 +15,18 @@ local sentTarget       -- the name UNIT_SPELLCAST_SENT gave for our last cast
 
 -- ---------- chat ----------
 local function inGroup() local ok, v = pcall(IsInGroup); return ok and v end
-local function say(msg)
+-- 2026-11-17 (BugSack 07:18): in a dungeon fight the game blocks add-on chat unless it comes from your own key press or
+-- click. Lines that fire on their own (Soulstone, summon, cookies) wait for the fight to end; a press sends at once.
+local held = {}
+local send
+local function say(msg, press)
   if not inGroup() then return end
+  if InCombatLockdown() and not press then held[#held + 1] = msg; return end
+  send(msg)
+end
+ns.groupSay = say
+function ns.flushHeld() local h = held; held = {}; for _, m in ipairs(h) do say(m) end end
+send = function(msg)
   local ch = 'PARTY'
   local okI, inst = pcall(IsInGroup, LE_PARTY_CATEGORY_INSTANCE)
   if LE_PARTY_CATEGORY_INSTANCE and okI and inst then ch = 'INSTANCE_CHAT' elseif IsInRaid and IsInRaid() then ch = 'RAID' end
@@ -186,7 +196,7 @@ ev:SetScript('OnEvent', function(_, e, unit, a2, a3, a4)
   elseif e == 'GROUP_ROSTER_UPDATE' or e == 'PLAYER_ENTERING_WORLD' then
     C_Timer.After(.5, place)
   elseif e == 'PLAYER_REGEN_ENABLED' then
-    audit(); place()
+    ns.flushHeld(); audit(); place()
   end
 end)
 

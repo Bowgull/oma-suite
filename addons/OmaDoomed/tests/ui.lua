@@ -289,6 +289,10 @@ local function reread(c, why)
       local ok = true
       if f.includeSpellIDs and not f.includeSpellIDs[id] then ok = false end
       if f.excludeSpellIDs and f.excludeSpellIDs[id] then ok = false end
+      -- dispel types (W.dispel[spellID] = 'Magic' ...; none = no type), checked inside the game's code
+      local dt = (W.dispel or {})[id]
+      if f.includeDispelTypes and not (dt and f.includeDispelTypes[dt]) then ok = false end
+      if f.excludeDispelTypes and dt and f.excludeDispelTypes[dt] then ok = false end
       if ok and n < g.max then n = n + 1; g.buttons[n]._spell = id; setShown(g.buttons[n], true) end   -- shown like the game: OnShow fires down its children
     end
     for i = n + 1, #g.buttons do g.buttons[i]._spell = nil; setShown(g.buttons[i], false) end

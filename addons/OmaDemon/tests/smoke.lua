@@ -121,27 +121,43 @@ local UIx = require('ui')
 local D, N = ns.debuffs, ns.nightfall
 local dc = D.container
 check(dc and dc.unit == 'player', 'debuff container built on player' .. (D.failed and (': ' .. D.failed) or ''))
-local dg = UIx.group(dc, 'debuffs')
-check(dg and dg.filter == 'HARMFUL' and dg.max == 8, 'HARMFUL group, up to 8 squares')
-local b1 = dg.buttons[1]
-check(b1:GetWidth() == 44, 'squares are 44 px: ' .. tostring(b1:GetWidth()))
-W.units.player.otherAuras = { 101, 102 }; W.fire('UNIT_AURA', 'player')
-check(#UIx.showing(dc).debuffs == 2, 'two debuffs on you, two squares')
+-- sheet 104: one fixed spot per type, centred above the bars; the game filters by dispel type
+W.dispel = { [101] = 'Magic', [102] = 'Curse', [104] = 'Poison' }
+local mg = UIx.group(dc, 'magic')
+check(mg and mg.slot and mg.filter == 'HARMFUL' and mg.filters.includeDispelTypes.Magic, 'a magic spot, filtered by the game')
+check(UIx.group(dc, 'other').filters.excludeDispelTypes.Curse, 'the last spot: anything without a type')
+local b1 = mg.buttons[1]
+check(b1:GetWidth() == 44, 'spots are 44 px: ' .. tostring(b1:GetWidth()))
+W.units.player.otherAuras = { 101, 102, 103 }; W.fire('UNIT_AURA', 'player')
+local sh = UIx.showing(dc)
+check(sh.magic[1] == 101 and sh.curse[1] == 102 and sh.other[1] == 103 and #sh.poison == 0, 'each debuff in its own spot')
+check(b1.omPlasma and b1.omPlasma:IsPlaying(), 'the plasma loops (started once)')
 W.units.player.otherAuras = {}; W.fire('UNIT_AURA', 'player')
-check(#UIx.showing(dc).debuffs == 0, 'gone when they wear off (the game hides them)')
-local tipped, shown = nil, false
-GameTooltip = { SetOwner = function() end, SetUnitDebuffByAuraInstanceID = function(_, u, id) tipped = u .. ':' .. id end,
-  Show = function() shown = true end, Hide = function() shown = false end }
-b1.auraInstanceID = 77; D.onEnter(b1)
-check(tipped == 'player:77' and shown, 'hover shows that debuff\'s tooltip')
-D.onLeave(b1); check(not shown, 'leaving hides it')
+sh = UIx.showing(dc); check(#sh.magic == 0 and #sh.curse == 0, 'gone when they wear off (the game hides them)')
+-- click to ask for help: the groupmate who can remove it, by class and level
+W.units.party1 = { guid = 'P-9', name = 'Eiria', player = true, level = 23 }
+local oldClass = UnitClass
+UnitClass = function(u) if u == 'party1' then return 'Druid', 'DRUID' end; return oldClass(u) end
+check(ns.helpLine('poison') == 'poisoned, Eiria cleanse pls :3', 'a level 23 druid cures poison: ' .. tostring(ns.helpLine('poison')))
+check(ns.helpLine('curse') == 'cursed, no decurse here. its fine T_T', 'but not curses until 24')
+W.units.party1.level = 24; check(ns.helpLine('curse') == 'cursed, Eiria decurse pls <3', 'at 24 she can')
+W.group = true
+local auraList = { { dispelName = 'Poison' } }
+C_UnitAuras.GetAuraDataByIndex = function(u, i) return auraList[i] end
+local n0 = #sent; _G.OmaDemonHelppoison:Click(); check(sent[#sent] == 'PARTY:poisoned, Eiria cleanse pls :3', 'click: the line goes out: ' .. tostring(sent[#sent]))
+n0 = #sent; _G.OmaDemonHelpmagic:Click(); check(#sent == n0, 'nothing in that spot (out of a fight we can tell): no line')
+W.combat = true; n0 = #sent; _G.OmaDemonHelpcurse:Click(); check(#sent == n0 + 1, 'in a fight a click still sends (it is your press)')
+ns.groupSay('Soulstone on Lindarra.'); check(#sent == n0 + 1, 'a line that fires on its own waits in a fight')
+W.combat = false; W.fire('PLAYER_REGEN_ENABLED'); check(sent[#sent] == 'PARTY:Soulstone on Lindarra.', 'and goes out when it ends')
+OmaDemonDB.group.askHelp = false; n0 = #sent; _G.OmaDemonHelppoison:Click(); check(#sent == n0, 'switch off: no line'); OmaDemonDB.group.askHelp = nil
+W.units.party1 = nil; UnitClass = oldClass; W.group = false
 -- Nightfall: one slot, Shadow Trance only
 local nc = N.container
 check(nc and nc.unit == 'player', 'Nightfall slot built on player' .. (N.failed and (': ' .. N.failed) or ''))
 local ng = UIx.group(nc, 'nightfall')
 check(ng and ng.slot and ng.filters.includeSpellIDs[17941], 'slot allows Shadow Trance (17941)')
 W.units.player.otherAuras = { 101, 17941 }; W.fire('UNIT_AURA', 'player')
-check(UIx.showing(nc).nightfall[1] == 17941 and #UIx.showing(dc).debuffs == 2, 'proc: the slot shows')
+check(UIx.showing(nc).nightfall[1] == 17941 and true, 'proc: the slot shows')
 check(N.live and UIx.isVisible(N.live), 'proc: the crescents show (they ride the game button)')
 check(N.chimed == nil, 'proc: no chime on a real proc (Forever refuses OnShow under the game button)')
 check(N.live.sides[1].pulse:IsPlaying() and N.live:GetAlpha() > 0, 'proc: the crescents pulse on their own, at full strength')
