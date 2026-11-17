@@ -299,7 +299,10 @@ local function placeClicks()
       local r = rows[k]
       if r and r.click then
         r.click:ClearAllPoints(); r.click:SetSize(width(), ROW)
-        if parked[k] then r.click:SetPoint('TOPLEFT', UIParent, 'BOTTOMRIGHT', 4000, -4000)   -- off screen: no click area
+        -- only places inside the list (its Rows setting) are live; a place past it would hang down the screen as an
+        -- invisible area (20:43 shots: all 16 stacked down the right side), where a resting mouse could send a DoT to
+        -- whatever mob that token holds
+        if parked[k] or (slotOf[k] or k) > (db.rows or 8) then r.click:SetPoint('TOPLEFT', UIParent, 'BOTTOMRIGHT', 4000, -4000)   -- off screen: no click area
         else r.click:SetPoint('TOPLEFT', geo, 'TOPLEFT', 0, slotY(slotOf[k] or k)) end
       end
     end
@@ -725,6 +728,9 @@ function L.slash(msg)
   if cmd == 'test' then testOn(not L.testing)
   elseif cmd == 'boxes' then db.boxes = not db.boxes; showBoxes(db.boxes); say(db.boxes and 'click areas shown (tinted blue).' or 'click areas hidden.')
   elseif cmd == 'where' then
+    local log = {}; ns.db.where = log
+    local say0 = say
+    local function say(m) log[#log + 1] = date('%H:%M:%S ') .. m; say0(m) end   -- also kept in OmaDoomedDB.where
     -- where every row's click area really is (2026-11-16: clicks only reached the top row). In a fight the click
     -- areas show; out of one they're hidden by design, but their places are still worked out.
     local function top(f) local ok, t = pcall(f.GetTop, f); return ok and t or nil end
