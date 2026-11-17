@@ -46,7 +46,7 @@ local function texCoord(t, c) t:SetTexCoord(c[1], c[2], c[3], c[4]) end
 local function newRow(k)
   local r = CreateFrame('Frame', nil, header)
   r.k, r.unit, r.shown, r.pair = k, tok(k), false, false
-  r.y, r.lv, r.wantA, r.fk, r.lastBite = false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
+  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet = false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
   r:SetSize(width(), ROW); r:Hide(); r:SetAlpha(0)
   -- threat: a soft swell of light behind the row, in Blizzard's threat colour, breathing (Motion)
   r.glow = r:CreateTexture(nil, 'BACKGROUND', nil, 2); r.glow:SetTexture(K.rowGlow, nil, nil, 'TRILINEAR')
@@ -145,7 +145,7 @@ local function tickLook(r)
   if not ok then return end
   local sum, n = 0, #dl
   for _, d in ipairs(dl) do if type(d.damage) == 'number' then sum = sum + d.damage end end
-  if r.dmg and r.nd == n and sum < r.dmg - .5 and ns.db.tick ~= 'plain' then
+  if r.dmg and r.nd == n and sum < r.dmg - .5 and ns.db.tick ~= 'plain' and not r.quiet then
     M.flash('bite' .. r.k, .45, function(v) r.bite:SetAlpha(v * .55) end)
   end
   r.dmg, r.nd = sum, n
@@ -190,7 +190,7 @@ local function skull(r, e)
   r.skullBar:SetValue(total)
 end
 local function threatLook(r, e)
-  local lv = db.threat ~= false and e.threat or nil
+  local lv = db.threat ~= false and not r.quiet and e.threat or nil
   if (lv or false) == r.lv then return end
   local rose = (lv or 0) > (r.lv or 0) and lv == 3
   r.lv = lv or false
@@ -535,6 +535,19 @@ local function start()
     else relayout(); update() end
   end)
   ns.bus:On('DOTS', function() for k = 1, TOKENS do local r = rows[k]; if r and r.shown then killbar(r) end end end)
+  -- sheet 78: someone else's crowd control on a mob: its row goes quiet (rings and threat glow at 35%, no tick
+  -- flash); the bar is already that crowd control's teal timer. The game shows the timer button; we only follow it.
+  ns.bus:On('OCC', function(owner, on)
+    for k = 1, TOKENS do
+      local r = rows[k]
+      if r and r.pair and r.pair.main == owner then
+        r.quiet = on and true or false
+        local a = on and .35 or 1
+        for _, c in ipairs({ r.pair.sring, r.pair.halo }) do if c then c:SetAlpha(a) end end
+        r.glow:SetAlpha(on and 0 or r.glow:GetAlpha()); if on then M.stop('thr' .. k); M.stop('bite' .. k); r.bite:SetAlpha(0); r.lv = false end
+      end
+    end
+  end)
   local ev = CreateFrame('Frame')
   local CASTS = { UNIT_SPELLCAST_START = 1, UNIT_SPELLCAST_STOP = 1, UNIT_SPELLCAST_FAILED = 1, UNIT_SPELLCAST_INTERRUPTED = 1,
     UNIT_SPELLCAST_DELAYED = 1, UNIT_SPELLCAST_CHANNEL_START = 1, UNIT_SPELLCAST_CHANNEL_STOP = 1, UNIT_SPELLCAST_CHANNEL_UPDATE = 1,

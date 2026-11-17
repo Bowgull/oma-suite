@@ -214,4 +214,16 @@ return {
     UnitCastingInfo = function() return nil end
     noErrors(T)
   end,
+  ["list: someone else's crowd control on a mob makes its row go quiet, and back"] = function(W, T)
+    local ns, F, UI = setup(W)
+    W.advance(1)
+    mob(W, F, 1, 'Raptor'); W.advance(.5)
+    local r = ns.moblist.rows[1]
+    T.ok(r.pair, 'the row has its rings')
+    ns.bus:Fire('OCC', r.pair.main, true)
+    T.ok(r.quiet, 'quiet'); T.near(r.pair.sring:GetAlpha(), .35, 1e-6, 'its rings at 35%')
+    ns.bus:Fire('OCC', r.pair.main, false)
+    T.ok(not r.quiet, 'back'); T.near(r.pair.sring:GetAlpha(), 1, 1e-6, 'rings full again')
+    noErrors(T)
+  end,
 }

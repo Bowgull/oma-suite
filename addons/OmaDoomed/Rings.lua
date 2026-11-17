@@ -117,7 +117,13 @@ local function newPair(gap, spare, flow, list)
     bar:SetSize(1, 1)
     if seats and db.occ ~= false then
       local okC, errC = pcall(main.AddAuraSlot, main, 'occ', R.OCC_FILTER, { sortMethod = SORT,
-        initializeFrame = function(b) R.occButton(b); b:ClearAllPoints(); b:SetAllPoints(bar) end })
+        initializeFrame = function(b)
+          R.occButton(b); b:ClearAllPoints(); b:SetAllPoints(bar)
+          -- the game shows this button while someone else's crowd control is on the mob: tell the list (row goes quiet)
+          b.omOwner = main
+          b:HookScript('OnShow', function(self) ns.bus:Fire('OCC', self.omOwner, true) end)
+          b:HookScript('OnHide', function(self) ns.bus:Fire('OCC', self.omOwner, false) end)
+        end })
       if not okC then log('crowd-control slot failed: ' .. tostring(errC)) end
     end
     if seats and not list and db.odeb ~= false then
