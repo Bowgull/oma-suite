@@ -53,6 +53,8 @@ ns.settings = Core.NewSettings({
     { key = 'othersAlpha', store = R, default = 55, control = 'slider', label = "Their rings' strength", min = 10, max = 100, step = 5, format = pct,
       tip = "How solid other players' rings are, when they show as rings. A new strength shows after a /reload." },
     { key = 'others', store = R, default = true },    -- /omadoomed rings others on|off
+    { key = 'recast', default = true, control = 'check', label = 'Recast light',
+      tip = "A ring lights up and breathes in its DoT's colour when it's time to start the recast: a DoT with a cast time at that cast time (plus a moment for lag), an instant in its last 1.5 seconds. Off: rings use 'Ending soon' instead." },
     { key = 'cc', store = R, default = true, control = 'check', label = 'Crowd-control timers',
       tip = "Your Fear, Banish, Howl of Terror and your Sayaad's Seduction as a teal ring over the mob. When it isn't your target or is off screen, the ring stands beside your target frame instead, so you always see how long is left." },
 

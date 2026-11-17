@@ -432,7 +432,7 @@ local function start()
   ns.bus:On('TICK', function(unit, name, key) if ns.db.tick ~= 'plain' then ns.ringsPulse(unit, name, key) end end)
   ns.bus:On('SETTING', function(key, store)
     if store == 'rings' then ns.ringsApply(key)
-    elseif key == 'low' or key == 'lowlook' then applyCurves() end
+    elseif key == 'low' or key == 'lowlook' or key == 'recast' then applyCurves() end
   end)
   -- plates come and go through PlateManager (the one owner of the nameplate events)
   ns.bus:On('PLATE_ADDED', function(u, plate, enemy) if db and enemy then attach(u) end end)
@@ -466,7 +466,7 @@ onEvent = (function(_, e, a1, _, a3)
     if db.where == 'split' then ns.makeChanPair() end
     channelGroup(framePair, db.where ~= 'split')
     visible()
-  elseif e == 'SPELLS_CHANGED' then if not InCombatLockdown() then refreshFilters(); placeAllSeats() else filtersDirty = true end
+  elseif e == 'SPELLS_CHANGED' then applyCurves(); if not InCombatLockdown() then refreshFilters(); placeAllSeats() else filtersDirty = true end
   elseif e == 'UNIT_SPELLCAST_SUCCEEDED' then learn(a3)
   end
 end)

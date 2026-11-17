@@ -90,31 +90,57 @@ R.othersOK = true             -- false if the game refused the "!PLAYER" group
 local function lowSecs() return (ns.db and ns.db.low) or 3 end
 local function breathes() return not (ns.db and ns.db.lowlook == 'steady') end
 
+-- Sheet 85, the recast light (approved 2026-11-16 "Yes, build it"): a ring lights when it's time to START the recast,
+-- so nothing is clipped. A DoT with a cast time: that cast time + 0.4 s for lag (the new one lands as the old one's
+-- last tick does). An instant: the last 1.5 s (one global cooldown). Read from the spellbook (talents move it);
+-- rebuilt on SPELLS_CHANGED. Off ('Recast light' unticked): the old 'Ending soon' seconds.
+R.RECAST_LAG, R.RECAST_INSTANT, R.RECAST_BREATH = 0.4, 1.5, 0.5
+local function castSecs(key)
+  local sp = Spells.byKey[key]
+  if not sp then return nil end
+  for _, n in ipairs(sp.names) do
+    local ok, ms = pcall(function()
+      if C_Spell and C_Spell.GetSpellInfo then local i = C_Spell.GetSpellInfo(n); return i and i.castTime end
+      return GetSpellInfo and select(4, GetSpellInfo(n))
+    end)
+    if ok and type(ms) == 'number' then return ms / 1000 end
+  end
+end
+function R.recastOn() return not (ns.db and ns.db.recast == false) end
+function R.windowFor(key)
+  if not (key and R.recastOn()) then return lowSecs() end
+  local c = castSecs(key)
+  if c and c > 0 then return c + R.RECAST_LAG end
+  return R.RECAST_INSTANT
+end
+
 -- Blizzard re-evaluates a curve on the seconds left (DurationTextBinding:SetTextColorCurve). Linear with a point
 -- every 1/60 of the gold time draws the breath; the low -> low + 0.001 pair is the step into gold.
 -- light: the whole-band light (sheet 58 C): nothing until the last seconds, then it rises and falls with the breath
 -- sheet 64 B (2026-11-15, "B: white-hot"): in a big pull the ending ring must be unmissable, so the whole band
 -- flares most of the way to white in its own colour (was 0.45 strength, 22% lift)
 local LIGHT_A = 0.85
-local function fillCurve(c, normal, low, lowBreathes, light)
-  local LOW = lowSecs()
-  local breathe = lowBreathes and breathes()
+local function fillCurve(c, normal, low, lowBreathes, light, key, aK)
+  local LOW = R.windowFor(key)
+  local recast = key and R.recastOn()
+  local breathe = lowBreathes and (recast or breathes())
+  local period = recast and R.RECAST_BREATH or BREATH
   for i = 0, 60 do
     local x = i * LOW / 60
-    local a = breathe and Anim.breath(x, LOW, BREATH, LOW_ALPHA) or 1
-    if light then a = LIGHT_A * (a - LOW_ALPHA) / (1 - LOW_ALPHA) end
+    local a = breathe and Anim.breath(x, LOW, period, LOW_ALPHA) or 1
+    if light then a = LIGHT_A * (a - LOW_ALPHA) / (1 - LOW_ALPHA) * (aK or 1) end
     c:AddPoint(x, CreateColor(low[1], low[2], low[3], a))
   end
   local na = light and 0 or 1
   c:AddPoint(LOW + 0.001, CreateColor(normal[1], normal[2], normal[3], na))
   c:AddPoint(86400, CreateColor(normal[1], normal[2], normal[3], na))
 end
-local function makeCurve(normal, low, lowBreathes, light)
+local function makeCurve(normal, low, lowBreathes, light, key, aK)
   local ok, c = pcall(C_CurveUtil.CreateColorCurve)
   if not ok or not c then return nil end
   if c.SetType and Enum.LuaCurveType then pcall(c.SetType, c, Enum.LuaCurveType.Linear) end
-  fillCurve(c, normal, low, lowBreathes, light)
-  curves[#curves + 1] = { c = c, normal = normal, low = low, breathes = lowBreathes, light = light }
+  fillCurve(c, normal, low, lowBreathes, light, key, aK)
+  curves[#curves + 1] = { c = c, normal = normal, low = low, breathes = lowBreathes, light = light, key = key, aK = aK }
   return c
 end
 -- Sheet 58 C (approved 2026-11-13, "C, own colour"): a DoT that is ending flares in its OWN colour, lifted towards
@@ -129,7 +155,7 @@ function R.rebuildCurves()
     if not e.c.ClearPoints then return false end
     local ok = pcall(e.c.ClearPoints, e.c)
     if not ok then return false end
-    fillCurve(e.c, e.normal, e.low, e.breathes, e.light)
+    fillCurve(e.c, e.normal, e.low, e.breathes, e.light, e.key, e.aK)
   end
   return true
 end
@@ -199,10 +225,10 @@ function R.probe()
   end
 
   for _, sp in ipairs(SPELLS) do
-    ringCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true)
-    numCurves[sp.key] = makeCurve(WHITE, lit(sp.color, R.LIT_NUM), true)
-    lightCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true, true)
-    haloCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_HALO), true, true)
+    ringCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true, nil, sp.key)
+    numCurves[sp.key] = makeCurve(WHITE, lit(sp.color, R.LIT_NUM), true, nil, sp.key)
+    lightCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true, true, sp.key)
+    haloCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_HALO), true, true, sp.key, R.HALO_A)   -- the bloom, softer
   end
   mineRingCurve = makeCurve(DARK_BRASS, lit(DARK_BRASS, R.LIT_RING), true)
   numCurves.mine = makeCurve(WHITE, lit(DARK_BRASS, R.LIT_NUM), true)
@@ -376,9 +402,21 @@ end
 -- (Rings.lua: the 'halo' container, under the rings). It's the ring glyph drawn half again as big, invisible with time
 -- to spare, then breathing in the DoT's own colour lifted towards white for its last seconds.
 R.LIT_HALO = 0.5
-R.HALO_K = 1.5
-R.HALO = false
-R.GLYPH_LIGHT = false   -- the whole-ring ending light (font glyph): off, see ringOwn
+-- The ring font against the ring art, measured with /omadoomed glyph: the font's ring is drawn GLYPH_K times the
+-- size asked for, its centre off by (GLYPH_DX, GLYPH_DY) of the size. Until measured, the font-drawn light and its
+-- bloom stay off (GLYPH_MEASURED): two attempts without it hung huge and off-centre.
+R.GLYPH_K, R.GLYPH_DX, R.GLYPH_DY, R.GLYPH_MEASURED = 1, 0, 0, false
+R.HALO_K, R.HALO_A = 1.12, 0.45     -- the bloom: a ring 12% wider, at 45%
+R.HALO = true
+R.GLYPH_LIGHT = true
+local function glyphOn() return R.GLYPH and R.GLYPH_MEASURED end
+-- a ring-font string of `size` (the ring's own size), sitting exactly on the band
+local function placeGlyph(fs, b, size)
+  R.ringFont(fs, size / R.GLYPH_K)
+  fs:SetSize(size * 2, size * 2); fs:ClearAllPoints(); fs:SetPoint('CENTER', b, 'CENTER', -R.GLYPH_DX * size, -R.GLYPH_DY * size)
+  fs:SetJustifyH('CENTER'); fs:SetJustifyV('MIDDLE'); pcall(fs.SetWordWrap, fs, false)
+end
+R.placeGlyph = placeGlyph
 function R.haloFor(key)
   local sp = Spells.byKey[key]
   local color, curve = sp and sp.color, haloCurves[key]
@@ -386,11 +424,9 @@ function R.haloFor(key)
     b:SetSize(S, S); pcall(b.EnableMouse, b, false)
     -- off (2026-11-16, 19:07 shots: "when rings are expiring the ring is way out of place its huge and almost floats"):
     -- the font glyph drawn at 1.5x hung off-centre round the ring. The ring's own light (ringOwn) still breathes.
-    if not (R.HALO and R.GLYPH and curve and color) then return end
-    local k = R.HALO_K
+    if not (R.HALO and glyphOn() and curve and color) then return end
     local fs = b:CreateFontString(nil, 'ARTWORK')
-    R.ringFont(fs, S * k); fs:SetSize(S * k * 2, S * k * 2); fs:SetPoint('CENTER', b, 'CENTER')
-    fs:SetJustifyH('CENTER'); fs:SetJustifyV('MIDDLE'); pcall(fs.SetWordWrap, fs, false)
+    placeGlyph(fs, b, S * R.HALO_K)
     fs:SetTextColor(color[1], color[2], color[3], 0)
     b:SetDurationText(fs, textOpts(RING_FMT, curve))
   end
@@ -433,11 +469,10 @@ local function ringOwn(color, curve, key, light)
     -- off (2026-11-16, 19:19 shots: "a huge pulsing ring when ending" on Corruption, on the plate and the target
     -- frame): the ring glyph draws far bigger than its size and off-centre, like the outer ring before it. Until a
     -- glyph is measured in game, the ending shows as the number turning the DoT's own colour.
-    if R.GLYPH_LIGHT and R.GLYPH and light then
+    if R.GLYPH_LIGHT and glyphOn() and light then
       top = top or CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
       local fl = top:CreateFontString(nil, 'ARTWORK')
-      R.ringFont(fl, S); fl:SetSize(S * 2, S * 2); fl:SetPoint('CENTER', b, 'CENTER')
-      fl:SetJustifyH('CENTER'); fl:SetJustifyV('MIDDLE'); pcall(fl.SetWordWrap, fl, false)
+      placeGlyph(fl, b, S)
       fl:SetTextColor(color[1], color[2], color[3], 0)
       b:SetDurationText(fl, textOpts(RING_FMT, light))
     end
@@ -638,6 +673,9 @@ function R.glyphTest()
     local ok = R.ringFont(fs, size)
     fs:SetSize(size * 2, size * 2); fs:SetPoint('CENTER', box, 'CENTER'); fs:SetJustifyH('CENTER'); fs:SetJustifyV('MIDDLE')
     fs:SetTextColor(1, .15, .1, .75); fs:SetText('O')
+    if R.GLYPH_MEASURED then   -- the calibrated one, in green: it should sit exactly on the blue band
+      local cal = gt:CreateFontString(nil, 'OVERLAY'); placeGlyph(cal, box, size); cal:SetTextColor(.2, 1, .3, .8); cal:SetText('O')
+    end
     print(('|cffb48cffOmaDoomed glyph|r size %d: font %s, string %.1f x %.1f'):format(size, tostring(ok), fs:GetStringWidth() or -1, fs:GetStringHeight() or -1))
     x = x + size + 120
   end
