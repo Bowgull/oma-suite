@@ -61,7 +61,7 @@ return {
     T.ok(b._anchor ~= nil, 'and it IS placed, though the list is hidden out of combat (2026-11-16: clicking stopped working)')
     W.combat = true; pump()
     T.ok(b:IsShown() or b.shown, "an enemy's button shows in a fight")
-    T.ok(not (L.rows[3].click.shown), "a friendly plate's button stays hidden")
+    T.ok(L.rows[3].click:IsShown(), "every click area shows in a fight (no rule naming a nameplate: the game never made those true)")
     noErrors(T)
   end,
   ['list: in a fight nothing moves; a dead mob leaves its place empty; a newcomer takes its own place'] = function(W, T)
@@ -157,7 +157,7 @@ return {
     ns.model.listInto = real
     noErrors(T)
   end,
-  ["list at the pull: the fight first, then your target, then other enemies (clickable), then newcomers; nothing parked (a friendly plate's click area is hidden by its driver)"] = function(W, T)
+  ["list at the pull: the fight first, then your target, then other enemies (clickable), then newcomers; nothing parked"] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist
     mob(W, F, 1, 'Raptor'); mob(W, F, 2, 'Lost Barrens Kodo').idle = true; mob(W, F, 3, 'Hyena'); mob(W, F, 5, 'Guard', { friendly = true })
@@ -168,7 +168,7 @@ return {
     T.ok(not L.parked[2], 'an enemy is never parked (19:07: the mob he was hitting got parked and could not be clicked)')
     T.ok(not L.parked[5], 'nothing is parked off screen any more (a token can pass to a new enemy mid-fight)')
     W.combat = true; pump()
-    T.ok(not L.rows[5].click.shown, "a friendly plate's click area stays hidden by its driver")
+    T.ok(L.rows[5].click:IsShown(), "every click area shows with the holder in a fight")
     T.ok(not L.parked[4], 'a token with no plate keeps a place for a newcomer')
     W.units.nameplate2.idle = false; W.advance(.3)
     T.ok(L.rows[2].shown, 'the Kodo row shows once it fights you, in its own place')

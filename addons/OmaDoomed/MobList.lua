@@ -131,7 +131,11 @@ local function newRow(k)
   end)
   -- only a live enemy has a click area (2026-11-16 "mouse over was very inaccurate": every plate had one, friendly
   -- and dead too, live but invisible in the list's empty places)
-  RegisterStateDriver(b, 'visibility', ('[@%s,harm,nodead] show; hide'):format(tok(k)))
+  -- No show/hide rule of its own any more (2026-11-16, "my mouse over casting isnt working on the frame"; 19:48 with
+  -- the tint on, no click area showed anywhere in a fight): a rule naming a nameplate token likely never comes true
+  -- in the game's secure conditions, so every area stayed hidden. Every area shows with the holder, for the whole
+  -- fight; hovering an empty place points at a token with no mob, which casts nothing at it.
+  b:Show()
   b.box = b:CreateTexture(nil, 'OVERLAY'); b.box:SetAllPoints(); b.box:SetColorTexture(.2, .8, 1, .25); b.box:SetShown(db.boxes == true)
   r.click = b
   return r
@@ -726,6 +730,15 @@ function L.slash(msg)
     local function top(f) local ok, t = pcall(f.GetTop, f); return ok and t or nil end
     local ok, mo = pcall(function() return ns.model and ns.model.mouseoverCastOn and ns.model.mouseoverCastOn() end)
     say(('click areas: holder %s, combat %s, Mouseover Cast %s'):format(tostring(holder and holder:IsVisible()), tostring(InCombatLockdown()), tostring(ok and mo)))
+    -- does the game's secure condition language accept nameplate tokens? (the old show/hide rule depended on it)
+    if SecureCmdOptionParse then
+      for k = 1, TOKENS do
+        if ns.plates.live[tok(k)] then
+          local okP, v = pcall(SecureCmdOptionParse, ('[@%s,exists] yes; no'):format(tok(k)))
+          say(('  rule test %s: [@%s,exists] -> %s'):format(tok(k), tok(k), tostring(okP and v)))
+        end
+      end
+    end
     for k = 1, TOKENS do
       local r = rows[k]
       if r and (r.shown or (r.click and r.click:IsVisible())) then
