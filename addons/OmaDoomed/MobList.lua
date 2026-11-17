@@ -722,10 +722,79 @@ end
 L.test = testOn
 L.showBoxes = showBoxes
 
+
+-- ---------- /omadoomed list probe: which click and hover methods really reach a mob on Forever ----------
+-- 2026-11-16 ("we have FOR SURE built versions of this that have hovered correctly and even clicked to target
+-- correctly"): the 12:43 build's rows were SecureUnitButtons, type1 'target', unit nameplateN, and at 13:06 he said
+-- clicking "works pretty well". Later builds failed for reasons of their own. This puts three test buttons, all tied
+-- to your current target's nameplate token, in the middle of the screen, and records what the game does with each:
+--   1  click, type 'target', unit nameplateN            (the 12:43 build's way)
+--   2  click, macro '/target [@mouseover,harm,nodead]'  (the current list's way)
+--   3  hover only: does pointing at it make that mob your mouseover? (what Mouseover Cast needs)
+-- Every result goes to chat and to OmaDoomedDB.probe. Built out of combat; works in and out of combat.
+local probe
+local function plog(m)
+  ns.db.probe = ns.db.probe or {}
+  local t = ns.db.probe; t[#t + 1] = date('%H:%M:%S ') .. m
+  while #t > 80 do table.remove(t, 1) end
+  say('probe: ' .. m)
+end
+local function plateOfUnit(u) local ok, p = pcall(C_NamePlate.GetNamePlateForUnit, u, false); return ok and p or nil end
+local function sameMob(u, tokn) local a, b = plateOfUnit(u), plateOfUnit(tokn); return a ~= nil and a == b end
+local function probeOn()
+  if InCombatLockdown() then say('the probe is built out of combat.'); return end
+  local tp = plateOfUnit('target')
+  local tokn = tp and ns.plates.unitOf[tp]
+  if not tokn then say('target a mob with a nameplate first, then /omadoomed list probe.'); return end
+  local okN, name = pcall(UnitName, tokn)
+  probe = CreateFrame('Frame', 'OmaDoomedProbe', UIParent); probe:SetSize(260, 150); probe:SetPoint('CENTER', UIParent, 'CENTER', -330, 40)
+  probe:SetFrameStrata('HIGH')
+  local bg = probe:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(); bg:SetColorTexture(0, 0, 0, .55)
+  local title = probe:CreateFontString(nil, 'OVERLAY'); title:SetFont(K.font, 12, 'OUTLINE'); title:SetPoint('TOP', 0, -6)
+  title:SetText(('probe: %s (%s)'):format(tostring(okN and name or '?'), tokn))
+  plog(('built for %s (%s). Rule test [@%s,exists] -> %s; Mouseover Cast %s'):format(tostring(okN and name or '?'), tokn, tokn,
+    tostring(SecureCmdOptionParse and select(2, pcall(SecureCmdOptionParse, ('[@%s,exists] yes; no'):format(tokn)))),
+    tostring(ns.model and ns.model.mouseoverCastOn and ns.model.mouseoverCastOn())))
+  local function button(i, label, setup)
+    local b = CreateFrame('Button', 'OmaDoomedProbe' .. i, probe, 'SecureUnitButtonTemplate')
+    b:SetSize(240, 30); b:SetPoint('TOP', probe, 'TOP', 0, -24 - (i - 1) * 38)
+    b:SetAttribute('unit', tokn)
+    b:SetAttribute('useOnKeyDown', false); b:RegisterForClicks('AnyUp', 'AnyDown')
+    setup(b)
+    local t = b:CreateTexture(nil, 'BACKGROUND'); t:SetAllPoints(); t:SetColorTexture(.2, .5, .9, .45)
+    local h = b:CreateTexture(nil, 'HIGHLIGHT'); h:SetAllPoints(); h:SetColorTexture(1, 1, 1, .2)
+    local fs = b:CreateFontString(nil, 'OVERLAY'); fs:SetFont(K.font, 12, 'OUTLINE'); fs:SetPoint('CENTER'); fs:SetText(i .. '  ' .. label)
+    b:HookScript('OnEnter', function()
+      C_Timer.After(.05, function()
+        local okE, ex = pcall(UnitExists, 'mouseover')
+        plog(('%d hover: mouseover exists %s, is that mob %s (combat %s)'):format(i, tostring(okE and ex), tostring(sameMob('mouseover', tokn)), tostring(InCombatLockdown())))
+      end)
+    end)
+    b:HookScript('PostClick', function(_, btn, down)
+      if down then return end
+      C_Timer.After(.2, function()
+        plog(('%d click: target is that mob %s (combat %s)'):format(i, tostring(sameMob('target', tokn)), tostring(InCombatLockdown())))
+      end)
+    end)
+  end
+  button(1, "click: target (unit)", function(b) b:SetAttribute('*type1', 'target') end)
+  button(2, "click: /target mouseover", function(b) b:SetAttribute('*type1', 'macro'); b:SetAttribute('*macrotext1', '/target [@mouseover,harm,nodead]') end)
+  button(3, "hover only (Mouseover Cast)", function(b) end)
+  say('probe up: clear your target (Escape), click 1, check; clear, click 2; then point at 3 and press a DoT. Again to remove.')
+end
+local function probeToggle()
+  if probe then
+    if InCombatLockdown() then say('the probe can be removed after this fight.'); return end
+    probe:Hide(); probe = nil; say('probe removed.'); return
+  end
+  probeOn()
+end
+
 function L.slash(msg)
   local cmd, arg = (msg or ''):match('^(%S*)%s*(.-)$'); cmd = (cmd or ''):lower()
   if not header then say('the mob list is off (it needs the rings on).'); return end
-  if cmd == 'test' then testOn(not L.testing)
+  if cmd == 'probe' then probeToggle()
+  elseif cmd == 'test' then testOn(not L.testing)
   elseif cmd == 'boxes' then db.boxes = not db.boxes; showBoxes(db.boxes); say(db.boxes and 'click areas shown (tinted blue).' or 'click areas hidden.')
   elseif cmd == 'where' then
     local log = {}; ns.db.where = log
