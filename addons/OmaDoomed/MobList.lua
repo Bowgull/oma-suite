@@ -61,7 +61,7 @@ local function newRow(k)
   local m = r:CreateMaskTexture(); m:SetTexture(K.ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(r.face)
   r.face:AddMaskTexture(m)
   -- sheet 86 ("portraits are great"): the game's own portrait, clean (the additive lift over it washed it out)
-  r.lift = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.lift:SetAllPoints(r.face); r.lift:SetBlendMode('ADD'); r.lift:SetAlpha(0); r.lift:AddMaskTexture(m)
+  r.lift = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.lift:SetAllPoints(r.face); r.lift:SetBlendMode('ADD'); r.lift:SetAlpha(.18); r.lift:AddMaskTexture(m)   -- a light touch (0.4 washed it out)
   r.ring = r:CreateTexture(nil, 'ARTWORK', nil, 3); r.ring:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR')
   r.ring:SetSize(PORT + 6, PORT + 6); r.ring:SetPoint('CENTER', r.face, 'CENTER'); r.ring:SetVertexColor(0, 0, 0, .9)
   -- your demon's mark (its own icon) and the mob's raid mark, on the portrait's lower corners

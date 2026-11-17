@@ -19,7 +19,7 @@ end
 Lt.LIST = {
   u = 2,
   row = 24,          -- 48 px a row
-  portrait = 17,     -- 34 px
+  portrait = 19,     -- 38 px (sheet 86: 34 px read as a dark smudge)
   gapPortrait = 5,   -- portrait -> name
   bar = 92,          -- 184 px
   barH = 8,          -- 16 px
