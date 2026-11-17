@@ -93,8 +93,8 @@ ns.settings = Core.NewSettings({
 
     { header = 'Where the rings go' },
     { key = 'where', store = R, default = 'enemy', control = 'dropdown', label = 'Where the rings show',
-      choices = { { 'enemy', 'Above enemies' }, { 'frame', 'Target frame' }, { 'split', 'Haunt' } },
-      tip = "Where your rings show:\n|cffffd100Above enemies:|r over every enemy's head.\n|cffffd100Target frame:|r only on your target's frame.\n|cffffd100Haunt:|r over every enemy you're not targeting. Your target's rings sit on its frame; your curse, channel and crowd control stay over its head." },
+      choices = { { 'enemy', 'Above enemies' }, { 'frame', 'Target frame' }, { 'split', 'Haunt' }, { 'both', 'Sweaty' } },
+      tip = "Where your rings show:\n|cffffd100Above enemies:|r over every enemy's head.\n|cffffd100Target frame:|r only on your target's frame.\n|cffffd100Haunt:|r over every enemy you're not targeting. Your target's rings sit on its frame; your curse, channel and crowd control stay over its head.\n|cffffd100Sweaty:|r over every enemy's head AND on your target's frame, so you can still read them when a big mob's plate runs off the top of the screen." },
 
     { header = 'Ring look' },
     { key = 'look', store = R, default = 'rich', control = 'dropdown', label = 'Ring look',

@@ -191,6 +191,25 @@ return {
     T.eq(#onFrame.corruption, 1, 'Corruption on the frame row')
     noErrors(T)
   end,
+  -- 2026-11-17 sheet 100, Joshua: "call it sweaty but yea build it": rings over every head AND on the target frame
+  ['Sweaty: your target keeps its rings over its head AND shows them on the target frame'] = function(W, T)
+    local ns, F, UI = setup(W, { where = 'both' })
+    F.mob('nameplate1', A, 'Kobold', 300).auras = { 172, 702, 689 }   -- Corruption, Curse of Weakness, Drain Life
+    F.mob('nameplate2', B, 'Gnoll', 300).auras = { 980 }
+    W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate2')
+    F.target(A); W.combat = true; W.advance(.5)
+    local frame, chan = hauntRows(UI)
+    T.ok(frame and UI.isVisible(frame), 'the target-frame row shows')
+    T.ok(not (chan and UI.isVisible(chan)), 'no extra over-the-mob row (the plate row already does that)')
+    T.ok(UI.isVisible(UI.rowOn('nameplate1')), "the target's own plate row still shows")
+    T.ok(UI.isVisible(UI.rowOn('nameplate2')), 'and every other enemy keeps its row')
+    local onFrame, onHead = UI.showing(UI.mainOf(frame)), UI.showing(UI.mainOf(UI.rowOn('nameplate1')))
+    T.eq(#onFrame.corruption, 1, 'Corruption on the frame'); T.eq(#onHead.corruption, 1, 'and over the head')
+    T.eq(#onFrame.channel, 1, 'your channel on the frame too')
+    F.target(B); W.advance(.5)
+    T.eq(#UI.showing(UI.mainOf(frame)).agony, 1, "the frame follows your target: B's Agony")
+    noErrors(T)
+  end,
   -- 2026-11-13, Joshua: "the curses text for the timer is too big" (a curse reads "2m")
   ['curse ring: its timer number is smaller than a DoT ring\'s'] = function(W, T)
     local ns, F, UI = setup(W)
