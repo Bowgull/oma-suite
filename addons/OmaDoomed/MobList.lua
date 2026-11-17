@@ -724,14 +724,15 @@ L.showBoxes = showBoxes
 
 
 -- ---------- /omadoomed list probe: which click and hover methods really reach a mob on Forever ----------
--- 2026-11-16 ("we have FOR SURE built versions of this that have hovered correctly and even clicked to target
--- correctly"): the 12:43 build's rows were SecureUnitButtons, type1 'target', unit nameplateN, and at 13:06 he said
--- clicking "works pretty well". Later builds failed for reasons of their own. This puts three test buttons, all tied
--- to your current target's nameplate token, in the middle of the screen, and records what the game does with each:
---   1  click, type 'target', unit nameplateN            (the 12:43 build's way)
---   2  click, macro '/target [@mouseover,harm,nodead]'  (the current list's way)
---   3  hover only: does pointing at it make that mob your mouseover? (what Mouseover Cast needs)
--- Every result goes to chat and to OmaDoomedDB.probe. Built out of combat; works in and out of combat.
+-- Round 2 (2026-11-16, research): round 1 used SecureUnitButtonTemplate, whose 'target' type returns early when no
+-- Click Casting binding is set (SecureTemplates.lua: "if expectBinding and bindingType == None then return"), so its
+-- "no target" may not have tested targeting at all. All buttons here are SecureActionButtonTemplate (no binding gate):
+--   A  type 'target', unit nameplateN
+--   B  type 'spell' Corruption, unit nameplateN            (Clique's hover-cast path: the button's own unit)
+--   C  type 'macro' /target [@mouseover,harm,nodead]       (the list's way)
+--   D  control: unit 'target', hover only                  (does hovering ANY add-on button set mouseover?)
+--   E  insecure click calling TargetDirectionEnemy(facing, 0.6)  (allowed for add-ons, or blocked?)
+-- Every result goes to chat and to OmaDoomedDB.probe. Built out of combat.
 local probe
 local function plog(m)
   ns.db.probe = ns.db.probe or {}
@@ -747,40 +748,52 @@ local function probeOn()
   local tokn = tp and ns.plates.unitOf[tp]
   if not tokn then say('target a mob with a nameplate first, then /omadoomed list probe.'); return end
   local okN, name = pcall(UnitName, tokn)
-  probe = CreateFrame('Frame', 'OmaDoomedProbe', UIParent); probe:SetSize(260, 150); probe:SetPoint('CENTER', UIParent, 'CENTER', -330, 40)
+  probe = CreateFrame('Frame', 'OmaDoomedProbe', UIParent); probe:SetSize(280, 230); probe:SetPoint('CENTER', UIParent, 'CENTER', -330, 40)
   probe:SetFrameStrata('HIGH')
   local bg = probe:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(); bg:SetColorTexture(0, 0, 0, .55)
   local title = probe:CreateFontString(nil, 'OVERLAY'); title:SetFont(K.font, 12, 'OUTLINE'); title:SetPoint('TOP', 0, -6)
-  title:SetText(('probe: %s (%s)'):format(tostring(okN and name or '?'), tokn))
-  plog(('built for %s (%s). Rule test [@%s,exists] -> %s; Mouseover Cast %s'):format(tostring(okN and name or '?'), tokn, tokn,
-    tostring(SecureCmdOptionParse and select(2, pcall(SecureCmdOptionParse, ('[@%s,exists] yes; no'):format(tokn)))),
-    tostring(ns.model and ns.model.mouseoverCastOn and ns.model.mouseoverCastOn())))
-  local function button(i, label, setup)
-    local b = CreateFrame('Button', 'OmaDoomedProbe' .. i, probe, 'SecureUnitButtonTemplate')
-    b:SetSize(240, 30); b:SetPoint('TOP', probe, 'TOP', 0, -24 - (i - 1) * 38)
-    b:SetAttribute('unit', tokn)
-    b:SetAttribute('useOnKeyDown', false); b:RegisterForClicks('AnyUp', 'AnyDown')
-    setup(b)
+  title:SetText(('probe 2: %s (%s)'):format(tostring(okN and name or '?'), tokn))
+  local okB, bt = pcall(function() return C_ClickBindings and C_ClickBindings.GetBindingType and C_ClickBindings.GetBindingType('LeftButton', 0) end)
+  plog(('round 2 for %s (%s). Click Casting binding on left-click: %s; Mouseover Cast %s'):format(tostring(okN and name or '?'), tokn,
+    tostring(okB and bt), tostring(ns.model and ns.model.mouseoverCastOn and ns.model.mouseoverCastOn())))
+  local function hooks(b, id, tokForCheck)
     local t = b:CreateTexture(nil, 'BACKGROUND'); t:SetAllPoints(); t:SetColorTexture(.2, .5, .9, .45)
     local h = b:CreateTexture(nil, 'HIGHLIGHT'); h:SetAllPoints(); h:SetColorTexture(1, 1, 1, .2)
-    local fs = b:CreateFontString(nil, 'OVERLAY'); fs:SetFont(K.font, 12, 'OUTLINE'); fs:SetPoint('CENTER'); fs:SetText(i .. '  ' .. label)
     b:HookScript('OnEnter', function()
       C_Timer.After(.05, function()
         local okE, ex = pcall(UnitExists, 'mouseover')
-        plog(('%d hover: mouseover exists %s, is that mob %s (combat %s)'):format(i, tostring(okE and ex), tostring(sameMob('mouseover', tokn)), tostring(InCombatLockdown())))
-      end)
-    end)
-    b:HookScript('PostClick', function(_, btn, down)
-      if down then return end
-      C_Timer.After(.2, function()
-        plog(('%d click: target is that mob %s (combat %s)'):format(i, tostring(sameMob('target', tokn)), tostring(InCombatLockdown())))
+        plog(('%s hover: mouseover exists %s, is that mob %s'):format(id, tostring(okE and ex), tostring(sameMob('mouseover', tokForCheck))))
       end)
     end)
   end
-  button(1, "click: target (unit)", function(b) b:SetAttribute('*type1', 'target') end)
-  button(2, "click: /target mouseover", function(b) b:SetAttribute('*type1', 'macro'); b:SetAttribute('*macrotext1', '/target [@mouseover,harm,nodead]') end)
-  button(3, "hover only (Mouseover Cast)", function(b) end)
-  say('probe up: clear your target (Escape), click 1, check; clear, click 2; then point at 3 and press a DoT. Again to remove.')
+  local function after(id, what)
+    C_Timer.After(.3, function() plog(('%s click: %s'):format(id, what())) end)
+  end
+  local y = -24
+  local function secure(id, label, setup)
+    local b = CreateFrame('Button', 'OmaDoomedProbe' .. id, probe, 'SecureActionButtonTemplate')
+    b:SetSize(260, 30); b:SetPoint('TOP', probe, 'TOP', 0, y); y = y - 38
+    b:SetAttribute('useOnKeyDown', false); b:RegisterForClicks('AnyUp', 'AnyDown')
+    setup(b)
+    hooks(b, id, tokn)
+    local fs = b:CreateFontString(nil, 'OVERLAY'); fs:SetFont(K.font, 12, 'OUTLINE'); fs:SetPoint('CENTER'); fs:SetText(id .. '  ' .. label)
+    b:HookScript('PostClick', function(_, _, down) if down then return end; after(id, function() return 'target is that mob ' .. tostring(sameMob('target', tokn)) end) end)
+    return b
+  end
+  secure('A', 'click: target (action button)', function(b) b:SetAttribute('type', 'target'); b:SetAttribute('unit', tokn) end)
+  secure('B', 'click: cast Corruption at it', function(b) b:SetAttribute('type', 'spell'); b:SetAttribute('spell', 'Corruption'); b:SetAttribute('unit', tokn) end)
+  secure('C', 'click: /target mouseover', function(b) b:SetAttribute('type', 'macro'); b:SetAttribute('macrotext', '/target [@mouseover,harm,nodead]'); b:SetAttribute('unit', tokn) end)
+  local d = secure('D', 'control: hover (unit = target)', function(b) b:SetAttribute('unit', 'target') end)
+  -- E: a plain (insecure) button that calls TargetDirectionEnemy toward where you face
+  local e = CreateFrame('Button', 'OmaDoomedProbeE', probe)
+  e:SetSize(260, 30); e:SetPoint('TOP', probe, 'TOP', 0, y)
+  hooks(e, 'E', tokn)
+  local fs = e:CreateFontString(nil, 'OVERLAY'); fs:SetFont(K.font, 12, 'OUTLINE'); fs:SetPoint('CENTER'); fs:SetText('E  click: target in the direction you face')
+  e:SetScript('OnClick', function()
+    local okT, err = pcall(function() return TargetDirectionEnemy and TargetDirectionEnemy(GetPlayerFacing(), 0.6) end)
+    after('E', function() return ('call ok %s (%s); target is that mob %s'):format(tostring(okT), tostring(err), tostring(sameMob('target', tokn))) end)
+  end)
+  say('probe 2 up: Escape to clear your target before each click: A, B (watch for a cast), C; hover D while the mob is targeted; face the mob and click E.')
 end
 local function probeToggle()
   if probe then
