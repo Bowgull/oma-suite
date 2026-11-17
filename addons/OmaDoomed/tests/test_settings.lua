@@ -1,9 +1,9 @@
 -- The Options page (Settings.lua) on the strict fake Settings API: every control is built from Blizzard's own
 -- controls with its default, and a change reaches the add-on at once.
-local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'platebar', 'enabled', 'which', 'othersMode', 'othersAlpha', 'recast', 'occ', 'odeb', 'cc', 'on', 'rows', 'scale', 'sort', 'threat', 'range', 'hp', 'fadeDone', 'casts', 'back', 'calm', 'where', 'look', 'size', 'alpha' }
+local KEYS = { 'doomed', 'skull', 'cast', 'tick', 'low', 'lowlook', 'team', 'platebar', 'enabled', 'which', 'othersMode', 'othersAlpha', 'recast', 'occ', 'odeb', 'cc', 'on', 'rows', 'scale', 'sort', 'threat', 'range', 'hp', 'fadeDone', 'casts', 'back', 'calm', 'where', 'look', 'size', 'alpha' }
 local KINDS = { look = 'dropdown', doomed = 'checkbox', skull = 'checkbox', cast = 'dropdown', tick = 'dropdown', low = 'slider', lowlook = 'dropdown', platebar = 'checkbox', enabled = 'checkbox',
   where = 'dropdown', othersMode = 'dropdown', which = 'dropdown', size = 'slider', alpha = 'slider', othersAlpha = 'slider', cc = 'checkbox',
-  recast = 'checkbox', occ = 'checkbox', odeb = 'checkbox', casts = 'checkbox', fadeDone = 'checkbox',
+  recast = 'checkbox', occ = 'checkbox', team = 'checkbox', odeb = 'checkbox', casts = 'checkbox', fadeDone = 'checkbox',
   on = 'checkbox', rows = 'slider', scale = 'slider', sort = 'dropdown', threat = 'checkbox', range = 'checkbox', hp = 'checkbox', back = 'slider', calm = 'checkbox' }
 local UNDER_BAR = { skull = true, cast = true, tick = true, low = true, lowlook = true, platebar = true }
 
@@ -31,7 +31,7 @@ return {
     T.eq(cat.name, 'OmaDoomed'); T.eq(cat.parent.name, 'Oma')
     T.eq(UI.S.addOnCategories[1], cat.parent, 'the Oma parent registered at login')
     local kinds = {}; for _, i in ipairs(cat.layout.inits) do kinds[#kinds + 1] = i.kind == 'header' and ('header:' .. i.text) or i.kind end
-    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,button,header:Over enemies,checkbox,checkbox,dropdown,dropdown,slider,checkbox,checkbox,checkbox,checkbox,header:Mob list,checkbox,slider,slider,dropdown,checkbox,checkbox,checkbox,checkbox,checkbox,slider,button,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Help,button,button,button",
+    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Over enemies,checkbox,checkbox,dropdown,dropdown,slider,checkbox,checkbox,checkbox,checkbox,header:Mob list,checkbox,slider,slider,dropdown,checkbox,checkbox,checkbox,checkbox,checkbox,slider,button,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Help,button,button,button",
       'grouped by place on screen (sheet 60): headers, controls, Pick, the preview button and the two report buttons')
   end,
   ['saved values are kept, not reset to defaults'] = function(W, T)

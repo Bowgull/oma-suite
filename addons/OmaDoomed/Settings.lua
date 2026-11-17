@@ -32,6 +32,8 @@ ns.settings = Core.NewSettings({
     { key = 'lowlook', default = 'breathe', control = 'dropdown', label = 'Ending soon look', parent = BAR,
       choices = { { 'breathe', 'Breathing gold' }, { 'steady', 'Steady gold' } },
       tip = "How the gold looks in a DoT's last seconds: breathing on the rings' beat, or steady." },
+    { key = 'team', store = R, default = true, control = 'check', label = "Group's debuffs under the target",
+      tip = "Under your target's frame, every other player's debuff on it: one line per class, each in a neon frame in that class's colour. Blizzard's own squares there go, so the cast bar always sits right under the bars. Takes a /reload." },
     { key = 'targetPath', default = '' },   -- another add-on's target health bar, by frame name (/omadoomed frame)
     { button = 'Pick', name = 'Target health bar', click = function() if ns.startPick then ns.startPick() end end,
       tip = "Only if another add-on replaced your target frame: click Pick, close Options, then click its health bar (out of combat, with a mouse). Or type /omadoomed frame and the bar's name." },

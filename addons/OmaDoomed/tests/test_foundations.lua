@@ -52,11 +52,13 @@ return {
     local ns, F, UI = rings(W, function() TargetFrame.ConfigureAuraContainer = orig end)
     local au = TargetFrame.TargetFrameContent.TargetFrameContentContextual.Auras
     F.mob('nameplate1', A, 'Kobold', 300); F.target(A)
-    T.eq(au:GetMaxDebuffs(), 0, 'debuff row off on a mob'); T.eq(au:GetMaxBuffs(), 32, 'buffs kept')
+    T.eq(au:GetMaxDebuffs(), 0, 'debuff row off on a mob'); T.eq(au:GetMaxBuffs(), 0, 'buffs too: the team row (sheet 104) shows the mob, the cast bar stays put')
+    OmaDoomedDB.rings.team = false; ns.bus:Fire('SETTING', 'squares', 'rings')
+    T.eq(au:GetMaxBuffs(), 32, 'team row off: buffs kept')
     au:SetMaxDebuffs(16); TargetFrame.ConfigureAuraContainer()
     T.eq(au:GetMaxDebuffs(), 0, 're-applied after Blizzard sets it')
     OmaDoomedDB.rings.squares = 'all'; ns.bus:Fire('SETTING', 'squares', 'rings')
-    T.eq(au:GetMaxDebuffs(), 16, "'All' gives the row back")
+    T.eq(au:GetMaxDebuffs(), 16, "'All' gives the row back (team row off)"); OmaDoomedDB.rings.team = nil
   end,
 
   ['saved data: a fresh install is the newest version with every default'] = function(W, T)

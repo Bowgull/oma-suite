@@ -72,8 +72,10 @@ local function squaresNow()
   local onPlayer = UnitExists('target') and UnitIsPlayer('target')
   local ok, err = pcall(function()
     -- only touch Blizzard's container when the value really changes (fewer chances to taint it)
-    local md = (mode == 'hide' or (mode == 'notmine' and not onPlayer)) and 0 or (MAX_TARGET_DEBUFFS or 16)
-    local mb = mode == 'hide' and 0 or (MAX_TARGET_BUFFS or 32)
+    -- sheet 104: the team row shows every debuff on an enemy, so Blizzard's squares go and its cast bar stays put
+    local teamHides = ns.team and ns.team.on() and UnitExists('target') and UnitCanAttack('player', 'target')
+    local md = (mode == 'hide' or teamHides or (mode == 'notmine' and not onPlayer)) and 0 or (MAX_TARGET_DEBUFFS or 16)
+    local mb = (mode == 'hide' or teamHides) and 0 or (MAX_TARGET_BUFFS or 32)
     if au:GetMaxDebuffs() ~= md then au:SetMaxDebuffs(md) end
     if au:GetMaxBuffs() ~= mb then au:SetMaxBuffs(mb) end
   end)

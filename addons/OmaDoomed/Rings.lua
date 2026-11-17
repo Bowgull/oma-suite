@@ -338,7 +338,9 @@ local function makeFramePair()
   local main = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
   local low = main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
   p.anchor:ClearAllPoints(); p.anchor:SetSize(S * R.FRAME_ROW, 1)
-  if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', R.FRAME_LEFT, -(S + R.FRAME_GAP))
+  -- sheet 104: with the team row on, the target's cast bar keeps its fixed spot under the bars, so the rings go below it
+  local castSlot = (ns.team and ns.team.on()) and (R.CAST_SLOT / R.FRAME_SCALE) or 0
+  if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', R.FRAME_LEFT, -(S + R.FRAME_GAP) - castSlot)
   else p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14) end
   p.frameScale = R.FRAME_SCALE
   p.pt = 'BOTTOMLEFT'
@@ -360,6 +362,10 @@ local function makeChanPair()
   for _, g in ipairs(R.GROUPS) do if not OVERHEAD[g.key] then pcall(p.ring.SetAuraGroupEnabled, p.ring, g.key, false); pcall(p.main.SetAuraGroupEnabled, p.main, g.key, false) end end
   p.ring:SetUnit('target'); p.main:SetUnit('target')
   look(p)
+end
+-- where the team row (TeamRow.lua) hangs: under your rings when they sit on the target frame, else nil
+function R.frameRowBottom()
+  if framePair and db and (db.where or 'enemy') ~= 'enemy' and db.enabled ~= false then return framePair.anchor, 4 end
 end
 placeChanPair = function()
   if not chanPair then return false end

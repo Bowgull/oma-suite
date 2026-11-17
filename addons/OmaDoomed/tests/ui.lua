@@ -364,6 +364,7 @@ function C.SetAuraSlotCandidateFilters(self, key, filters)
   local g = group(self, key); if not g.slot then error('AuraContainer: "' .. key .. '" is not a slot', 2) end
   g.filters = filters; reread(self, 'SetAuraSlotCandidateFilters')
 end
+function C.SetAuraGroupLayout(self, key, layout) group(self, key).opts.layout = layout end
 function C.SetAuraGroupEnabled(self, key, on) group(self, key).enabled = on and true or false; reread(self, 'SetAuraGroupEnabled') end
 function C.SetAuraGroupCandidateFilters(self, key, filters)
   if type(filters) ~= 'table' then error('AuraContainer:SetAuraGroupCandidateFilters wants a table', 2) end

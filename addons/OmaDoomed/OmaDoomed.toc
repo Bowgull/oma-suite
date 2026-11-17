@@ -45,6 +45,8 @@ Fonts.xml
 RingsLook.lua
 RingsFade.lua
 Rings.lua
+ClassAuras.lua
+TeamRow.lua
 MobList.lua
 MinimapButton.lua
 CrowdControl.lua

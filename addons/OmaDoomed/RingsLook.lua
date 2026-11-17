@@ -648,6 +648,10 @@ local function occButton(b)
 end
 R.occButton = occButton
 R.OCC_FILTER = 'HARMFUL|!PLAYER|CROWD_CONTROL|INCLUDE_NAME_PLATE_ONLY'
+-- for TeamRow.lua (sheet 104): the same number style as the rings
+R.textOpts = textOpts
+function R.numFmt() return NUM_FMT end
+R.CAST_SLOT = 30                   -- the target's cast bar, in its fixed spot right under the bars (Blizzard's squares hidden)
 R.ODEB_FILTER = 'HARMFUL|!PLAYER|!CROWD_CONTROL|INCLUDE_NAME_PLATE_ONLY'
 -- other warlocks' DoTs keep their faint rings (the 'others' group): the squares leave them out
 function R.odebFilters()
