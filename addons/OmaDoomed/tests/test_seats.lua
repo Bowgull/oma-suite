@@ -38,19 +38,12 @@ return {
     T.eq(#seen.corruption, 0, 'no Corruption: takes no place'); T.eq(#seen.agony, 1, 'Agony'); T.eq(#seen.immolate, 1, 'Immolate')
     noErrors(T)
   end,
-  ['packed seats: the row starts where the first seat was, and re-centres when a seat is learned'] = function(W, T)
-    local known = {}
-    local ns, F, UI = setup(W, known)
-    local S, R = ns.rings.S, ns.rings
-    for _, sp in ipairs(ns.spells.list) do if sp.key ~= 'siphon' then for _, id in ipairs(sp.ids) do known[id] = true end end end
-    W.fire('SPELLS_CHANGED'); W.advance(.1)
+  ["packed seats: the row starts at the row anchor's left edge (over a mob: the health bar's left edge)"] = function(W, T)
+    local ns, F, UI = setup(W)
     local p = ns.rings.pairsAll[1]
-    local x = p.sring._pts and p.sring._pts.BOTTOMLEFT and p.sring._pts.BOTTOMLEFT[3]
-    T.near(x, R.seatX(1, 4) - S / 2, 1e-6, 'four known: starts at the first of four spots')
-    for _, sp in ipairs(ns.spells.list) do for _, id in ipairs(sp.ids) do known[id] = true end end
-    W.fire('SPELLS_CHANGED'); W.advance(.1)
-    x = p.sring._pts.BOTTOMLEFT[3]
-    T.near(x, R.seatX(1, 5) - S / 2, 1e-6, 'five known: moves out')
+    local pt = p.sring._pts and p.sring._pts.BOTTOMLEFT
+    T.ok(pt, 'anchored by its bottom-left')
+    T.eq(pt[1], p.anchor, 'to the row anchor'); T.eq(pt[2], 'BOTTOMLEFT', "at the anchor's left edge"); T.eq(pt[3], 0); T.eq(pt[4], 0)
     noErrors(T)
   end,
   ['seats: target-frame rows have no seat rows; plate rows keep the flowing rings above'] = function(W, T)

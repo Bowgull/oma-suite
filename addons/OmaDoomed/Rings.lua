@@ -73,13 +73,12 @@ local function seatRow(c, kind)
     end
   end
 end
--- the packed row starts where the first seat's spot is, so a full row sits exactly where the old seats did
+-- the packed row starts at the row anchor's left edge (2026-11-16, "Yes, line them up"): over a mob that is the
+-- health bar's left edge (the anchor spans the bar), in the mob list the start of the seat area
 function R.placeSeatRow(p)
   if not (p and p.sring) then return end
-  local _, n = R.seatSpots()
-  local x = R.seatX(1, n) - S / 2
   for _, c in ipairs({ p.halo, p.sring, p.smain }) do
-    if c then c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOM', x, 0) end
+    if c then c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT', 0, 0) end
   end
 end
 
