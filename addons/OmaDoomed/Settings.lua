@@ -79,6 +79,8 @@ ns.settings = Core.NewSettings({
     { key = 'range', store = L, default = true, control = 'check', label = 'Fade out of range',
       tip = 'An enemy your spells cannot reach shows at half strength.' },
     { key = 'hp', store = L, default = true, control = 'check', label = 'Health numbers' },
+    { key = 'fadeDone', store = L, default = true, control = 'check', label = 'Fade mobs your DoTs will finish',
+      tip = "A mob your DoTs will kill on their own fades back, so the bright rows are the ones that still need you. Your target never fades." },
     { key = 'casts', store = L, default = true, control = 'check', label = 'Cast lines',
       tip = "A thin line under a mob's health bar while it casts: red when you can interrupt it, grey when you can't." },
     { key = 'back', store = L, default = 35, control = 'slider', label = 'Backing', min = 0, max = 80, step = 5, format = pct,

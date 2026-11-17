@@ -46,7 +46,7 @@ local function texCoord(t, c) t:SetTexCoord(c[1], c[2], c[3], c[4]) end
 local function newRow(k)
   local r = CreateFrame('Frame', nil, header)
   r.k, r.unit, r.shown, r.pair = k, tok(k), false, false
-  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet = false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
+  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet, r.veilWin = false, false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
   r:SetSize(width(), ROW); r:Hide(); r:SetAlpha(0)
   -- threat: a soft swell of light behind the row, in Blizzard's threat colour, breathing (Motion)
   r.glow = r:CreateTexture(nil, 'BACKGROUND', nil, 2); r.glow:SetTexture(K.rowGlow, nil, nil, 'TRILINEAR')
@@ -82,6 +82,22 @@ local function newRow(k)
   r.skullBar:SetMinMaxValues(0, 1); r.skullBar:SetValue(0)
   r.skull = r.skullBar:CreateTexture(nil, 'OVERLAY'); r.skull:SetTexture(K.mark, nil, nil, 'TRILINEAR'); r.skull:SetTexCoord(0, 78 / 128, 0, 54 / 64)
   r.skull:SetSize(SW, SH); r.skull:SetPoint('RIGHT', r.skullBar:GetStatusBarTexture(), 'RIGHT')
+  -- 'Fade mobs your DoTs will finish' (sheet 90 A, 2026-11-17 "yes build it as a setting"): the same trick as the
+  -- skull. A mob's health is hidden in a fight, so the add-on can't ask "doomed?". A soft dark veil rides the end of a
+  -- long bar filled with your DoTs' damage over the health; only when the damage covers the health does it reach the
+  -- row's window and lie over the bar and rings. The game eases the bar (interpolated value), so it sweeps in softly.
+  -- The portrait (threat rim, threat glow) and the name stay outside it: they never fade.
+  local vx = PADX + PORT + GAPP - 4
+  r.veilWin = CreateFrame('Frame', nil, r); r.veilWin:SetClipsChildren(true)
+  r.veilWin:SetPoint('TOPLEFT', r, 'TOPLEFT', vx, -(ROW / 2 - (NAME + 3 + BARH) / 2 + NAME + 1))
+  r.veilWin:SetPoint('BOTTOMRIGHT', r, 'BOTTOMRIGHT', 0, 2)
+  r.veilWin:SetFrameLevel(r:GetFrameLevel() + 8); r.veilWin:Hide()
+  local VW = width() - vx
+  r.veilBar = CreateFrame('StatusBar', nil, r.veilWin); r.veilBar:SetSize(VW * 400, ROW); r.veilBar:SetPoint('RIGHT', r.veilWin, 'RIGHT')
+  r.veilBar:SetStatusBarTexture('Interface\\Buttons\\WHITE8X8'); r.veilBar:SetStatusBarColor(0, 0, 0, 0)
+  r.veilBar:SetMinMaxValues(0, 1); r.veilBar:SetValue(0)
+  r.veil = r.veilBar:CreateTexture(nil, 'OVERLAY'); r.veil:SetTexture(K.rowGlow, nil, nil, 'TRILINEAR'); r.veil:SetVertexColor(0, 0, 0, .62)
+  r.veil:SetSize(VW + 20, ROW); r.veil:SetPoint('RIGHT', r.veilBar:GetStatusBarTexture(), 'RIGHT', 10, 0)
   -- name and health, built like the nameplate: Blizzard's bar frame, status bar art, white name
   local tx = PADX + PORT + GAPP
   local blk = NAME + 3 + BARH
@@ -179,13 +195,21 @@ end
 -- the skull (2026-11-16): your DoTs will finish this mob AND it still has an empty seat, i.e. "don't spend a GCD
 -- filling it". A mob with every seat full needs nothing from you, so it gets no skull (at level 19 nearly every
 -- DoTed mob would carry one, which told him nothing).
+local EASE = Enum and Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut
+local function setEased(bar, v) if not (EASE and pcall(bar.SetValue, bar, v, EASE)) then bar:SetValue(v) end end
 local function skull(r, e)
-  if ns.db.skull == false or not (e and (e.missing or 0) > 0) then r.skullWin:Hide(); return end
-  r.skullWin:Show()
   local ok = pcall(ns.model.listInto, r.unit, true, dl, ds)
   local total = 0
   if ok then for _, d in ipairs(dl) do total = total + (d.damage or 0) end end
   local okH, h = pcall(UnitHealth, r.unit)
+  -- the fade: never on your target (Tab always lands on a bright row), never while the setting is off
+  if db.fadeDone ~= false and not (e and e.target) and total > 0 then
+    r.veilWin:Show()
+    if okH then pcall(r.veilBar.SetMinMaxValues, r.veilBar, 0, h) end
+    setEased(r.veilBar, total)
+  else r.veilWin:Hide() end
+  if ns.db.skull == false or not (e and (e.missing or 0) > 0) then r.skullWin:Hide(); return end
+  r.skullWin:Show()
   if okH then pcall(r.skullBar.SetMinMaxValues, r.skullBar, 0, h) end
   r.skullBar:SetValue(total)
 end

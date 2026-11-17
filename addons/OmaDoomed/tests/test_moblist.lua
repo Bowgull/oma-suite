@@ -242,4 +242,18 @@ return {
     T.ok(ns.moblist.header:IsShown(), 'and shows in fights')
     noErrors(T)
   end,
+  ["list: 'Fade mobs your DoTs will finish' veils a dotted row by the game's own bar (never your target; off with the setting)"] = function(W, T)
+    local ns, F, UI = setup(W)
+    mob(W, F, 1, 'Raptor'); W.advance(.3)
+    local r, e = ns.moblist.rows[1], ns.roster.entries[1]
+    local real = ns.model.listInto
+    ns.model.listInto = function(u, _, out) for i = #out, 1, -1 do out[i] = nil end; out[1] = { name = 'Corruption', damage = 400 }; return out end
+    e.target = false; ns.moblist.update()
+    T.ok(r.veilWin:IsShown(), 'the veil is set up on a dotted row')
+    local lo, hi = r.veilBar:GetMinMaxValues(); T.ok(r.veilBar:GetValue() >= hi, 'damage covers the health: the veil reaches the row')
+    e.target = true; ns.moblist.update(); T.ok(not r.veilWin:IsShown(), 'never on your target')
+    e.target = false; OmaDoomedDB.list.fadeDone = false; ns.moblist.update(); T.ok(not r.veilWin:IsShown(), 'off with the setting')
+    ns.model.listInto = real
+    noErrors(T)
+  end,
 }

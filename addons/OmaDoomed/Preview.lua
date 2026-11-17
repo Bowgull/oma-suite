@@ -376,7 +376,7 @@ local GROUP = {   -- which part of the scene each setting lights (keys from Sett
   platebar = 'np', enabled = 'np', which = 'np', othersAlpha = 'np', cc = 'np',
   where = 'where', look = 'rings', size = 'rings', alpha = 'rings', othersMode = 'np',
   recast = 'np', occ = 'np', odeb = 'np',
-  on = 'list', rows = 'list', scale = 'list', sort = 'list', threat = 'list', range = 'list', hp = 'list', back = 'list', casts = 'list',
+  on = 'list', fadeDone = 'list', rows = 'list', scale = 'list', sort = 'list', threat = 'list', range = 'list', hp = 'list', back = 'list', casts = 'list',
 }
 local HEADER = { ['Your target frame'] = 'tf', ['Over enemies'] = 'np', ['Where the rings go'] = 'where', ['Ring look'] = 'rings', ['Mob list'] = 'list' }
 
