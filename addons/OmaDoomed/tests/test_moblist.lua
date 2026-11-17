@@ -60,20 +60,18 @@ return {
     T.ok(L.rows[2]:GetScript('OnEnter') ~= nil, 'the row lights and shows the tooltip on hover')
     noErrors(T)
   end,
-  ['list: in a fight nothing moves; a dead mob leaves its place empty; a newcomer takes its own place'] = function(W, T)
+  ['list: in a fight a dead mob goes and the rest close up; a newcomer joins at the end'] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist
     for k = 1, 3 do mob(W, F, k) end
     W.combat = true; W.advance(.3); W.fire('PLAYER_REGEN_DISABLED'); pump()
-    local before = { L.slotOf[1], L.slotOf[2], L.slotOf[3], L.slotOf[4] }
     T.eq(shownRows(ns), '1,2,3')
     W.units.nameplate2.dead = true; W.fire('UNIT_HEALTH', 'nameplate2'); W.advance(.3)
     T.eq(shownRows(ns), '1,3', 'the dead one goes')
+    T.eq(L.slotOf[3], 2, 'and the list closes up in the fight (display only: no hole)')
     mob(W, F, 4, 'Late'); W.advance(.3)
     T.eq(shownRows(ns), '1,3,4', 'a newcomer shows')
-    T.eq(L.slotOf[1], before[1]); T.eq(L.slotOf[3], before[3]); T.eq(L.slotOf[4], before[4], 'in the place its token already had: nothing moved')
-    W.combat = false; W.fire('PLAYER_REGEN_ENABLED')
-    T.eq(L.slotOf[4], 3, 'after the fight the list packs again')
+    T.eq(L.slotOf[4], 3, 'right under the others')
     noErrors(T)
   end,
   ['list: each row shows your DoTs in their seats, bound once to its own nameplate'] = function(W, T)
@@ -168,13 +166,13 @@ return {
     T.ok(L.rows[2].shown, 'the Kodo row shows once it fights you, in its own place')
     noErrors(T)
   end,
-  ['list: the backing covers only the rows showing, from the top one down'] = function(W, T)
+  ['list: the backing covers only the rows showing; the last mob left moves to the top'] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist
     for k = 1, 3 do mob(W, F, k) end
     W.combat = true; W.advance(.3); W.fire('PLAYER_REGEN_DISABLED'); pump()
     W.units.nameplate1.dead = true; W.units.nameplate2.dead = true; W.advance(1)
-    T.eq(L.slotOf[3], 3, 'the third keeps its place in the fight')
+    T.eq(L.slotOf[3], 1, 'the last one left moves up to the top, mid-fight')
     noErrors(T)
   end,
   ['list: the skull shows only when your DoTs will finish the mob AND it still has an empty seat'] = function(W, T)

@@ -304,7 +304,8 @@ end
 -- fight (an idle Kodo, a friendly guard) is parked: its click area goes off screen, so the list's empty places are
 -- never a live mouseover for a mob you can't see in it. In a fight nothing moves (the buttons are locked).
 local function pack(instant)
-  if InCombatLockdown() and fighting then return end
+  -- display only now (no secure click areas): the list re-packs in fights too, so a dead mob never leaves a hole
+  -- (2026-11-17 shots: rows in places 1 and 4 with empty places between)
   local n, done = 0, {}
   wipe(parked)
   for _, e in ipairs(RO.order(db.sort ~= 'soonest')) do n = n + 1; slotOf[e.k] = n; done[e.k] = true end
@@ -353,7 +354,7 @@ local function update()
       if e.on then local ok, err = pcall(fill, r, e); if not ok then ns.error('list row: ' .. tostring(err)) end end
     end
   end
-  if not fighting then pack() else fitBack() end
+  pack()
 end
 L.update = update
 
@@ -528,7 +529,7 @@ local function start()
   buildPairs()
   -- the scheduler drives the list: refreshed with the roster, and frozen while your mouse is over it
   local function mouseOver() return header:IsMouseOver() or (holder and holder:IsShown() and MouseIsOver and MouseIsOver(geo)) end
-  ns.sched.add('moblist', .2, update, function() return fighting == false and mouseOver() end)
+  ns.sched.add('moblist', .2, update, function() return mouseOver() end)   -- frozen while your mouse is on it (rows never move under it)
   ns.bus:On('ROSTER_DONE', function() ns.sched.mark('moblist') end)
   ns.bus:On('SETTING', function(key, store)
     if store ~= 'list' then return end
