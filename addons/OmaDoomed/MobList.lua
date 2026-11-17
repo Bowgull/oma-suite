@@ -395,7 +395,16 @@ local function buildEditMode()
   grip:SetScript('OnMouseUp', function() grip:SetScript('OnUpdate', nil); db.scale = math.floor(header:GetScale() * 100 + .5); savePos(); placeClicks() end)
 end
 
-local function visible() if header then header:SetShown(fighting or db.unlocked == true or L.testing == true) end end
+-- db.hidden: switched off from the minimap button or its key (2026-11-17, "easily turn off and on ... like Details");
+-- moving it or the test list still shows it
+local function visible() if header then header:SetShown((fighting and db.hidden ~= true) or db.unlocked == true or L.testing == true) end end
+function L.isShown() return db and db.hidden ~= true end
+function L.setShown(on)
+  if not db then return end
+  db.hidden = not on
+  if header then visible() end
+  if L.tabShown then L.tabShown() end
+end
 local function unlock(on)
   if InCombatLockdown() then say('the list can be moved after this fight.'); return end
   db.unlocked = on
@@ -467,7 +476,7 @@ local function peek(on)
 end
 local function tabShown()
   if not tab then return end
-  tab:SetShown(not fighting and db.tabLocked ~= true and db.on ~= false)
+  tab:SetShown(not fighting and db.tabLocked ~= true and db.on ~= false and db.hidden ~= true)
   if not tab:IsShown() then tab.peek = false end
 end
 local function buildTab()
@@ -504,6 +513,7 @@ local function buildTab()
   tabLook(false); tabShown()
 end
 L.tab = function() return tab end
+L.tabShown = function() tabShown() end
 
 local function start()
   if not (R.db and RO and M and K and G and RegisterStateDriver) then return end
@@ -786,3 +796,7 @@ L.parked = parked
 -- the key binding (Bindings.xml): Key Bindings > AddOns > OmaDoomed > Move the mob list
 _G.OmaDoomed_ListMove = function() if L.toggleMove then L.toggleMove() end end
 _G['BINDING_NAME_OMADOOMED_LISTMOVE'] = 'Move the mob list'
+
+-- the key binding (Bindings.xml): Key Bindings > AddOns > OmaDoomed > Show / hide the mob list
+_G.OmaDoomed_ListToggle = function() if L.setShown then L.setShown(not L.isShown()) end end
+_G['BINDING_NAME_OMADOOMED_LISTTOGGLE'] = 'Show / hide the mob list'

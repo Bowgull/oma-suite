@@ -46,6 +46,7 @@ RingsLook.lua
 RingsFade.lua
 Rings.lua
 MobList.lua
+MinimapButton.lua
 CrowdControl.lua
 Preview.lua
 Settings.lua

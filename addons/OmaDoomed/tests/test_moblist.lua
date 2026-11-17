@@ -224,4 +224,22 @@ return {
     T.ok(not r.quiet, 'back'); T.near(r.pair.sring:GetAlpha(), 1, 1e-6, 'rings full again')
     noErrors(T)
   end,
+  ['minimap button: left-click turns the mob list off and on; a fight shows it only when on'] = function(W, T)
+    local ns, F, UI = setup(W)
+    if not Minimap then Minimap = CreateFrame('Frame', 'Minimap', UIParent); Minimap:SetSize(140, 140) end
+    ns.minimap.build()
+    local b = _G.OmaDoomedMinimapButton
+    T.ok(b, 'the button is on the minimap')
+    T.ok(ns.moblist.isShown(), 'on by default')
+    b:GetScript('OnClick')(b, 'LeftButton')
+    T.ok(not ns.moblist.isShown(), 'off'); T.eq(OmaDoomedDB.list.hidden, true, 'kept')
+    W.combat = true; W.fire('PLAYER_REGEN_DISABLED')
+    T.ok(not ns.moblist.header:IsShown(), 'a fight does not show it while off')
+    W.combat = false; W.fire('PLAYER_REGEN_ENABLED')
+    b:GetScript('OnClick')(b, 'LeftButton')
+    T.ok(ns.moblist.isShown(), 'on again')
+    W.combat = true; W.fire('PLAYER_REGEN_DISABLED')
+    T.ok(ns.moblist.header:IsShown(), 'and shows in fights')
+    noErrors(T)
+  end,
 }

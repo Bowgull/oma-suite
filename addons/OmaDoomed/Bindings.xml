@@ -2,6 +2,9 @@
   <Binding name="OMADOOMED_REPORT" header="OMADOOMED" category="ADDONS">
     OmaDoomed_SaveReport()
   </Binding>
+  <Binding name="OMADOOMED_LISTTOGGLE" category="ADDONS">
+    OmaDoomed_ListToggle()
+  </Binding>
   <Binding name="OMADOOMED_LISTMOVE" category="ADDONS">
     OmaDoomed_ListMove()
   </Binding>
