@@ -42,6 +42,18 @@ local function slash()
   s:Exact('errors', function() local e = ns.log:List(); for i = math.min(8, #e), 1, -1 do print(e[i]) end end)
   s:Exact('options', function() return ns.openSettings and ns.openSettings() end)
   s:Exact('glyph', function() return ns.rings and ns.rings.glyphTest and ns.rings.glyphTest() end)
+  -- /omadoomed ending: when each DoT lights, where that number comes from, and whether the curves are up to date
+  s:Exact('ending', function()
+    local R = ns.rings; if not (R and R.windowFor) then return end
+    local out = {}
+    local function line(m) out[#out + 1] = m; print('|cffb48cffOmaDoomed ending|r ' .. m) end
+    for _, k in ipairs(R.SEATS or {}) do line(('%s: lights at %.1f s left (%s)'):format(k, R.windowFor(k), R.windowSource(k))) end
+    line(('kill bar on your target: same windows; crowd control and other debuffs: %d s (Ending soon)'):format(R.lowSecs and R.lowSecs() or 5))
+    line(('curves built on %s; now %s -> %s'):format(tostring(R.builtOn), R.castPrint(), R.builtOn == R.castPrint() and 'up to date' or 'STALE (rebuilding)'))
+    if R.builtOn ~= R.castPrint() and R.recheckWindows then R.recheckWindows() end
+    line(('ring font %s, measured %s, band light %s, outer glow %s, breathing %s'):format(tostring(R.GLYPH), tostring(R.GLYPH_MEASURED), tostring(R.GLYPH_LIGHT), tostring(R.HALO), tostring(not (ns.db and ns.db.lowlook == 'steady'))))
+    ns.db.ending = out
+  end)
   -- the tracking's trace log, for bug reports (off by default: it costs a line per unmatched hit)
   s:Word('trace', function(rest)
     local t = OmaDoomedDB and OmaDoomedDB.track; if not t then return end

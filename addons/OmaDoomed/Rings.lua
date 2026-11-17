@@ -418,6 +418,13 @@ local function applyCurves()
     toldCurves = true; say('the rings show the new ending-soon setting after a /reload.')
   end
 end
+R.applyCurves = applyCurves
+-- the spellbook may not be loaded when the curves are first made (cast-time DoTs would get the instant window):
+-- look again a moment after entering the world, and rebuild only if the cast times differ from what they were built on
+function R.recheckWindows()
+  if R.builtOn ~= R.castPrint() then applyCurves(); return true end
+  return false
+end
 
 -- ---------- events (registered at a warlock's login only) ----------
 local ev
@@ -451,7 +458,7 @@ local function start()
   filler = CreateFrame('Frame')
   R.fadeStart()
   ev = CreateFrame('Frame')
-  for _, e in ipairs({ 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'PLAYER_TARGET_CHANGED', 'SPELLS_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
+  for _, e in ipairs({ 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'PLAYER_TARGET_CHANGED', 'SPELLS_CHANGED', 'PLAYER_ENTERING_WORLD' }) do pcall(ev.RegisterEvent, ev, e) end
   pcall(ev.RegisterUnitEvent, ev, 'UNIT_SPELLCAST_SUCCEEDED', 'player')
   ev:SetScript('OnEvent', function(...) local ok, err = pcall(onEvent, ...); if not ok then ns.error('rings event: ' .. tostring(err)) end end)
   ns.bus:On('TICK', function(unit, name, key) if ns.db.tick ~= 'plain' then ns.ringsPulse(unit, name, key) end end)
@@ -491,6 +498,7 @@ onEvent = (function(_, e, a1, _, a3)
     if db.where == 'split' then ns.makeChanPair() end
     channelGroup(framePair, db.where ~= 'split')
     visible()
+  elseif e == 'PLAYER_ENTERING_WORLD' then if C_Timer and C_Timer.After then C_Timer.After(2, R.recheckWindows) end
   elseif e == 'SPELLS_CHANGED' then applyCurves(); if not InCombatLockdown() then refreshFilters(); placeAllSeats() else filtersDirty = true end
   elseif e == 'UNIT_SPELLCAST_SUCCEEDED' then learn(a3)
   end

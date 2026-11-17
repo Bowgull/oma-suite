@@ -183,7 +183,7 @@ local function layout()
 end
 
 local LOW_ALPHA, BREATH = 0.3, 1.5
-local function lowSecs() return (ns.db and ns.db.low) or 3 end
+local function lowSecs() return (ns.db and ns.db.low) or 5 end   -- crowd control isn't recast: 'Ending soon' seconds
 local function breathes() return not (ns.db and ns.db.lowlook == 'steady') end
 
 local function paint(f, h)

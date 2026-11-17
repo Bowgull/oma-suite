@@ -102,14 +102,14 @@ return {
     noErrors(T)
   end,
   -- sheet 59 B: an ending piece flares in its DoT's own ring colour, lifted 22% towards white (no gold)
-  ['ending: the last 3 seconds flare in its own lit colour (steady look), before that its deep colour'] = function(W, T)
+  ['ending: inside its window (the same as its ring) it flares in its own lit colour (steady look), before that its deep colour'] = function(W, T)
     local ns, F, UI, M, DOTS = setup(W)
     ns.db.lowlook = 'steady'
     DOTS[A] = { dot(W, 'Corruption', 20, 10) }
     W.advance(.5, FRAME)
     local s = slot(M, 'Corruption')
     colorIs(T, s.base, full(COLOR.Corruption), 'own colour with 9.5 s left')
-    DOTS[A][1].expiresAt = W.now + 2
+    DOTS[A][1].expiresAt = W.now + 1.2   -- inside Corruption's window (RingsLook R.windowFor; 1.5 s here, no cast time)
     W.advance(.2, FRAME)
     local ring = ns.spells.byKey.corruption.color
     local lit = { ring[1] + (1 - ring[1]) * .22, ring[2] + (1 - ring[2]) * .22, ring[3] + (1 - ring[3]) * .22 }

@@ -591,8 +591,10 @@ local function fakeRing(parent, key)
   local band = w:CreateTexture(nil, 'ARTWORK', nil, 2); band:SetTexture(ART .. 'rings\\ring_plain', nil, nil, 'TRILINEAR'); band:SetAllPoints()
   local c = sp and sp.color or { 1, 1, 1 }; band:SetVertexColor(c[1], c[2], c[3])
   local bez = w:CreateTexture(nil, 'ARTWORK', nil, 3); bez:SetTexture(ART .. 'rings\\bezel', nil, nil, 'TRILINEAR'); bez:SetAllPoints()
+  -- the ending light, as the real ring draws it: the whole band in its own lit colour, breathing (the real curve)
+  local light = w:CreateTexture(nil, 'ARTWORK', nil, 4); light:SetTexture(ART .. 'rings\\ring_bold', nil, nil, 'TRILINEAR'); light:SetAllPoints(); light:SetBlendMode('ADD'); light:SetAlpha(0)
   local num = w:CreateFontString(nil, 'OVERLAY'); num:SetFont(K.font, math.floor(RING * .42), 'OUTLINE'); num:SetPoint('CENTER')
-  w.num = num
+  w.num, w.light, w.key = num, light, key
   return w
 end
 local function fakeParts(r)
@@ -643,8 +645,12 @@ local function testStep()
       if left then
         local v = left - (t % math.max(3, left)); if v < .5 then v = left end
         w.num:SetText(v >= 60 and (math.floor(v / 60 + .5) .. 'm') or tostring(math.floor(v + .5)))
-        local c = SPB[key] and SPB[key].color or { 1, 1, 1 }
-        if v < 3 then w.num:SetTextColor(c[1], c[2], c[3]) else w.num:SetTextColor(1, 1, 1) end
+        -- the real ending curves, evaluated on the seconds left (what Blizzard does for the real rings)
+        local nc = R.numCurves and R.numCurves[key]; local lc = R.lightCurves and R.lightCurves[key]
+        local okN, cn = pcall(function() return nc and nc:Evaluate(v) end)
+        local okL, cl = pcall(function() return lc and lc:Evaluate(v) end)
+        if okN and cn and cn.r then w.num:SetTextColor(cn.r, cn.g, cn.b) else w.num:SetTextColor(1, 1, 1) end
+        if okL and cl and cl.r then w.light:SetVertexColor(cl.r, cl.g, cl.b); w.light:SetAlpha(cl.a or 0) else w.light:SetAlpha(0) end
         w:Show()
       else w:Hide() end
     end

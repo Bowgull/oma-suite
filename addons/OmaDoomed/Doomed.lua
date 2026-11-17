@@ -12,7 +12,11 @@ local P = {}; ns.parts.doomed = P
 
 local Spells, M, Secret = ns.spells, ns.model, ns.core.Secret
 local K = ns.killStyle                -- colours and looks (KillBarStyle.lua); colours and beats by spell: Spells.lua
-local function LOWS() return (ns.db and ns.db.low) or 3 end   -- 'Ending soon' (settings): seconds of gold
+local function LOWS(name)   -- the ending window: the rings' own (RingsLook R.windowForName), so bar and ring light together
+  local R = ns.rings
+  if R and R.windowForName then return R.windowForName(name) end
+  return (ns.db and ns.db.low) or 5
+end
 local FILL = 'UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health'
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
 local MARK = 'Interface\\AddOns\\OmaDoomed\\Art\\doomed-mark'
@@ -373,7 +377,7 @@ local function drawPiece(s, d, i, now, anow)
     if b then moving = true end
     -- the style: gold through its last seconds and on past zero while it glides out
     local left = d.expires and (d.expires - now)
-    ask.left, ask.low, ask.steady = left, LOWS(), ns.db.lowlook == 'steady'
+    ask.left, ask.low, ask.steady = left, LOWS(d.name), ns.db.lowlook == 'steady'
     ask.provisional, ask.look, ask.pr = d.provisional, ns.db.cast or 'charging', 1
     if d.provisional and d.castStart and d.castEnd and d.castEnd > d.castStart then ask.pr = math.max(0, math.min(1, (now - d.castStart) / (d.castEnd - d.castStart))) end
     local la = M.landAt[d.name]

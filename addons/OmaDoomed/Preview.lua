@@ -176,7 +176,8 @@ function ns.previewDraw()
   local db, rdb = ns.db, OmaDoomedDB.rings
   local t = GetTime() - t0
   if t > 26 then t0 = GetTime(); t = 0; P.plan = plan() end
-  local low, steady = db.low or 3, db.lowlook == 'steady'
+  local low, steady = db.low or 5, db.lowlook == 'steady'
+  local function lowFor(k) local R = ns.rings; return (R and R.windowFor and k and R.windowFor(KEY[k])) or low end   -- each DoT's own window, as in game
   local castLook, tickLook = db.cast or 'charging', db.tick or 'ember'
   local function breath(x) return K.breath(x, low, steady) end
   -- the numbers
@@ -278,7 +279,7 @@ function ns.previewDraw()
         local k = other and 'c' or d.k
         w.ic:SetTexture(icon(NAME[k]))
         local col = other and { .54, .42, .16 } or RING[k]
-        local lowR = d and d.timeLeft <= low
+        local lowR = d and d.timeLeft <= lowFor(d.k)
         if lowR then local b = breath(d.timeLeft); local lc = ns.rings.lit(col, ns.rings.LIT_RING); w.ring:SetVertexColor(lc[1] * b, lc[2] * b, lc[3] * b) else w.ring:SetVertexColor(col[1], col[2], col[3]) end
         w.glow:SetVertexColor(col[1], col[2], col[3])
         local pa = (d and d.lastTick and tickLook ~= 'plain') and (t - d.lastTick.at) or 9

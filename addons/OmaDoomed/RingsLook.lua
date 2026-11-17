@@ -87,8 +87,9 @@ local numCurves, lightCurves, haloCurves = {}, {}, {}   -- per spell key ('mine'
 R.othersOK = true             -- false if the game refused the "!PLAYER" group
 
 -- 'Ending soon' (kill bar settings, shared): how many seconds, and whether the gold breathes
-local function lowSecs() return (ns.db and ns.db.low) or 3 end
+local function lowSecs() return (ns.db and ns.db.low) or 5 end   -- 5: the Settings default (Settings.lua 'low')
 local function breathes() return not (ns.db and ns.db.lowlook == 'steady') end
+R.lowSecs = lowSecs
 
 -- Sheet 85, the recast light (approved 2026-11-16 "Yes, build it"): a ring lights when it's time to START the recast,
 -- so nothing is clipped. A DoT with a cast time: that cast time + 0.4 s for lag (the new one lands as the old one's
@@ -107,11 +108,33 @@ local function castSecs(key)
   end
 end
 function R.recastOn() return not (ns.db and ns.db.recast == false) end
+-- the one ending window, used by every ring, the kill bar and the preview (2026-11-16: "i need to be sure ending soon
+-- works"; the kill bar used 'Ending soon' seconds while the rings used this, so they lit at different moments).
+-- key: a seat spell key ('corruption'...). Anything else (crowd control, your other debuffs): the 'Ending soon' seconds.
 function R.windowFor(key)
-  if not (key and R.recastOn()) then return lowSecs() end
+  if not (key and R.recastOn() and R.SEAT_OF and R.SEAT_OF[key]) then return lowSecs() end
   local c = castSecs(key)
   if c and c > 0 then return c + R.RECAST_LAG end
   return R.RECAST_INSTANT
+end
+function R.windowForName(name)
+  local sp = name and Spells.dot and Spells.dot(name)
+  return R.windowFor(sp and sp.key)
+end
+-- where each window comes from (for /omadoomed ending), and a fingerprint of the cast times the curves were built on:
+-- if the spellbook wasn't loaded when the curves were made, a later look sees different cast times and rebuilds them
+function R.windowSource(key)
+  if not R.recastOn() then return 'ending soon (recast light off)' end
+  if not (R.SEAT_OF and R.SEAT_OF[key]) then return 'ending soon' end
+  local c = castSecs(key)
+  if c and c > 0 then return ('cast %.2f s + %.1f'):format(c, R.RECAST_LAG) end
+  if c == 0 then return 'instant (one global cooldown)' end
+  return 'spell not found: instant fallback'
+end
+function R.castPrint()
+  local t = {}
+  for _, k in ipairs(R.SEATS or {}) do local c = castSecs(k); t[#t + 1] = k .. '=' .. tostring(c) end
+  return table.concat(t, ',')
 end
 
 -- Blizzard re-evaluates a curve on the seconds left (DurationTextBinding:SetTextColorCurve). Linear with a point
@@ -123,7 +146,7 @@ local LIGHT_A = 0.85
 local function fillCurve(c, normal, low, lowBreathes, light, key, aK)
   local LOW = R.windowFor(key)
   local recast = key and R.recastOn()
-  local breathe = lowBreathes and (recast or breathes())
+  local breathe = lowBreathes and breathes()   -- 'steady' wins with the recast light too
   local period = recast and R.RECAST_BREATH or BREATH
   for i = 0, 60 do
     local x = i * LOW / 60
@@ -151,6 +174,7 @@ R.lit, R.LIT_RING, R.LIT_NUM = lit, 0.6, 0.1   -- white-hot ring; the number tur
 -- the 'Ending soon' settings changed: every curve again, in place (buttons keep the curve they were given).
 -- Out of combat only. False when the client can't clear a curve: then the change shows after a /reload.
 function R.rebuildCurves()
+  R.builtOn = R.castPrint()
   for _, e in ipairs(curves) do
     if not e.c.ClearPoints then return false end
     local ok = pcall(e.c.ClearPoints, e.c)
@@ -224,6 +248,7 @@ function R.probe()
     if C_Timer and C_Timer.After then C_Timer.After(.5, retry) else R.glyphWaiting = false end
   end
 
+  R.builtOn = R.castPrint()
   for _, sp in ipairs(SPELLS) do
     ringCurves[sp.key] = makeCurve(sp.color, lit(sp.color, R.LIT_RING), true, nil, sp.key)
     numCurves[sp.key] = makeCurve(WHITE, lit(sp.color, R.LIT_NUM), true, nil, sp.key)
