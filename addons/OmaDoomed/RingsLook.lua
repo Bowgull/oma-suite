@@ -330,7 +330,9 @@ local function roundIcon(b, size)
   local icon = b:CreateTexture(nil, 'ARTWORK', nil, 0)
   -- sheet 86 A (approved 2026-11-16 "rings are great", "a for rings"): in the Classic look the icon fills the whole
   -- disc inside the colour band (0.834 of the ring, was 0.69: about 18 px of icon in a 34 px ring)
-  local fill = R.flat() and 0.834 or 0.756
+  -- 2026-11-17 sheet 105: Classic's art circle now stops where the band starts (mask_disc), so the whole 2.5 px band
+  -- shows; the icon is sized to that circle (0.76) instead of zoomed past it (0.834 cut the art and hid the band)
+  local fill = R.flat() and 0.76 or 0.756
   icon:SetSize(size * fill, size * fill); icon:SetPoint('CENTER', b, 'CENTER')
   icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)       -- trim the icon's own border; the mask makes it round
   local m = b:CreateMaskTexture()
@@ -362,7 +364,8 @@ local function numberOn(cd, b, size, k)
   num:SetPoint('CENTER', b, 'CENTER', 0, -size * 0.02)
   num:SetTextColor(1, 1, 1, 1)
   -- Classic: a thin outline plus a soft shadow (sheet 86 A: the heavy outline filled in small digits)
-  if flat then num:SetShadowColor(0, 0, 0, .85); num:SetShadowOffset(1, -1) else num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1) end
+  -- sheet 105: Classic is outline only; the soft shadow read as a dark box behind small digits
+  if flat then num:SetShadowColor(0, 0, 0, 0); num:SetShadowOffset(0, 0) else num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1) end
   return num
 end
 
@@ -490,6 +493,9 @@ local function ringOwn(color, curve, key, light)
     -- Rich (sheet 41): the ring lit like metal (cream on top, shade underneath, a warm sheen up-left), under the dark track
     if not flat then local light = b:CreateTexture(nil, 'ARTWORK', nil, 3); light:SetTexture(ART .. 'ring_light', nil, nil, 'TRILINEAR'); light:SetAllPoints(b) end
     local cd = CreateFrame('Cooldown', nil, b); styleCooldown(cd, ART .. 'swipe_track_bold')
+    -- sheet 105: in Classic the spent part stays a dim shade of the DoT's colour instead of going dark, so a ring with
+    -- seconds left still reads as its colour
+    if flat then pcall(cd.SetSwipeColor, cd, 1, 1, 1, .62) end
     b:SetDurationCooldown(cd)
     -- sheet 55 / 53 B: Modern's band sits in a channel: a 1 px black line outside it, above the dark track so it
     -- runs the whole way round (the inside line is drawn over the bezel, in the main button)

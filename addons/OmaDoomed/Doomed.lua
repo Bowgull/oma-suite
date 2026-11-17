@@ -94,11 +94,13 @@ end
 local function sizeSkull()
   if not (win and longBar and mark) then return end
   local k = skullStep()
-  local W, H = px(MARK_W, win), px(MARK_H, win)
+  -- sheet 105 (2026-11-17, "Skull at 75%"): it crowded the portrait; 75% of its pixel-art size
+  local SK = 0.75
+  local W, H = px(MARK_W * SK, win), px(MARK_H * SK, win)
   if k ~= 1 then W, H = W * k, H * k end
   -- sheet 23 v5: centred over the ring (measured on the sheet: 0.5 px off; a -6 px offset put it 6.8 px left in game)
-  -- and 65.5 px above the ring's centre, on its top edge
-  win:SetSize(W, H); win:ClearAllPoints(); win:SetPoint('CENTER', portrait, 'CENTER', px(.8, win) * k, px(65.5, win) * k)
+  -- with its bottom on the ring's top edge (38.5 px above the ring's centre at full size: 65.5 - 54 / 2)
+  win:SetSize(W, H); win:ClearAllPoints(); win:SetPoint('CENTER', portrait, 'CENTER', px(.8, win) * k, px(38.5 + MARK_H * SK / 2, win) * k)
   longBar:SetSize(W * 400, H); mark:SetSize(W, H)
 end
 P.sizeSkull = function() pcall(sizeSkull) end
