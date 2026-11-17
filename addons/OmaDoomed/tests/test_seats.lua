@@ -54,4 +54,13 @@ return {
     end
     noErrors(T)
   end,
+  ["sheet 78: a plate's side row shows the mob's important buffs (by type colour) before other players' debuffs"] = function(W, T)
+    local ns, F, UI = setup(W)
+    local p; for _, q in ipairs(ns.rings.pairsAll) do if q.side then p = q; break end end
+    T.ok(p, 'a plate pair with its side row')
+    local keys = {}; for _, g in ipairs(p.side.groups) do keys[#keys + 1] = g.key end
+    T.eq(table.concat(keys, ','), 'mbuff,odeb', 'buffs first, then their debuffs')
+    T.eq(ns.rings.BUFF_RGB.Enrage[1], 1, 'Enrage orange'); T.ok(ns.rings.BUFF_RGB.Magic[3] > .9, 'magic pale blue')
+    noErrors(T)
+  end,
 }

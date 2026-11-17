@@ -131,6 +131,9 @@ local function newPair(gap, spare, flow, list)
       pcall(side.SetEditModePreviewEnabled, side, false)
       side:SetFlowLayoutAnchorPoint('LEFT'); side:SetFlowLayoutGrowthDirection(1, 1)
       side:SetFlowLayoutMaximumLineSize(R.ODEB * 4.2)
+      -- sheet 78: their buffs that matter (shields, magic you can eat, Enrage), by type colour, before the debuffs
+      pcall(side.AddAuraGroup, side, 'mbuff', 'HELPFUL|IMPORTANT|INCLUDE_NAME_PLATE_ONLY', { initializeFrame = R.buffButton(S * 2 / 3),
+        sortMethod = SORT, maxFrameCount = 2, layout = { groupSpacing = R.ODEB * .3 } })
       local okD, errD = pcall(side.AddAuraGroup, side, 'odeb', R.ODEB_FILTER, { initializeFrame = R.odebButton,
         candidateFilters = R.odebFilters(), sortMethod = SORT, maxFrameCount = 3, layout = { groupSpacing = R.ODEB * .3 } })
       if not okD then log("other players' debuffs failed: " .. tostring(errD)); side = nil

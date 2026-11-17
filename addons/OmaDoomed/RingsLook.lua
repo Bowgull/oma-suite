@@ -556,15 +556,27 @@ local function softIcon(b, size)
   local edge = b:CreateTexture(nil, 'ARTWORK', nil, 2); edge:SetTexture(ART .. 'softsq_edge', nil, nil, 'TRILINEAR'); edge:SetAllPoints(icon)
   return icon
 end
-local function glowBehind(b, size, fixed)
+-- sheet 78: a mob's buffs by type: magic (your Felhunter can eat it) in Blizzard's pale "can steal" blue, Enrage in
+-- orange, anything else a quiet warm grey. Kept apart from the debuff map (a debuff's Magic is blue too, darker).
+local BUFF_RGB = { Magic = { .66, .88, 1 }, Enrage = { 1, .5, .1 }, None = { .62, .58, .5 } }
+local buffMap
+local function buffColorMap()
+  if buffMap or not CreateColor then return buffMap end
+  buffMap = {}
+  for k, c in pairs(BUFF_RGB) do buffMap[k] = CreateColor(c[1], c[2], c[3], 1) end
+  return buffMap
+end
+R.BUFF_RGB = BUFF_RGB
+local function glowBehind(b, size, fixed, map, helpful)
   local g = b:CreateTexture(nil, 'BACKGROUND', nil, -6); g:SetTexture(ART .. 'softsq_glow', nil, nil, 'TRILINEAR'); g:SetSize(size * 1.5, size * 1.5)
   g:SetPoint('CENTER', b, 'CENTER'); g:SetBlendMode('ADD')
   if fixed then g:SetVertexColor(fixed[1], fixed[2], fixed[3], fixed[4] or 1); return g end
-  -- the game colours it by the debuff's type; if this client refuses, a quiet red stays
-  g:SetVertexColor(.82, .1, .1, .6)
+  -- the game colours it by the aura's type; if this client refuses, a quiet colour stays
+  if helpful then g:SetVertexColor(.62, .58, .5, .6) else g:SetVertexColor(.82, .1, .1, .6) end
   local style = preserveStyle()
   if b.AddDispelTypeTexture then
-    pcall(b.AddDispelTypeTexture, b, g, { style = style, showWhenHarmful = true, showWithoutDispelType = true, customDispelColorMap = colorMap() })
+    pcall(b.AddDispelTypeTexture, b, g, { style = style, showWhenHarmful = not helpful, showWhenHelpful = helpful or nil,
+      showWithoutDispelType = true, customDispelColorMap = map or colorMap() })
   end
   return g
 end
@@ -598,7 +610,11 @@ function R.buffButton(size)
   return function(b)
     b:SetSize(size, size); pcall(b.EnableMouse, b, false)
     local icon = softIcon(b, size)
-    glowBehind(b, size, { .66, .88, 1, .9 })
+    -- by type, and breathing (sheet 78: "soft square, pale-blue or orange glow, breathing")
+    local g = glowBehind(b, size, nil, buffColorMap(), true)
+    local ag = g:CreateAnimationGroup(); ag:SetLooping('BOUNCE')
+    local a = ag:CreateAnimation('Alpha'); a:SetFromAlpha(1); a:SetToAlpha(.45); a:SetDuration(.9); a:SetSmoothing('IN_OUT')
+    ag:Play()
     local cd = CreateFrame('Cooldown', nil, b); cd:SetAllPoints(b); pcall(cd.SetDrawSwipe, cd, false); pcall(cd.SetDrawEdge, cd, false)
     pcall(cd.SetHideCountdownNumbers, cd, true); pcall(cd.SetUseAuraDisplayTime, cd, true)
     b:SetIcon(icon); b:SetDurationCooldown(cd)

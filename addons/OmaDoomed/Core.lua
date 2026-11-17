@@ -43,6 +43,18 @@ local function slash()
   s:Exact('options', function() return ns.openSettings and ns.openSettings() end)
   s:Exact('glyph', function() return ns.rings and ns.rings.glyphTest and ns.rings.glyphTest() end)
   -- /omadoomed ending: when each DoT lights, where that number comes from, and whether the curves are up to date
+  -- /omadoomed buffs: does this client take the 'can dispel' filter token? (sheet 78 purge colour; DECISIONS.md)
+  s:Exact('buffs', function()
+    local out = {}
+    for _, f in ipairs({ 'HELPFUL|IMPORTANT', 'HELPFUL|RAID_PLAYER_DISPELLABLE', 'HELPFUL|STEALABLE', 'HELPFUL|IMPORTANT|INCLUDE_NAME_PLATE_ONLY' }) do
+      local okC, c = pcall(CreateFrame, 'AuraContainer', nil, UIParent, 'CustomAuraContainerTemplate')
+      local okA, err = false, 'no container'
+      if okC and c then okA, err = pcall(c.AddAuraGroup, c, 'probe', f, { initializeFrame = function() end, maxFrameCount = 1 }); c:Hide() end
+      out[#out + 1] = ('%s -> %s%s'):format(f, okA and 'accepted' or 'refused', okA and '' or (' (' .. tostring(err) .. ')'))
+      print('|cffb48cffOmaDoomed buffs|r ' .. out[#out])
+    end
+    ns.db.buffsProbe = out
+  end)
   s:Exact('ending', function()
     local R = ns.rings; if not (R and R.windowFor) then return end
     local out = {}
