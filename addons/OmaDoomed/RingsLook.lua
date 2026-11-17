@@ -377,12 +377,15 @@ end
 -- to spare, then breathing in the DoT's own colour lifted towards white for its last seconds.
 R.LIT_HALO = 0.5
 R.HALO_K = 1.5
+R.HALO = false
 function R.haloFor(key)
   local sp = Spells.byKey[key]
   local color, curve = sp and sp.color, haloCurves[key]
   return function(b)
     b:SetSize(S, S); pcall(b.EnableMouse, b, false)
-    if not (R.GLYPH and curve and color) then return end
+    -- off (2026-11-16, 19:07 shots: "when rings are expiring the ring is way out of place its huge and almost floats"):
+    -- the font glyph drawn at 1.5x hung off-centre round the ring. The ring's own light (ringOwn) still breathes.
+    if not (R.HALO and R.GLYPH and curve and color) then return end
     local k = R.HALO_K
     local fs = b:CreateFontString(nil, 'ARTWORK')
     R.ringFont(fs, S * k); fs:SetSize(S * k * 2, S * k * 2); fs:SetPoint('CENTER', b, 'CENTER')

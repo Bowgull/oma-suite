@@ -59,7 +59,7 @@ ns.settings = Core.NewSettings({
     -- 2026-11-16 (sheet 83): the mob list, its own store (OmaDoomedDB.list)
     { header = 'Mob list' },
     { key = 'on', store = L, default = true, control = 'check', label = 'Mob list',
-      tip = "Every enemy in your fight in one list: its health, your DoTs, threat, and the skull when your DoTs will finish it. Hover a row and press a mouseover DoT key, or click it to target. Shows in fights. Takes a /reload." },
+      tip = "Every enemy in your fight in one list: its health, your DoTs, threat, and the skull when your DoTs will finish it. Click a row to target it. With Blizzard's Mouseover Cast on (Options > Combat), hover a row and cast. Shows in fights. Takes a /reload." },
     { key = 'rows', store = L, default = 8, control = 'slider', label = 'Rows', min = 4, max = 16, step = 1, format = tostring,
       tip = 'How many enemies the list has room for.' },
     { key = 'scale', store = L, default = 100, control = 'slider', label = 'Size', min = 60, max = 180, step = 5, format = pct,
@@ -72,9 +72,11 @@ ns.settings = Core.NewSettings({
     { key = 'range', store = L, default = true, control = 'check', label = 'Fade out of range',
       tip = 'An enemy your spells cannot reach shows at half strength.' },
     { key = 'hp', store = L, default = true, control = 'check', label = 'Health numbers' },
+    { key = 'back', store = L, default = 35, control = 'slider', label = 'Backing', min = 0, max = 80, step = 5, format = pct,
+      tip = 'How dark the soft backing behind the list is. 0 is none.' },
     { key = 'unlocked', store = L, default = false },
     { button = 'Move', name = 'Move the list', click = function() if ns.moblist and ns.moblist.unlock then ns.moblist.unlock(true) end end,
-      tip = 'Shows the list so you can drag it and size it from its corner. Type /omadoomed list lock when done.' },
+      tip = 'Shows the list with five test rows: drag it anywhere, size it with the mouse wheel or its corner, right-click it when done. You can also bind a key: Key Bindings > AddOns > OmaDoomed.' },
     { key = 'calm', default = false, control = 'check', label = 'Calm motion',
       tip = 'Things change at once instead of easing, and nothing breathes.' },
 

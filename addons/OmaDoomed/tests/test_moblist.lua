@@ -157,21 +157,29 @@ return {
     ns.model.listInto = real
     noErrors(T)
   end,
-  ["list: a plate that's up but not in your fight is parked off screen (no live click area in the list's empty places)"] = function(W, T)
+  ["list at the pull: the fight first, then your target, then other enemies (clickable), then newcomers; friendly plates parked off screen"] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist
-    mob(W, F, 1, 'Raptor'); mob(W, F, 2, 'Lost Barrens Kodo').idle = true; mob(W, F, 3, 'Hyena')
+    mob(W, F, 1, 'Raptor'); mob(W, F, 2, 'Lost Barrens Kodo').idle = true; mob(W, F, 3, 'Hyena'); mob(W, F, 5, 'Guard', { friendly = true })
     W.advance(.3)
     W.combat = true; W.fire('PLAYER_REGEN_DISABLED'); pump()
     T.eq(L.slotOf[1], 1); T.eq(L.slotOf[3], 2, 'the fight packed to the top, the Kodo not between them')
-    T.ok(L.parked[2], 'the idle Kodo is parked')
-    T.ok(L.rows[2].click._anchor ~= nil and L.rows[2].click._anchor ~= L.rows[1].click._anchor, 'its click area is not in the list')
+    T.eq(L.slotOf[2], 3, 'the idle enemy right under the fight: it can still join and be clicked')
+    T.ok(not L.parked[2], 'an enemy is never parked (19:07: the mob he was hitting got parked and could not be clicked)')
+    T.ok(L.parked[5], 'a friendly plate is parked')
+    T.ok(L.rows[5].click._anchor ~= L.rows[1].click._anchor, 'its click area is not in the list')
     T.ok(not L.parked[4], 'a token with no plate keeps a place for a newcomer')
-    T.eq(L.slotOf[4], 3, 'right under the fight')
-    -- the Kodo joins mid-fight: its row takes the first free place, not slot 16
     W.units.nameplate2.idle = false; W.advance(.3)
-    T.ok(L.rows[2].shown, 'the Kodo row shows once it fights you')
-    T.ok(L.slotOf[2] <= 4, 'in the first free place: ' .. tostring(L.slotOf[2]))
+    T.ok(L.rows[2].shown, 'the Kodo row shows once it fights you, in its own place')
+    noErrors(T)
+  end,
+  ['list: the backing covers only the rows showing, from the top one down'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    for k = 1, 3 do mob(W, F, k) end
+    W.combat = true; W.advance(.3); W.fire('PLAYER_REGEN_DISABLED'); pump()
+    W.units.nameplate1.dead = true; W.units.nameplate2.dead = true; W.advance(1)
+    T.eq(L.slotOf[3], 3, 'the third keeps its place in the fight')
     noErrors(T)
   end,
   ['list: the skull shows only when your DoTs will finish the mob AND it still has an empty seat'] = function(W, T)

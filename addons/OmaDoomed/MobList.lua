@@ -27,7 +27,7 @@ L.RH = ROW
 
 local db
 local testOff    -- the test list (below)
-local header, holder, geo, back, sel, grip
+local header, holder, geo, back, backF, sel, grip
 local rows, slotOf, parked = {}, {}, {}
 local fighting = false
 local function say(m) print('|cffb48cffOmaDoomed:|r ' .. m) end
@@ -118,8 +118,14 @@ local function newRow(k)
   b:SetAttribute('*type1', 'macro'); b:SetAttribute('*macrotext1', '/target [@mouseover,harm,nodead]')
   b:SetAttribute('useOnKeyDown', false)
   b:RegisterForClicks('AnyUp', 'AnyDown')
-  b:HookScript('OnEnter', function() M.tween('hov' .. k, r.hover:GetAlpha(), .22, .12, function(v) r.hover:SetAlpha(v) end) end)
-  b:HookScript('OnLeave', function() M.tween('hov' .. k, r.hover:GetAlpha(), 0, .25, function(v) r.hover:SetAlpha(v) end) end)
+  b:HookScript('OnEnter', function(self)
+    M.tween('hov' .. k, r.hover:GetAlpha(), .22, .12, function(v) r.hover:SetAlpha(v) end)
+    if GameTooltip then pcall(GameTooltip_SetDefaultAnchor, GameTooltip, self); pcall(GameTooltip.SetUnit, GameTooltip, tok(k)); pcall(GameTooltip.Show, GameTooltip) end
+  end)
+  b:HookScript('OnLeave', function()
+    M.tween('hov' .. k, r.hover:GetAlpha(), 0, .25, function(v) r.hover:SetAlpha(v) end)
+    if GameTooltip then pcall(GameTooltip.Hide, GameTooltip) end
+  end)
   -- only a live enemy has a click area (2026-11-16 "mouse over was very inaccurate": every plate had one, friendly
   -- and dead too, live but invisible in the list's empty places)
   RegisterStateDriver(b, 'visibility', ('[@%s,harm,nodead] show; hide'):format(tok(k)))
@@ -238,12 +244,16 @@ local function moveTo(r, s, now)
 end
 
 local shownCount = 0
+-- the backing covers only the rows showing (top to bottom), never empty places above them (19:07 shot: one mob in
+-- place 3 under two empty places of black)
 local function fitBack()
-  local low = 0
-  for k = 1, TOKENS do local r = rows[k]; if r and r.shown and (slotOf[k] or k) > low then low = slotOf[k] or k end end
-  if db.unlocked then low = math.max(low, 3) end
-  local h = PADY * 2 + ROW * math.max(low, 1)
+  local low, top = 0, TOKENS + 1
+  for k = 1, TOKENS do local r = rows[k]; if r and r.shown then local s2 = slotOf[k] or k; if s2 > low then low = s2 end; if s2 < top then top = s2 end end end
+  if db.unlocked and not L.testing then low = math.max(low, 3); top = 1 end
+  if top > low then top = 1 end
+  local h = PADY * 2 + ROW * math.max(low - top + 1, 1)
   local want = (low > 0 or L.testing) and 1 or 0
+  back:ClearAllPoints(); back:SetPoint('TOPLEFT', header, 'TOPLEFT', -24, slotY(top) + PADY + FEATHER)
   -- the backing reaches FEATHER past the rows above and below; its soft ends are never more than half its height,
   -- so a list of one row stays soft (16:51 shots: margins 48 on a 72 px backing squashed into hard lines)
   local function setH(v)
@@ -253,7 +263,7 @@ local function fitBack()
     if sel then sel:SetHeight(v) end
   end
   M.tween('backH', back.h or h, h, .22, function(v) back.h = v; setH(v) end, M.ease.out)
-  if back.want ~= want then back.want = want; M.tween('backA', back:GetAlpha(), want, .25, function(v) back:SetAlpha(v) end) end
+  if back.want ~= want then back.want = want; M.tween('backA', backF:GetAlpha(), want, .25, function(v) backF:SetAlpha(v) end) end
 end
 
 local function placeClicks()
@@ -284,7 +294,13 @@ local function pack(instant)
   local n, done = 0, {}
   wipe(parked)
   for _, e in ipairs(RO.order(db.sort ~= 'soonest')) do n = n + 1; slotOf[e.k] = n; done[e.k] = true end
+  -- then the mobs likely to be in it: your target and your demon's (at the pull the one you hit is often not on the
+  -- threat list yet: 19:07, it got parked and could not be clicked), then every other enemy, then empty tokens
+  local function plateTok(unit) local ok, p = pcall(C_NamePlate.GetNamePlateForUnit, unit, false); local u = ok and p and ns.plates.unitOf[p]; return u and tonumber(u:match('(%d+)$')) end
+  for _, unit in ipairs({ 'target', 'pettarget' }) do local k = plateTok(unit); if k and not done[k] and ns.plates.enemy[tok(k)] then n = n + 1; slotOf[k] = n; done[k] = true end end
+  for k = 1, TOKENS do if not done[k] and ns.plates.enemy[tok(k)] then n = n + 1; slotOf[k] = n; done[k] = true end end
   for k = 1, TOKENS do if not done[k] and not ns.plates.live[tok(k)] then n = n + 1; slotOf[k] = n; done[k] = true end end
+  -- only a plate that can't be in your fight (friendly) is parked off screen
   for k = 1, TOKENS do if not done[k] then n = n + 1; slotOf[k] = n; parked[k] = true end end
   for k = 1, TOKENS do if rows[k] then moveTo(rows[k], slotOf[k], instant) end end
   placeClicks(); fitBack()
@@ -339,8 +355,17 @@ local function buildEditMode()
   end
   local tag = sel:CreateFontString(nil, 'OVERLAY'); tag:SetFont(K.font, 12, ''); tag:SetText('Mob List'); tag:SetPoint('BOTTOM', sel, 'TOP', 0, 2)
   sel:SetScript('OnMouseDown', function(_, b) if b == 'LeftButton' and not InCombatLockdown() then header:StartMoving() end end)
-  sel:SetScript('OnMouseUp', function() header:StopMovingOrSizing(); savePos(); placeClicks() end)
-  grip = CreateFrame('Button', nil, sel); grip:SetSize(16, 16); grip:SetPoint('BOTTOMRIGHT', sel, 'BOTTOMRIGHT', -2, 2)
+  sel:SetScript('OnMouseUp', function(_, b)
+    header:StopMovingOrSizing(); savePos(); placeClicks()
+    if b == 'RightButton' and L.unlock then L.unlock(false) end   -- right-click: done
+  end)
+  -- the mouse wheel sizes it (5% a notch), as easy as the corner
+  sel:EnableMouseWheel(true)
+  sel:SetScript('OnMouseWheel', function(_, d)
+    if InCombatLockdown() then return end
+    db.scale = math.max(60, math.min(180, (db.scale or 100) + d * 5)); header:SetScale(db.scale / 100); savePos(); placeClicks()
+  end)
+  grip = CreateFrame('Button', nil, sel); grip:SetSize(24, 24); grip:SetPoint('BOTTOMRIGHT', sel, 'BOTTOMRIGHT', -2, 2)
   grip:SetNormalTexture(K.sizeGrip); grip:SetHighlightTexture(K.sizeGripHi); grip:SetPushedTexture(K.sizeGripDown)
   local from, start = 0, 1
   grip:SetScript('OnMouseDown', function()
@@ -359,8 +384,11 @@ local function unlock(on)
   db.unlocked = on
   if on and not sel then buildEditMode() end
   if sel then sel:SetShown(on) end
+  -- unlocked, it shows the five test rows, so you place and size the list you will really see
+  if L.test and (on and not L.testing or (not on and L.testing and L.testForMove)) then L.testForMove = on or nil; L.test(on, true) end
   visible(); fitBack()
 end
+L.toggleMove = function() unlock(not db.unlocked) end
 
 -- ---------- seats: one row of your rings per token, built one per frame out of combat ----------
 local function placeSeats(r)
@@ -408,9 +436,12 @@ local function start()
   holder:SetAllPoints(UIParent); holder:SetFrameStrata('HIGH')
   RegisterStateDriver(holder, 'visibility', '[combat] show; hide')
   -- the one soft backing (no box, no edges): wide feathered shape, 9-slice so its soft ends keep their shape
-  back = header:CreateTexture(nil, 'BACKGROUND', nil, -8); back:SetTexture(K.listBack, nil, nil, 'TRILINEAR')
-  back:SetVertexColor(0, 0, 0, .5); back:SetPoint('TOPLEFT', header, 'TOPLEFT', -24, FEATHER)
-  back:SetWidth(width() + 48); back:SetHeight(1); back:SetAlpha(0); back.h = false; back.want = false
+  -- the backing's strength is its colour's alpha (setting 'Backing', like the Threat and Details windows: see-through);
+  -- fading it in and out is its own frame's alpha, so the two never overwrite each other
+  backF = CreateFrame('Frame', nil, header); backF:SetAllPoints(header); backF:SetFrameLevel(math.max(0, header:GetFrameLevel() - 1)); backF:SetAlpha(0)
+  back = backF:CreateTexture(nil, 'BACKGROUND', nil, -8); back:SetTexture(K.listBack, nil, nil, 'TRILINEAR')
+  back:SetVertexColor(0, 0, 0, (db.back or 35) / 100); back:SetPoint('TOPLEFT', header, 'TOPLEFT', -24, FEATHER)
+  back:SetWidth(width() + 48); back:SetHeight(1); back.h = false; back.want = false
   for k = 1, TOKENS do rows[k] = newRow(k); rows[k]:SetFrameLevel(header:GetFrameLevel() + 2) end
   relayout()
   unlock(db.unlocked == true)
@@ -421,7 +452,8 @@ local function start()
   ns.bus:On('ROSTER_DONE', function() ns.sched.mark('moblist') end)
   ns.bus:On('SETTING', function(key, store)
     if store ~= 'list' then return end
-    if key == 'scale' and not InCombatLockdown() then header:SetScale((db.scale or 100) / 100); placeClicks()
+    if key == 'back' then back:SetVertexColor(0, 0, 0, (db.back or 35) / 100)
+    elseif key == 'scale' and not InCombatLockdown() then header:SetScale((db.scale or 100) / 100); placeClicks()
     else relayout(); update() end
   end)
   ns.bus:On('DOTS', function() for k = 1, TOKENS do local r = rows[k]; if r and r.shown then killbar(r) end end end)
@@ -433,6 +465,7 @@ local function start()
   for e in pairs(CASTS) do pcall(ev.RegisterEvent, ev, e) end
   ev:SetScript('OnEvent', function(_, e, unit)
     if e == 'PLAYER_REGEN_DISABLED' then
+      if db.unlocked and sel then db.unlocked = false; sel:Hide(); L.testForMove = nil end
       if L.testing then testOff() end
       RO.refreshAll(); pack(true)        -- the places for this fight, set before Blizzard locks the buttons
       fighting = true; visible(); update()
@@ -564,9 +597,9 @@ testOff = function()
   for i = 1, #FAKE do clearFake(rows[i]) end
   showBoxes(db.boxes == true)
 end
-local function testOn(on)
+local function testOn(on, quiet)
   if InCombatLockdown() then say('the test list is for out of combat.'); return end
-  if not on then testOff(); visible(); update(); say('test list off.'); return end
+  if not on then testOff(); visible(); update(); if not quiet then say('test list off.') end; return end
   L.testing = true
   L.t0 = GetTime()
   for i, d in ipairs(FAKE) do
@@ -593,7 +626,7 @@ local function testOn(on)
   placeClicks(); visible(); fitBack()
   ns.sched.add('listtest', .05, testStep)
   showBoxes(db.boxes == true)
-  say('test list on: five pretend rows. /omadoomed list boxes shows the click areas. /omadoomed list test again to stop.')
+  if not quiet then say('test list on: five pretend rows. /omadoomed list boxes shows the click areas. /omadoomed list test again to stop.') end
 end
 L.test = testOn
 L.showBoxes = showBoxes
@@ -603,7 +636,7 @@ function L.slash(msg)
   if not header then say('the mob list is off (it needs the rings on).'); return end
   if cmd == 'test' then testOn(not L.testing)
   elseif cmd == 'boxes' then db.boxes = not db.boxes; showBoxes(db.boxes); say(db.boxes and 'click areas shown (tinted blue).' or 'click areas hidden.')
-  elseif cmd == 'unlock' then unlock(true); say('drag the list, and size it with the corner grip. /omadoomed list lock when done.')
+  elseif cmd == 'unlock' or cmd == 'move' then unlock(true); say('drag the list anywhere; mouse wheel or the corner grip sizes it; right-click it when done.')
   elseif cmd == 'lock' then unlock(false); say('list locked: it shows in fights.')
   elseif cmd == 'rows' then
     local n = tonumber(arg); if n then db.rows = math.max(4, math.min(TOKENS, n)); relayout(); say(('the list shows up to %d mobs.'):format(db.rows)) end
@@ -621,3 +654,6 @@ function L.relayout() relayout(); update() end
 L.rows = rows
 L.slotOf = slotOf
 L.parked = parked
+-- the key binding (Bindings.xml): Key Bindings > AddOns > OmaDoomed > Move the mob list
+_G.OmaDoomed_ListMove = function() if L.toggleMove then L.toggleMove() end end
+_G['BINDING_NAME_OMADOOMED_LISTMOVE'] = 'Move the mob list'

@@ -212,11 +212,23 @@ end
 
 -- ---------- casts and targets ----------
 local function targetPlate() return C_NamePlate.GetNamePlateForUnit('target', false) or false end
--- the mob a cast is going to (2026-11-16 "the rings glitched when i hovered and tried to cast"): his DoT keys are
--- mouseover keys ([@mouseover,harm,nodead][]), so while the mouse is on an enemy (its nameplate or its mob-list row)
--- the cast goes there, not to the target. Plate frames are never secret.
+-- the mob a cast is going to. With Blizzard's Mouseover Cast on (Options > Combat; its key held, or none set) a cast
+-- goes to the enemy under the mouse (its nameplate or its mob-list row); otherwise to the target. 2026-11-16: his
+-- account has no mouseover macros, so taking the mouse's mob always (as first built) put his target's casts on the
+-- wrong mob. Plate frames are never secret.
+local function mouseoverCastOn()
+  local get = (C_CVar and C_CVar.GetCVarBool) or GetCVarBool
+  local ok, on = pcall(get, 'enableMouseoverCast')
+  if not (ok and on == true) then return false end
+  local okK, key = pcall(GetModifiedClick, 'MOUSEOVERCAST')
+  if okK and key == 'NONE' then return true end
+  local okH, held = pcall(IsModifiedClick, 'MOUSEOVERCAST')
+  return okH and held == true
+end
+M.mouseoverCastOn = mouseoverCastOn
 local function castPlate()
   local PM = ns.plates
+  if not mouseoverCastOn() then return targetPlate() end
   local ok, mp = pcall(C_NamePlate.GetNamePlateForUnit, 'mouseover', false)
   if ok and mp and PM and PM.unitOf then
     local u = PM.unitOf[mp]
