@@ -163,12 +163,12 @@ local function onCast(id)
     local u = unitByName(who) or 'player'
     stone = { name = short(who), guid = UnitGUID(u), ends = GetTime() + LIFE, placed = GetTime() }
     paint(); place(); tick()
-    if d.sayStone then say(('Soulstone on %s.'):format(stone.name)) end
+    if d.sayStone then say(ns.line('stone', stone.name)) end
   elseif name == 'Ritual of Summoning' then
     local who = sentTarget or UnitName('target')
-    if d.saySummon and who and who ~= '' then say(('summoning %s, click the portal pls'):format(short(who))) end
+    if d.saySummon and who and who ~= '' then say(ns.line('summon', short(who))) end
   elseif name == 'Ritual of Souls' then   -- only the group stones; a Create Healthstone is just for you
-    if d.sayStones and GetTime() - lastStones > 60 then lastStones = GetTime(); say('healthstones ready, grab one') end
+    if d.sayStones and GetTime() - lastStones > 60 then lastStones = GetTime(); say(ns.line('stones')) end
   end
 end
 

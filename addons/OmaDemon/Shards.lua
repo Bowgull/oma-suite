@@ -211,7 +211,7 @@ local function update(why)
     end
     if old < N and n >= N and db.sound ~= false then pcall(PlaySoundFile, CHIME, 'SFX') end
     local keep = db.keep or 6
-    if db.chat ~= false and n > keep and old <= keep then say(('%d soul shards, over your %d. Clear some bag space when you can.'):format(n, keep)) end
+    if db.chat ~= false and n > keep and old <= keep then say(ns.line('shards', n, keep)) end
     log(('gain %d -> %d (%s)'):format(old, n, why))
   elseif n < old then
     local k = 0

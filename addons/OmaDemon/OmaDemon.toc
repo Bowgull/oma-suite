@@ -13,6 +13,7 @@ Libs\OmaCore\Log.lua
 Libs\OmaCore\Settings.lua
 Libs\OmaCore\Slash.lua
 Settings.lua
+Lines.lua
 Glow.lua
 Shards.lua
 Stones.lua

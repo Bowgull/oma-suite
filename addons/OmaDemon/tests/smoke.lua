@@ -76,6 +76,24 @@ local n0 = #sent; cast(3); check(#sent == n0, 'Create Healthstone (just yours) s
 cast(5); check(sent[#sent] == 'PARTY:healthstones ready, grab one', 'healthstones line: ' .. tostring(sent[#sent]))
 local n = #sent; cast(5); check(#sent == n, 'healthstones line at most once a minute')
 W.group = false; cast(1, 'Lindarra'); check(#sent == n, 'never sent when alone')
+-- sheet 51: Chat style Funny, a different line each time, never twice in a row
+check(G.chatStyle == 'plain', 'chat style defaults to Plain')
+G.chatStyle = 'funny'; W.group = true
+local prev
+for i = 1, 30 do
+  cast(1, 'Lindarra'); local m = sent[#sent]
+  check(m:find('Lindarra', 1, true) and m ~= prev, 'funny stone line has the name, never repeats: ' .. m); prev = m
+end
+cast(2, 'Zugzug'); check(sent[#sent]:find('Zugzug', 1, true), 'funny summon line: ' .. sent[#sent])
+for _, kind in ipairs({ 'stone', 'summon', 'stones', 'shards' }) do
+  for _, f in ipairs(ns.lines.funny[kind]) do
+    local okf, m = pcall(string.format, f, kind == 'shards' and 7 or 'Zugzug', 6)
+    check(okf and #m < 255 and not m:find('%', 1, true), 'line ok: ' .. tostring(m))
+  end
+end
+check(ns.line('shards', 7, 6):find('7', 1, true), 'funny shards line has the count')
+G.chatStyle = 'plain'; check(ns.line('stone', 'Lindarra') == 'Soulstone on Lindarra.', 'back to Plain')
+W.group = false; n = #sent
 W.group = true
 local pf = CreateFrame('Frame', 'CompactPartyFrameMember2', UIParent); pf.unit = 'party1'; pf:Show()
 auras['party1:Soulstone Resurrection'] = { sourceUnit = 'player', expirationTime = W.now + 1800 }

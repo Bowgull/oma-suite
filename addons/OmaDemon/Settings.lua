@@ -77,6 +77,9 @@ ns.settings = Core.NewSettings({
       tip = '"summoning <name>, click the portal pls" when you start Ritual of Summoning.' },
     { key = 'sayStones', store = R, default = false, control = 'check', label = 'Say Healthstones in chat',
       tip = '"healthstones ready, grab one" when you cast Ritual of Souls. Your own Create Healthstone stays quiet.' },
+    { key = 'chatStyle', store = R, default = 'plain', control = 'dropdown', label = 'Chat style',
+      choices = { { 'plain', 'Plain' }, { 'funny', 'Funny' } },
+      tip = "Plain: the lines above. Funny: a different joke line each time, never the same one twice in a row (some swear; the game's profanity filter stars those out for anyone who has it on). Also the extra-shards line." },
 
     { header = 'Reminders' },
     { key = 'armor', store = R, default = true, control = 'check', label = 'Armor missing',
