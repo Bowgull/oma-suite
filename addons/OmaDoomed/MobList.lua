@@ -64,9 +64,9 @@ local function newRow(k)
   r.ring = r:CreateTexture(nil, 'ARTWORK', nil, 3); r.ring:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR')
   r.ring:SetSize(PORT + 6, PORT + 6); r.ring:SetPoint('CENTER', r.face, 'CENTER'); r.ring:SetVertexColor(0, 0, 0, .9)
   -- your demon's mark (its own icon) and the mob's raid mark, on the portrait's lower corners
-  r.pet = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.pet:SetSize(15, 15); r.pet:SetPoint('CENTER', r.face, 'BOTTOMRIGHT', -2, 2); r.pet:Hide()
+  r.pet = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.pet:SetSize(20, 20); r.pet:SetPoint('CENTER', r.face, 'BOTTOMRIGHT', -1, 1); r.pet:Hide()
   local pm = r:CreateMaskTexture(); pm:SetTexture(K.ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); pm:SetAllPoints(r.pet); r.pet:AddMaskTexture(pm)
-  r.petRim = r:CreateTexture(nil, 'OVERLAY', nil, 3); r.petRim:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR'); r.petRim:SetSize(19, 19)
+  r.petRim = r:CreateTexture(nil, 'OVERLAY', nil, 3); r.petRim:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR'); r.petRim:SetSize(25, 25)
   r.petRim:SetPoint('CENTER', r.pet, 'CENTER'); r.petRim:SetVertexColor(K.petRim[1], K.petRim[2], K.petRim[3]); r.petRim:Hide()
   r.mark = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.mark:SetSize(13, 13); r.mark:SetPoint('CENTER', r.face, 'BOTTOMLEFT', 2, 2)
   r.mark:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcons'); r.mark:Hide()
@@ -92,7 +92,7 @@ local function newRow(k)
   r.frameArt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -2, 3); r.frameArt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 2, -3)
   r.tgt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 3); r.tgt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.tgt, K.plateTarget)
   r.tgt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -4, 4); r.tgt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 4, -4); r.tgt:Hide()
-  r.hp = r.bar:CreateFontString(nil, 'OVERLAY', nil, 7); r.hp:SetFont(K.font, 10, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
+  r.hp = r.bar:CreateFontString(nil, 'OVERLAY', nil, 7); r.hp:SetFont(K.font, 12, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
   -- a tick: the DoT pieces flash (a soft white light over the bar) as they shrink (sheet 83, row 1)
   r.bite = r.bar:CreateTexture(nil, 'OVERLAY', nil, 1); r.bite:SetTexture(K.statusbar); r.bite:SetAllPoints(r.bar)
   r.bite:SetVertexColor(1, .93, .8); r.bite:SetBlendMode('ADD'); r.bite:SetAlpha(0)
@@ -305,8 +305,10 @@ local function pack(instant)
   for _, unit in ipairs({ 'target', 'pettarget' }) do local k = plateTok(unit); if k and not done[k] and ns.plates.enemy[tok(k)] then n = n + 1; slotOf[k] = n; done[k] = true end end
   for k = 1, TOKENS do if not done[k] and ns.plates.enemy[tok(k)] then n = n + 1; slotOf[k] = n; done[k] = true end end
   for k = 1, TOKENS do if not done[k] and not ns.plates.live[tok(k)] then n = n + 1; slotOf[k] = n; done[k] = true end end
-  -- only a plate that can't be in your fight (friendly) is parked off screen
-  for k = 1, TOKENS do if not done[k] then n = n + 1; slotOf[k] = n; parked[k] = true end end
+  -- the rest (friendly plates now). Never parked off screen: the [harm,nodead] driver already hides their click areas,
+  -- and the game hands a token to a new mob mid-fight, which a parked token could then never be clicked for
+  -- (2026-11-16 19:48, "its only targeting top mob": no click area showed anywhere with /omadoomed list boxes)
+  for k = 1, TOKENS do if not done[k] then n = n + 1; slotOf[k] = n end end
   for k = 1, TOKENS do if rows[k] then moveTo(rows[k], slotOf[k], instant) end end
   placeClicks(); fitBack()
 end
@@ -706,6 +708,21 @@ function L.slash(msg)
   if not header then say('the mob list is off (it needs the rings on).'); return end
   if cmd == 'test' then testOn(not L.testing)
   elseif cmd == 'boxes' then db.boxes = not db.boxes; showBoxes(db.boxes); say(db.boxes and 'click areas shown (tinted blue).' or 'click areas hidden.')
+  elseif cmd == 'where' then
+    -- where every row's click area really is (2026-11-16: clicks only reached the top row). In a fight the click
+    -- areas show; out of one they're hidden by design, but their places are still worked out.
+    local function top(f) local ok, t = pcall(f.GetTop, f); return ok and t or nil end
+    local ok, mo = pcall(function() return ns.model and ns.model.mouseoverCastOn and ns.model.mouseoverCastOn() end)
+    say(('click areas: holder %s, combat %s, Mouseover Cast %s'):format(tostring(holder and holder:IsVisible()), tostring(InCombatLockdown()), tostring(ok and mo)))
+    for k = 1, TOKENS do
+      local r = rows[k]
+      if r and (r.shown or (r.click and r.click:IsVisible())) then
+        local rt, ct = top(r), top(r.click)
+        say(('  %s place %s: row %s, click %s (shown %s, visible %s, top %s vs row %s)'):format(tok(k), tostring(slotOf[k]),
+          r.shown and 'shown' or 'hidden', r.click and 'yes' or 'none', tostring(r.click and r.click:IsShown()), tostring(r.click and r.click:IsVisible()),
+          ct and ('%.0f'):format(ct * r.click:GetEffectiveScale()) or '?', rt and ('%.0f'):format(rt * r:GetEffectiveScale()) or '?'))
+      end
+    end
   elseif cmd == 'unlock' or cmd == 'move' then unlock(true); say('drag the list anywhere; mouse wheel or the corner grip sizes it; right-click it when done.')
   elseif cmd == 'lock' then unlock(false); say('list locked: it shows in fights.')
   elseif cmd == 'rows' then

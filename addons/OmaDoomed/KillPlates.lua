@@ -185,7 +185,15 @@ local function chargeStep()
 end
 
 -- one unit's pieces on one health bar (a plate's, or a row of the mob list: MobList.lua)
+local rowBars = setmetatable({}, { __mode = 'k' })   -- the list's bars: the plates' sweep never clears them
 local function paintOn(unit, hb, addon, reversed)
+  -- the mob list's bars are small and far from the mob: their pieces are lifted 35% toward white so they read
+  -- (19:48 shots: "hard to see", deep navy and plum on a dark bar); the plates keep the approved deep pieces
+  local lift = rowBars[hb] and .35 or 0
+  local function pieceColor(b, r, g, bl)
+    if lift > 0 then r, g, bl = r + (1 - r) * lift, g + (1 - g) * lift, bl + (1 - bl) * lift end
+    barColor(b, r, g, bl)
+  end
   -- the model's list for this plate: one entry per DoT with damage left, the one ending first nearest the green
   local ok = pcall(ns.model.listInto, unit, true, list, seenName)
   if not ok then wipe(list) end
@@ -214,9 +222,9 @@ local function paintOn(unit, hb, addon, reversed)
         end
         st.dmg, st.s, st.e = d.damage, cStart / 1000, cEnd / 1000
         local o = styleOf(sp, true, lk, 0)
-        if lk ~= 'smoulder' then barColor(b, o.base[1], o.base[2], o.base[3]) end
+        if lk ~= 'smoulder' then pieceColor(b, o.base[1], o.base[2], o.base[3]) end
         if lk == 'charging' then
-          setBar(ch, w, maxv, ch.omV or 0); barColor(ch, o.fill[1], o.fill[2], o.fill[3])   -- its landed colour: landing changes nothing
+          setBar(ch, w, maxv, ch.omV or 0); pieceColor(ch, o.fill[1], o.fill[2], o.fill[3])   -- its landed colour: landing changes nothing
         end
         show(ch, lk == 'charging')
         if lk == 'stripes' then texColor(ov.pre, o.tn[1], o.tn[2], o.tn[3], Style.STRIPES_A) end
@@ -228,7 +236,7 @@ local function paintOn(unit, hb, addon, reversed)
         if st and not st.landAt then   -- it landed: Charging's fill was already whole; the other looks ease up
           st.landAt = GetTime()
           chargeOne(b, st, st.landAt)
-        elseif not st then local o = styleOf(sp, false); barColor(b, o.base[1], o.base[2], o.base[3]) end
+        elseif not st then local o = styleOf(sp, false); pieceColor(b, o.base[1], o.base[2], o.base[3]) end
       end
       show(b, true)
     else show(b, false); quietSlot(set, i) end
@@ -248,7 +256,6 @@ local function paint(unit)
 end
 
 -- the mob list's rows: draw (or clear) one row's bar for its unit; the list calls it on DOTS and its own changes
-local rowBars = setmetatable({}, { __mode = 'k' })   -- the list's bars: the plates' sweep never clears them
 function K.paintRow(unit, hb) rowBars[hb] = true; if unit then return paintOn(unit, hb, nil, false) end; if shown[hb] then clear(hb) end end
 
 local dirty = true

@@ -19,14 +19,14 @@ return {
     ns.db.recast = false; ns.db.low = 4
     T.eq(ns.rings.windowFor('corruption'), 4, 'the Ending soon seconds')
   end,
-  ['the ring font is measured: drawn 1/0.9 bigger and nudged right, so it sits on the band'] = function(W, T)
+  ["the ring font is measured: asked 1/1.05 the size and moved right by the font's own offset, so it sits on the band"] = function(W, T)
     local ns = setup({})
     local R = ns.rings
     T.ok(R.GLYPH_MEASURED, 'measured in game')
     local fs = { SetFont = function(self, f, size) self.size = size; return true end, SetSize = function() end, ClearAllPoints = function() end,
       SetPoint = function(self, a, b, c, x, y) self.x, self.y = x, y end, SetJustifyH = function() end, SetJustifyV = function() end, SetWordWrap = function() end }
     R.placeGlyph(fs, {}, 34)
-    T.ok(math.abs(fs.size - 34 / 0.9) < .01, 'font size asked so the ring comes out 34: ' .. tostring(fs.size))
-    T.ok(fs.x > 3 and fs.x < 3.5, 'nudged right to centre it: ' .. tostring(fs.x))
+    T.ok(math.abs(fs.size - 34 / 1.05) < .01, 'font size asked so the ring comes out 34: ' .. tostring(fs.size))
+    T.ok(math.abs(fs.x - 34 * 0.1076) < .01, 'moved right 0.1076 of its size: ' .. tostring(fs.x))
   end,
 }

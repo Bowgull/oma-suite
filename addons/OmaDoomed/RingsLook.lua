@@ -405,9 +405,13 @@ R.LIT_HALO = 0.5
 -- The ring font against the ring art, measured with /omadoomed glyph: the font's ring is drawn GLYPH_K times the
 -- size asked for, its centre off by (GLYPH_DX, GLYPH_DY) of the size. Until measured, the font-drawn light and its
 -- bloom stay off (GLYPH_MEASURED): two attempts without it hung huge and off-centre.
--- Measured 2026-11-16 19:40 (his PC, 1920x1080, sizes 34/64/128): the font's ring is 0.90 of the size asked for and
--- its centre 8.7% of that size to the left, level vertically (same at every size).
-R.GLYPH_K, R.GLYPH_DX, R.GLYPH_DY, R.GLYPH_MEASURED = 0.90, -0.097, 0, true
+-- Measured 2026-11-16 (his PC, 1920x1080), by least-squares circle fits of the band art and the glyph at 34 and 64
+-- (128 is capped by the game's font height: it reported 120). Size: the glyph draws 4.9-5.3% bigger than asked
+-- (fit 1.049 / 1.053), so it is asked 1/1.05 the size. Centre: the font's geometry puts it left by exactly
+-- (xMax/2 - ADV/2)/EM = (732.5/2 - 256)/1024 = 0.1076 of its size (the game centres a string on its ink's right edge,
+-- the ring sits at half the advance); fitted 0.116-0.119 at those sizes (pixel rounding). Level vertically (fit 0.000).
+-- An earlier bounding-box reading (0.90, -0.097) mistook the art's soft glow for its edge.
+R.GLYPH_K, R.GLYPH_DX, R.GLYPH_DY, R.GLYPH_MEASURED = 1.05, -0.1076, 0, true
 R.HALO_K, R.HALO_A = 1.12, 0.45     -- the bloom: a ring 12% wider, at 45%
 R.HALO = true
 R.GLYPH_LIGHT = true
@@ -659,7 +663,7 @@ function R.buildGroups()
 end
 
 -- /omadoomed glyph: measure the ring font against the ring art (2026-11-16: the font-drawn ending light came out huge
--- and off-centre). Three pairs in the middle of the screen at 34, 64 and 128: the band art in blue, the font's ring at
+-- and off-centre). Three pairs in the middle of the screen at 34, 48 and 64: the band art in blue, the font's ring at
 -- the same size in red on top, each in a thin white box of its size. Prints what the game says the string measures.
 -- Run it again to take it away.
 local gt
@@ -667,7 +671,7 @@ function R.glyphTest()
   if gt then gt:SetShown(not gt:IsShown()); return end
   gt = CreateFrame('Frame', nil, UIParent); gt:SetAllPoints(UIParent); gt:SetFrameStrata('TOOLTIP')
   local x = -220
-  for _, size in ipairs({ 34, 64, 128 }) do
+  for _, size in ipairs({ 34, 48, 64 }) do   -- 128 is capped by the game's font height (reported 120)
     local box = gt:CreateTexture(nil, 'BACKGROUND'); box:SetColorTexture(1, 1, 1, .25); box:SetSize(size + 2, size + 2); box:SetPoint('CENTER', UIParent, 'CENTER', x, 0)
     local inner = gt:CreateTexture(nil, 'BORDER'); inner:SetColorTexture(0, 0, 0, .85); inner:SetSize(size, size); inner:SetPoint('CENTER', box, 'CENTER')
     local art = gt:CreateTexture(nil, 'ARTWORK'); art:SetTexture(ART .. 'ring_bold', nil, nil, 'TRILINEAR'); art:SetSize(size, size); art:SetPoint('CENTER', box, 'CENTER'); art:SetVertexColor(.3, .5, 1)
