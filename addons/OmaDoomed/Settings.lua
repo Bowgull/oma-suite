@@ -55,6 +55,11 @@ ns.settings = Core.NewSettings({
     { key = 'others', store = R, default = true },    -- /omadoomed rings others on|off
     { key = 'recast', default = true, control = 'check', label = 'Recast light',
       tip = "A ring lights up and breathes in its DoT's colour when it's time to start the recast: a DoT with a cast time at that cast time (plus a moment for lag), an instant in its last 1.5 seconds. Off: rings use 'Ending soon' instead." },
+    -- sheet 83, part 2: the two sheet-78 parts get their own switches
+    { key = 'occ', store = R, default = true, control = 'check', label = "Someone else's crowd control",
+      tip = "Another player's Polymorph, Sap, Fear... on a mob: its health bar becomes that crowd control's teal timer. Takes a /reload." },
+    { key = 'odeb', store = R, default = true, control = 'check', label = "Other players' debuffs",
+      tip = "Other players' debuffs on a mob as small soft squares beside its health bar, glowing in their type's colour. Takes a /reload." },
     { key = 'cc', store = R, default = true, control = 'check', label = 'Crowd-control timers',
       tip = "Your Fear, Banish, Howl of Terror and your Sayaad's Seduction as a teal ring over the mob. When it isn't your target or is off screen, the ring stands beside your target frame instead, so you always see how long is left." },
 
@@ -74,6 +79,8 @@ ns.settings = Core.NewSettings({
     { key = 'range', store = L, default = true, control = 'check', label = 'Fade out of range',
       tip = 'An enemy your spells cannot reach shows at half strength.' },
     { key = 'hp', store = L, default = true, control = 'check', label = 'Health numbers' },
+    { key = 'casts', store = L, default = true, control = 'check', label = 'Cast lines',
+      tip = "A thin line under a mob's health bar while it casts: red when you can interrupt it, grey when you can't." },
     { key = 'back', store = L, default = 35, control = 'slider', label = 'Backing', min = 0, max = 80, step = 5, format = pct,
       tip = 'How dark the soft backing behind the list is. 0 is none.' },
     { key = 'unlocked', store = L, default = false },

@@ -202,4 +202,16 @@ return {
     T.ok(not L.testing, 'a fight ends the test')
     noErrors(T)
   end,
+  ["list: 'Cast lines' off hides a mob's cast line"] = function(W, T)
+    local ns, F, UI = setup(W)
+    mob(W, F, 1, 'Shaman'); W.advance(.3)
+    local r = ns.moblist.rows[1]
+    OmaDoomedDB.list.casts = false
+    local t0 = GetTime()
+    UnitCastingInfo = function(u) if u == 'nameplate1' then return 'Lightning Bolt', nil, nil, t0 * 1000, (t0 + 2) * 1000, false, 1, false end end
+    W.fire('UNIT_SPELLCAST_START', 'nameplate1')
+    T.ok(not r.cast:IsShown(), 'no cast line')
+    UnitCastingInfo = function() return nil end
+    noErrors(T)
+  end,
 }

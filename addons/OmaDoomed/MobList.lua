@@ -163,6 +163,7 @@ local function castStep(self)
   pcall(self.SetValue, self, self.chan and (self.e and plain(self.e) and self.e - now + self.s or now) or now)
 end
 local function castLook(r)
+  if db.casts == false then r.cast:SetScript('OnUpdate', nil); r.cast:Hide(); return end   -- 'Cast lines' off
   if not r.shown then r.cast:SetScript('OnUpdate', nil); r.cast:Hide(); return end
   local chan = false
   local ok, name, _, _, s, e, _, _, noInt = pcall(UnitCastingInfo, r.unit)
