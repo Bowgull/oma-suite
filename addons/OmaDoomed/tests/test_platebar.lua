@@ -67,7 +67,7 @@ return {
     T.eq(made[2].rec.value, 70, 'piece 2: Corruption + Immolate')
     T.eq(made[1].rec.max, 300, 'scaled to max health')
     -- phase 5: the plate pieces take the target bar's landed strength (x1.15, KillBarStyle), the one approved change
-    T.near(col(made[1]), 41 / 255 * 1.15, 1e-6, "Corruption's kill bar colour, as on the target bar")
+    T.near(col(made[1]), math.min(1, 41 / 255 * 1.4 * 1.15), 1e-6, "Corruption's kill bar colour, as on the target bar")
   end,
   ['in combat the max health is handed over hidden, never read'] = function(W, T)
     local ns, F, DOTS, made = setup(W)
@@ -100,13 +100,13 @@ return {
     W.advance(1.0)
     T.ok(fills[2].rec.shown, 'Immolate fill shown while casting')
     T.near(fills[2].rec.value, 40 * .5, 2, 'halfway through the cast: half of its own piece, filled from its far edge toward the green')
-    T.near(col(made[2]), 160 / 255 * .45, 1e-6, 'the piece itself sits dim')
+    T.near(col(made[2]), 160 / 255 * 1.4 * .45, 1e-6, 'the piece itself sits dim')
     T.ok(not fills[1].rec.shown, 'Corruption (not being cast) has no fill')
     UnitCastingInfo = function() return nil end
     DOTS.nameplate1[2].provisional = false
     W.advance(.2)
     T.ok(not fills[2].rec.shown, 'landed: fill gone')
-    T.near(col(made[2]), 160 / 255 * 1.15, 1e-6, 'and the piece is its full colour at once (the fill was already whole)')
+    T.near(col(made[2]), math.min(1, 160 / 255 * 1.4 * 1.15), 1e-6, 'and the piece is its full colour at once (the fill was already whole)')
   end,
   ['precast Smoulder: the piece rises out of the dark, no fill; eases to full as it lands'] = function(W, T)
     local ns, F, DOTS, made, fills = setup(W)
@@ -122,7 +122,7 @@ return {
     UnitCastingInfo = function() return nil end
     DOTS.nameplate1[1].provisional = false
     W.advance(.5)
-    T.near(col(made[1]), 160 / 255 * 1.15, 1e-6, 'full colour after the ease')
+    T.near(col(made[1]), math.min(1, 160 / 255 * 1.4 * 1.15), 1e-6, 'full colour after the ease')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
   end,
   ['precast Drifting stripes: piece dim, no Charging fill, no errors'] = function(W, T)
@@ -132,7 +132,7 @@ return {
     UnitCastingInfo = function() return 'Immolate', nil, nil, t0 * 1000, (t0 + 2) * 1000 end
     DOTS.nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 99, provisional = true } }
     W.advance(1)
-    T.near(col(made[1]), 160 / 255 * .45, 1e-6, 'piece dim while casting')
+    T.near(col(made[1]), 160 / 255 * 1.4 * .45, 1e-6, 'piece dim while casting')
     T.ok(not fills[1].rec.shown, 'no Charging fill')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
   end,
@@ -143,7 +143,7 @@ return {
     UnitCastingInfo = function() return 'Immolate', nil, nil, t0 * 1000, (t0 + 2) * 1000 end
     DOTS.nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 99, provisional = true } }
     W.advance(1)
-    T.near(col(made[1]), 160 / 255 * .45, 1e-6, 'piece dim while casting')
+    T.near(col(made[1]), 160 / 255 * 1.4 * .45, 1e-6, 'piece dim while casting')
     T.ok(not fills[1].rec.shown, 'no Charging fill')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
   end,
@@ -154,7 +154,7 @@ return {
     UnitCastingInfo = function() return 'Immolate', nil, nil, t0 * 1000, (t0 + 2) * 1000 end
     DOTS.nameplate1 = { { name = 'Immolate', damage = 40, expiresAt = 99, provisional = true } }
     W.advance(1)
-    T.near(col(made[1]), 160 / 255 * .45, 1e-6, 'piece dim while casting')
+    T.near(col(made[1]), 160 / 255 * 1.4 * .45, 1e-6, 'piece dim while casting')
     T.ok(not fills[1].rec.shown, 'no Charging fill')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
   end,

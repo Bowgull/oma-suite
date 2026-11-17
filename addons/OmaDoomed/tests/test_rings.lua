@@ -64,7 +64,7 @@ local function ringLook(look)
         local edged = false; for _, t in ipairs(UI.textures) do if tostring(t):find('ring_edge') then edged = true end end
         T.ok(edged, 'rich: the colour band has its black edge (sheet 55)')
       else
-        T.eq(fnum, math.floor(40 * .46 + .5), 'flat: 46% on the frame row'); T.eq(pnum, math.floor(40 * .46 + .5), 'flat: 46% over the mobs')
+        T.eq(fnum, math.floor(40 * .50 + .5), 'flat: 50% on the frame row (sheet 86 A: one size up)'); T.eq(pnum, math.floor(40 * .50 + .5), 'flat: 50% over the mobs')
         T.eq(polish(UI), 0, 'flat: no shadow, gloss, bezel or number spot')
         for _, t in ipairs(UI.textures) do T.ok(not tostring(t):find('ring_edge'), 'flat: no extra edge art') end
       end

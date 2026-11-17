@@ -12,6 +12,9 @@ S.GOLD = { 206 / 255, 160 / 255, 44 / 255 }   -- the old 'ending soon' gold (kep
 S.LIT = 0.22
 function S.lit(c, k) k = k or S.LIT; return c[1] + (1 - c[1]) * k, c[2] + (1 - c[2]) * k, c[3] + (1 - c[3]) * k end
 S.OTHER = { .55, .45, .65 }                    -- a DoT with no entry in Spells.lua
+-- 2026-11-16 ("you can just universally lighten them across wherever they show"): every piece's own colour, brighter
+-- by the same factor everywhere it is drawn; hue and strength kept (no white mixed in: that made them milky)
+S.LIGHTEN = 1.4
 local DIM, FULL, LIFT = .45, 1.15, .7          -- precast dim, the landed piece's strength, the additive lift
 local LOW_TONE, SPARK = 1.3, .45               -- the tick light in gold time, the ember's strength
 S.STRIPES_A, S.MOTES_K = .55, .8               -- drifting stripes' alpha, motes' strength
@@ -64,7 +67,7 @@ function S.piece(o, sp, s)
     local b = (.6 + .4 * S.breath(left, s.low, s.steady)) / (FULL + LIFT)
     local r, g, bl = S.lit(sp and sp.color or S.OTHER)
     set(c, r * b, g * b, bl * b)
-  else set(c, deep[1], deep[2], deep[3]) end
+  else set(c, min(1, deep[1] * S.LIGHTEN), min(1, deep[2] * S.LIGHTEN), min(1, deep[3] * S.LIGHTEN)) end
   local tn = sp and sp.color or c
   set(o.tn, tn[1], tn[2], tn[3])
   mix(o.glow, c, o.tn, .7)   -- the glow: its own colour, low (no white: warlock light)

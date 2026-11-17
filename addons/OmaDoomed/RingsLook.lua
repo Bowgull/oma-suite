@@ -303,10 +303,13 @@ end
 
 local function roundIcon(b, size)
   local icon = b:CreateTexture(nil, 'ARTWORK', nil, 0)
-  icon:SetSize(size * 0.756, size * 0.756); icon:SetPoint('CENTER', b, 'CENTER')
+  -- sheet 86 A (approved 2026-11-16 "rings are great", "a for rings"): in the Classic look the icon fills the whole
+  -- disc inside the colour band (0.834 of the ring, was 0.69: about 18 px of icon in a 34 px ring)
+  local fill = R.flat() and 0.834 or 0.756
+  icon:SetSize(size * fill, size * fill); icon:SetPoint('CENTER', b, 'CENTER')
   icon:SetTexCoord(0.06, 0.94, 0.06, 0.94)       -- trim the icon's own border; the mask makes it round
   local m = b:CreateMaskTexture()
-  m:SetTexture(ART .. 'mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(b)
+  m:SetTexture(ART .. (R.flat() and 'mask_disc' or 'mask'), 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(b)
   icon:AddMaskTexture(m)
   return icon
 end
@@ -323,7 +326,7 @@ function R.flat() local d = R.db or (ns.db and ns.db.rings); return d ~= nil and
 -- DoT number: 46% over the mobs in both looks, 44% (Modern) / 46% (Classic) in the frame row. A minutes-long timer
 -- ("2m", curses) is 36% everywhere: the old scaled-down share left it 7 px tall under the frame.
 R.NUM_K_LONG = 0.36
-function R.numK(frame) if R.flat() then return 0.46 end; return frame and R.FRAME_NUM_K or 0.46 end
+function R.numK(frame) if R.flat() then return 0.50 end; return frame and R.FRAME_NUM_K or 0.46 end   -- Classic: one size up (sheet 86 A)
 R.NUM_K = 0.46
 local function numberOn(cd, b, size, k)
   -- the number lives in a child of the cooldown, so it always draws above the dark swipe; it never moves
@@ -333,7 +336,8 @@ local function numberOn(cd, b, size, k)
   num:SetFont(NUM_FONT, math.floor(size * (type(k) == 'number' and k or R.numK()) + 0.5), flat and 'OUTLINE' or 'THICKOUTLINE')
   num:SetPoint('CENTER', b, 'CENTER', 0, -size * 0.02)
   num:SetTextColor(1, 1, 1, 1)
-  if flat then num:SetShadowColor(0, 0, 0, 0); num:SetShadowOffset(0, 0) else num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1) end
+  -- Classic: a thin outline plus a soft shadow (sheet 86 A: the heavy outline filled in small digits)
+  if flat then num:SetShadowColor(0, 0, 0, .85); num:SetShadowOffset(1, -1) else num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1) end
   return num
 end
 

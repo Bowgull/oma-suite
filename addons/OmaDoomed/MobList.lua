@@ -60,21 +60,24 @@ local function newRow(k)
   r.face = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.face:SetSize(PORT, PORT); r.face:SetPoint('CENTER', r, 'LEFT', cx, 0)
   local m = r:CreateMaskTexture(); m:SetTexture(K.ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(r.face)
   r.face:AddMaskTexture(m)
-  r.lift = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.lift:SetAllPoints(r.face); r.lift:SetBlendMode('ADD'); r.lift:SetAlpha(.4); r.lift:AddMaskTexture(m)
+  -- sheet 86 ("portraits are great"): the game's own portrait, clean (the additive lift over it washed it out)
+  r.lift = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.lift:SetAllPoints(r.face); r.lift:SetBlendMode('ADD'); r.lift:SetAlpha(0); r.lift:AddMaskTexture(m)
   r.ring = r:CreateTexture(nil, 'ARTWORK', nil, 3); r.ring:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR')
   r.ring:SetSize(PORT + 6, PORT + 6); r.ring:SetPoint('CENTER', r.face, 'CENTER'); r.ring:SetVertexColor(0, 0, 0, .9)
   -- your demon's mark (its own icon) and the mob's raid mark, on the portrait's lower corners
   r.pet = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.pet:SetSize(20, 20); r.pet:SetPoint('CENTER', r.face, 'BOTTOMRIGHT', -1, 1); r.pet:Hide()
   local pm = r:CreateMaskTexture(); pm:SetTexture(K.ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); pm:SetAllPoints(r.pet); r.pet:AddMaskTexture(pm)
   r.petRim = r:CreateTexture(nil, 'OVERLAY', nil, 3); r.petRim:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR'); r.petRim:SetSize(25, 25)
-  r.petRim:SetPoint('CENTER', r.pet, 'CENTER'); r.petRim:SetVertexColor(K.petRim[1], K.petRim[2], K.petRim[3]); r.petRim:Hide()
+  r.petRim:SetPoint('CENTER', r.pet, 'CENTER'); r.petRim:SetVertexColor(.89, .82, 1); r.petRim:Hide()   -- a bright rim so it reads on the dark row
   r.mark = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.mark:SetSize(13, 13); r.mark:SetPoint('CENTER', r.face, 'BOTTOMLEFT', 2, 2)
   r.mark:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcons'); r.mark:Hide()
   -- OmaDoomed's skull on the portrait's top edge (the target frame's trick: a long bar 0..health filled with your
   -- DoTs' damage; the skull rides its end and reaches the little window only when the damage covers the health)
   local SW, SH = PORT * .78, PORT * .78 * 54 / 78
   r.skullWin = CreateFrame('Frame', nil, r); r.skullWin:SetClipsChildren(true)
-  r.skullWin:SetSize(SW, SH); r.skullWin:SetPoint('BOTTOM', r.face, 'TOP', 0, -PORT * .3); r.skullWin:SetFrameLevel(r:GetFrameLevel() + 6)
+  -- off the face (sheet 86): at the right end of the name line, above the bar's end. Whether it shows is decided by
+  -- the game (hidden health), so it can't push the name aside; names are cut short of it instead.
+  r.skullWin:SetSize(SW, SH); r.skullWin:SetPoint('BOTTOMRIGHT', r, 'TOPLEFT', PADX + PORT + GAPP + BAR, -(ROW / 2 - (NAME + 3 + BARH) / 2 + NAME + 2)); r.skullWin:SetFrameLevel(r:GetFrameLevel() + 6)
   r.skullBar = CreateFrame('StatusBar', nil, r.skullWin); r.skullBar:SetSize(SW * 400, SH); r.skullBar:SetPoint('RIGHT', r.skullWin, 'RIGHT')
   r.skullBar:SetStatusBarTexture('Interface\\Buttons\\WHITE8X8'); r.skullBar:SetStatusBarColor(0, 0, 0, 0)
   r.skullBar:SetMinMaxValues(0, 1); r.skullBar:SetValue(0)
@@ -103,7 +106,7 @@ local function newRow(k)
   local cb = r.cast:CreateTexture(nil, 'BACKGROUND'); cb:SetAllPoints(); cb:SetColorTexture(0, 0, 0, .7)
   r.name = r:CreateFontString(nil, 'OVERLAY'); r.name:SetFont(K.font, NAME, 'OUTLINE')
   r.name:SetTextColor(1, 1, 1); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
-  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 6); r.name:SetWidth(BAR); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
+  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 6); r.name:SetWidth(BAR - PORT * .8 - 4); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
   -- shields and anti-magic: only while the mob has one (HELPFUL|IMPORTANT, what the game itself flags)
   local ok, buffs = pcall(CreateFrame, 'AuraContainer', nil, r, 'CustomAuraContainerTemplate')
   if ok and buffs then
@@ -208,9 +211,18 @@ local function threatLook(r, e)
     r.ring:SetVertexColor(0, 0, 0, .9)
   end
 end
+-- your demon's own spell icon (sheet 86, "demon mark is great"): crisp game art, not a 20 px face
+local DEMON_ICON = {
+  Imp = 'Interface\\Icons\\Spell_Shadow_SummonImp', Voidwalker = 'Interface\\Icons\\Spell_Shadow_SummonVoidWalker',
+  Succubus = 'Interface\\Icons\\Spell_Shadow_SummonSuccubus', Sayaad = 'Interface\\Icons\\Spell_Shadow_SummonSuccubus',
+  Felhunter = 'Interface\\Icons\\Spell_Shadow_SummonFelHunter', Felguard = 'Interface\\Icons\\Spell_Shadow_SummonFelGuard',
+}
 local function petLook(r, e)
   if e.petOn then
-    pcall(SetPortraitTexture, r.pet, 'pet')   -- your demon's own face
+    local ok, fam = pcall(UnitCreatureFamily, 'pet')
+    local icon = ok and type(fam) == 'string' and DEMON_ICON[fam]
+    if icon then r.pet:SetTexture(icon); r.pet:SetTexCoord(.08, .92, .08, .92)
+    else r.pet:SetTexCoord(0, 1, 0, 1); pcall(SetPortraitTexture, r.pet, 'pet') end   -- a demon not in the table: its face
     r.pet:Show(); r.petRim:Show()
   else r.pet:Hide(); r.petRim:Hide() end
 end

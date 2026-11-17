@@ -187,9 +187,9 @@ end
 -- one unit's pieces on one health bar (a plate's, or a row of the mob list: MobList.lua)
 local rowBars = setmetatable({}, { __mode = 'k' })   -- the list's bars: the plates' sweep never clears them
 local function paintOn(unit, hb, addon, reversed)
-  -- the mob list's bars are small and far from the mob: their pieces are lifted 35% toward white so they read
-  -- (19:48 shots: "hard to see", deep navy and plum on a dark bar); the plates keep the approved deep pieces
-  local lift = rowBars[hb] and .35 or 0
+  -- no list-only lift any more (it turned the list's pieces milky): every bar uses the same lightened colours
+  -- (KillBarStyle S.LIGHTEN)
+  local lift = 0
   local function pieceColor(b, r, g, bl)
     if lift > 0 then r, g, bl = r + (1 - r) * lift, g + (1 - g) * lift, bl + (1 - bl) * lift end
     barColor(b, r, g, bl)

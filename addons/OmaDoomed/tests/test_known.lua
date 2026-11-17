@@ -3,7 +3,7 @@
 -- moved to tests/test_foundations.lua when phase 2 fixed it.
 -- Tests here that are not on that list (the English twins) pass today and show the scenario itself is sound.
 local A = 'Creature-0-1-0-1-100-AAAA'
-local COLOR = { Corruption = { 41 / 255, 40 / 255, 136 / 255 } }
+local COLOR = { Corruption = { 41 / 255 * 1.4, 40 / 255 * 1.4, 136 / 255 * 1.4 } }   -- lightened x1.4 (KillBarStyle S.LIGHTEN)
 
 -- A German client: spell names and descriptions come back in German (Classic Era deDE wording, as in
 -- Track/Locale_deDE.lua). GetLocale may still say enUS on Forever; here it says deDE.

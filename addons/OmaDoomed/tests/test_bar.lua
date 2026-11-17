@@ -9,6 +9,8 @@ local COLOR = {   -- Doomed.lua's piece colours (sheet 34 B)
   Corruption = { 41 / 255, 40 / 255, 136 / 255 }, Immolate = { 160 / 255, 66 / 255, 22 / 255 },
   ['Bane of Agony'] = { 128 / 255, 30 / 255, 97 / 255 },
 }
+-- 2026-11-16: every piece's colour lightened x1.4, the same everywhere (KillBarStyle S.LIGHTEN)
+for k, c in pairs(COLOR) do COLOR[k] = { math.min(1, c[1] * 1.4), math.min(1, c[2] * 1.4), math.min(1, c[3] * 1.4) } end
 local function full(c) return { math.min(1, c[1] * 1.15), math.min(1, c[2] * 1.15), math.min(1, c[3] * 1.15) } end
 
 local function setup(W)
