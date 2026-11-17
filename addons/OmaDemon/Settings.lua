@@ -98,9 +98,11 @@ ns.settings = Core.NewSettings({
 
     { header = 'Extra Shards' },
     { key = 'keep', store = S, default = 6, control = 'slider', label = 'Shards to keep', min = 1, max = 20, step = 1, format = tostring,
-      tip = 'Above this many, you get one line in chat so you can clear bag space.' },
+      tip = 'How many Soul Shards you want to carry.' },
+    { key = 'trim', store = S, default = true, control = 'check', label = 'Delete extras on bag open',
+      tip = 'Each time you open your bags with more shards than you keep, one extra shard is deleted. Never in a fight. Off: you get a line in chat instead, and clear them yourself.' },
     { key = 'chat', store = S, default = true, control = 'check', label = 'Line in chat',
-      tip = 'One line in chat when you go over.' },
+      tip = 'One line in chat when a shard is deleted, or when you go over (with deleting off).' },
   },
 })
 

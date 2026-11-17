@@ -18,6 +18,7 @@ SetOverrideBindingClick = function(owner, prio, key, btn) binds[key] = btn end
 ClearOverrideBindings = function() binds = {} end
 HideUIPanel = HideUIPanel or function(f) f:Hide() end
 local count = 3
+ToggleBackpack = function() end; OpenAllBags = function() end   -- the bag-open hooks need them before the add-on loads
 PlaySound = function() end
 C_Item = C_Item or {}; C_Item.GetItemCount = function() return count end
 local files = {}
@@ -85,9 +86,9 @@ for i = 1, 30 do
   check(m:find('Lindarra', 1, true) and m ~= prev, 'funny stone line has the name, never repeats: ' .. m); prev = m
 end
 cast(2, 'Zugzug'); check(sent[#sent]:find('Zugzug', 1, true), 'funny summon line: ' .. sent[#sent])
-for _, kind in ipairs({ 'stone', 'summon', 'stones', 'shards' }) do
+for _, kind in ipairs({ 'stone', 'summon', 'stones', 'shards', 'trim' }) do
   for _, f in ipairs(ns.lines.funny[kind]) do
-    local okf, m = pcall(string.format, f, kind == 'shards' and 7 or 'Zugzug', 6)
+    local okf, m = pcall(string.format, f, (kind == 'shards' or kind == 'trim') and 7 or 'Zugzug', 6)
     check(okf and #m < 255 and not m:find('%', 1, true), 'line ok: ' .. tostring(m))
   end
 end
@@ -185,5 +186,27 @@ W.fire('UNIT_SPELLCAST_SUCCEEDED', 'player', 'c', 6)
 check(OmaDemonDB.group.nfProbe.sum.instant == 1, 'an instant Shadow Bolt is counted')
 W.fire('SPELL_ACTIVATION_OVERLAY_GLOW_SHOW', 6); check(OmaDemonDB.group.nfProbe.sum.events == 1, 'overlay event logged')
 W.advance(301); check(not PR.on and #OmaDemonDB.group.nfProbe.log > 3, 'probe stops by itself after 5 min')
+-- extra shards deleted on bag open (ShardTrim.lua)
+local bagShards, cursor, deleted = 0, nil, 0
+C_Container = C_Container or {}
+C_Container.GetContainerNumSlots = function(bag) return bag == 0 and 16 or 0 end
+C_Container.GetContainerItemID = function(bag, slot) if bag == 0 and slot <= bagShards then return 6265 end end
+C_Container.PickupContainerItem = function() cursor = 6265 end
+DeleteCursorItem = function() if cursor then cursor = nil; bagShards = bagShards - 1; deleted = deleted + 1 end end
+CursorHasItem = function() return cursor ~= nil end; ClearCursor = function() cursor = nil end
+C_Item.GetItemCount = function() return bagShards end
+date = date or os.date
+local SD = OmaDemonDB.shards
+SD.keep, SD.trim = 6, nil
+local said = {}; local oldSay = ns.say; ns.say = function(m) said[#said + 1] = m end
+bagShards = 8; W.advance(1); ToggleBackpack(); OpenAllBags(); W.advance(1)   -- one press can fire several hooks
+check(bagShards == 7 and deleted == 1, 'bag open over the limit: one shard deleted (several hooks, one press)')
+check(said[#said] and said[#said]:find('7', 1, true), 'and a line in chat: ' .. tostring(said[#said]))
+W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 6, 'next open: the last extra')
+W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 6, 'at the limit: nothing more')
+bagShards = 9; W.combat = true; W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 9, 'never in a fight'); W.combat = false
+cursor = 1234; W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 9 and cursor == 1234, 'never while you hold something')
+cursor = nil; SD.trim = false; W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 9, 'switch off: kept')
+SD.trim = nil; ns.say = oldSay
 io.write(('OmaDemon smoke: %d checks passed\n'):format(ok))
 

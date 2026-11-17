@@ -8,6 +8,7 @@ local PLAIN = {
   summon = 'summoning %s, click the portal pls',
   stones = 'healthstones ready, grab one',
   shards = '%d soul shards, over your %d. Clear some bag space when you can.',
+  trim   = 'Deleted an extra Soul Shard: %d left (keeping %d).',
 }
 
 local FUNNY = {
@@ -38,6 +39,12 @@ local FUNNY = {
     'bro %d shards, ur a soul hoarder',
     '%d shards, thats a lot of dead ppl in ur bags',
     '%d shards, ur bags are cooked. delete some',
+  },
+  trim = {
+    'yeeted a soul, %d left',
+    'ate a shard, %d left',
+    'one soul deleted, %d left. rip bozo',
+    'shard gone, %d left. nobody will miss him',
   },
 }
 ns.lines = { plain = PLAIN, funny = FUNNY }
