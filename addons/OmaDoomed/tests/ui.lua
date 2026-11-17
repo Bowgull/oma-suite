@@ -312,6 +312,7 @@ function C.SetUnit(self, unit)
 end
 function C.GetUnit(self) return self.unit end
 function C.UpdateAllAuras(self) reread(self, 'UpdateAllAuras') end
+local refuseHook
 function C.AddAuraGroup(self, key, filter, opts)
   if type(key) ~= 'string' or self.groupByKey[key] then error('AuraContainer:AddAuraGroup: bad or repeated key ' .. tostring(key), 2) end
   if type(filter) ~= 'string' then error('AuraContainer:AddAuraGroup: filter must be a string', 2) end
@@ -319,20 +320,23 @@ function C.AddAuraGroup(self, key, filter, opts)
   local g = { key = key, filter = filter, opts = opts, enabled = true, filters = opts.candidateFilters,
     max = math.min(opts.maxFrameCount or BATCH, BATCH), buttons = {} }
   for i = 1, BATCH do
-    local b = obj('AuraButton'); b.shown = false; link(b, self)
+    local b = obj('AuraButton'); b.shown = false; link(b, self); b.HookScript = refuseHook
     opts.initializeFrame(b)
     g.buttons[i] = b
   end
   self.built = self.built + BATCH; UI.aura.buttons = UI.aura.buttons + BATCH
   self.groups[#self.groups + 1] = g; self.groupByKey[key] = g
 end
+-- Forever refuses HookScript on the game's aura buttons (BugSack 2026-11-17: "Cannot assign script handler for 'onshow'
+-- (blocked by secret aspects)"), so the stand-in refuses it too
+refuseHook = function(self, what) error("Button:HookScript(): Cannot assign script handler for '" .. tostring(what):lower() .. "' (blocked by secret aspects)", 2) end
 -- AddAuraSlot: ONE button showing the first matching aura, outside the flow layout (the add-on anchors it itself)
 function C.AddAuraSlot(self, key, filter, opts)
   if type(key) ~= 'string' or self.groupByKey[key] then error('AuraContainer:AddAuraSlot: bad or repeated key ' .. tostring(key), 2) end
   if type(filter) ~= 'string' then error('AuraContainer:AddAuraSlot: filter must be a string', 2) end
   if type(opts) ~= 'table' or type(opts.initializeFrame) ~= 'function' then error('AuraContainer:AddAuraSlot: needs initializeFrame', 2) end
   local g = { key = key, filter = filter, opts = opts, enabled = true, filters = opts.candidateFilters, max = 1, slot = true, buttons = {} }
-  local b = obj('AuraButton'); b.shown = false; link(b, self)
+  local b = obj('AuraButton'); b.shown = false; link(b, self); b.HookScript = refuseHook
   opts.initializeFrame(b)
   g.buttons[1] = b
   self.built = self.built + 1; UI.aura.buttons = UI.aura.buttons + 1

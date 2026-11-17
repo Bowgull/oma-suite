@@ -75,7 +75,7 @@ function D.button(b)
   if tintByType(b, breath, 'breath') then
     local ag = breath:CreateAnimationGroup(); ag:SetLooping('BOUNCE')
     local a = ag:CreateAnimation('Alpha'); a:SetFromAlpha(.15); a:SetToAlpha(1); a:SetDuration(1.2); a:SetSmoothing('IN_OUT')
-    if not (ns.reduced and ns.reduced()) then ag:Play(); b:HookScript('OnShow', function() ag:Play() end) else breath:SetAlpha(.6) end
+    if not (ns.reduced and ns.reduced()) then ag:Play() else breath:SetAlpha(.6) end   -- a looping group keeps going; no OnShow hook (Forever blocks it on aura buttons)
     b.omBreath = ag
   end
   -- time left: the game's own countdown on a clear cooldown (no swipe, no edge)

@@ -75,7 +75,7 @@ function N.button(b)
   anims[#anims + 1] = breathe(g, .4, 1)
   N.hold = hold
   local function play() if ns.reduced and ns.reduced() then return end; for _, ag in ipairs(anims) do ag:Play() end end
-  play(); b:HookScript('OnShow', play)
+  play()   -- looping: keeps going while hidden; no OnShow hook (Forever blocks it on aura buttons)
 end
 
 local function blizzGlowSeen() return ns.groupDB().nfBlizz == true end

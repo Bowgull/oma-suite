@@ -224,6 +224,19 @@ return {
     T.ok(not r.quiet, 'back'); T.near(r.pair.sring:GetAlpha(), 1, 1e-6, 'rings full again')
     noErrors(T)
   end,
+  ["list: the game showing the crowd-control slot quiets the row, with no hook on the game's button"] = function(W, T)
+    local ns, F, UI = setup(W)
+    W.advance(1)
+    mob(W, F, 1, 'Raptor'); W.advance(.5)
+    local r = ns.moblist.rows[1]
+    local b = r.pair.main.groupByKey.occ.buttons[1]
+    T.ok(b, 'the slot exists (its set-up did not stop at a refused hook)')
+    W.combat = true; W.advance(.3); W.fire('PLAYER_REGEN_DISABLED'); W.advance(.5)
+    T.ok(UI.isVisible(r), 'in a fight the row is on screen')
+    b:Show(); T.ok(r.quiet, 'the game shows it: quiet')
+    b:Hide(); T.ok(not r.quiet, 'the game hides it: back')
+    noErrors(T)
+  end,
   ['minimap button: left-click turns the mob list off and on; a fight shows it only when on'] = function(W, T)
     local ns, F, UI = setup(W)
     if not Minimap then Minimap = CreateFrame('Frame', 'Minimap', UIParent); Minimap:SetSize(140, 140) end

@@ -120,9 +120,15 @@ local function newPair(gap, spare, flow, list)
         initializeFrame = function(b)
           R.occButton(b); b:ClearAllPoints(); b:SetAllPoints(bar)
           -- the game shows this button while someone else's crowd control is on the mob: tell the list (row goes quiet)
+          -- Forever refuses HookScript on the game's aura buttons ("blocked by secret aspects", 2026-11-17 BugSack),
+          -- so a small frame of our own rides the button: it shows and hides with it, and its scripts are ours
           b.omOwner = main
-          b:HookScript('OnShow', function(self) ns.bus:Fire('OCC', self.omOwner, true) end)
-          b:HookScript('OnHide', function(self) ns.bus:Fire('OCC', self.omOwner, false) end)
+          local okW, w = pcall(CreateFrame, 'Frame', nil, b)
+          if okW and w then
+            w:SetSize(1, 1)
+            w:SetScript('OnShow', function() ns.bus:Fire('OCC', main, true) end)
+            w:SetScript('OnHide', function() ns.bus:Fire('OCC', main, false) end)
+          end
         end })
       if not okC then log('crowd-control slot failed: ' .. tostring(errC)) end
     end
