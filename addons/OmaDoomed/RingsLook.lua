@@ -556,9 +556,10 @@ local function softIcon(b, size)
   local edge = b:CreateTexture(nil, 'ARTWORK', nil, 2); edge:SetTexture(ART .. 'softsq_edge', nil, nil, 'TRILINEAR'); edge:SetAllPoints(icon)
   return icon
 end
--- sheet 78: a mob's buffs by type: magic (your Felhunter can eat it) in Blizzard's pale "can steal" blue, Enrage in
--- orange, anything else a quiet warm grey. Kept apart from the debuff map (a debuff's Magic is blue too, darker).
-local BUFF_RGB = { Magic = { .66, .88, 1 }, Enrage = { 1, .5, .1 }, None = { .62, .58, .5 } }
+-- sheet 78: a mob's buffs by type. Magic (your Felhunter can eat it; shields, wards, Shadow Protection, Anti-Magic
+-- Shield are all magic) in orange (2026-11-16: "swap the blue for the orange ... the colour sounds nicer"), anything
+-- else a quiet warm grey. Enrage is not singled out: a warlock can't remove it and it changes nothing for him.
+local BUFF_RGB = { Magic = { 1, .5, .1 }, None = { .62, .58, .5 } }
 local buffMap
 local function buffColorMap()
   if buffMap or not CreateColor then return buffMap end

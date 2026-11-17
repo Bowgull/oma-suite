@@ -60,7 +60,7 @@ return {
     T.ok(p, 'a plate pair with its side row')
     local keys = {}; for _, g in ipairs(p.side.groups) do keys[#keys + 1] = g.key end
     T.eq(table.concat(keys, ','), 'mbuff,odeb', 'buffs first, then their debuffs')
-    T.eq(ns.rings.BUFF_RGB.Enrage[1], 1, 'Enrage orange'); T.ok(ns.rings.BUFF_RGB.Magic[3] > .9, 'magic pale blue')
+    T.eq(ns.rings.BUFF_RGB.Enrage, nil, 'Enrage not singled out'); T.eq(ns.rings.BUFF_RGB.Magic[1], 1, 'magic buffs orange'); T.ok(ns.rings.BUFF_RGB.Magic[3] < .2)
     noErrors(T)
   end,
 }
