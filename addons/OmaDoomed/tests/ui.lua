@@ -195,6 +195,14 @@ function UI.install()
     setmetatable(f, kind == 'AuraContainer' and UI.CONTMT or UI.FRAMEMT)
     if parent ~= nil then link(f, parent) end
     if kind == 'AuraContainer' then UI.newContainer(f, template) end
+    -- Forever: a frame inside a game aura button can't take OnShow/OnHide (BugSack 2026-11-17, "Frame:SetScript():
+    -- Cannot assign script handler for 'onshow' (blocked by secret aspects)"): whether it shows is secret
+    for _ = 1, 64 do
+      local up = type(parent) == 'table' and parent or nil
+      if not up then break end
+      if rawget(up, 'kind') == 'AuraButton' then f.SetScript = UI.refuseVisScript; break end
+      parent = rawget(up, '_parent')
+    end
     UI.made[#UI.made + 1] = f
     return f
   end
@@ -320,7 +328,7 @@ function C.AddAuraGroup(self, key, filter, opts)
   local g = { key = key, filter = filter, opts = opts, enabled = true, filters = opts.candidateFilters,
     max = math.min(opts.maxFrameCount or BATCH, BATCH), buttons = {} }
   for i = 1, BATCH do
-    local b = obj('AuraButton'); b.shown = false; link(b, self); b.HookScript = refuseHook
+    local b = obj('AuraButton'); b.shown = false; link(b, self); b.HookScript = refuseHook; b.SetScript = UI.refuseSet
     opts.initializeFrame(b)
     g.buttons[i] = b
   end
@@ -329,6 +337,15 @@ function C.AddAuraGroup(self, key, filter, opts)
 end
 -- Forever refuses HookScript on the game's aura buttons (BugSack 2026-11-17: "Cannot assign script handler for 'onshow'
 -- (blocked by secret aspects)"), so the stand-in refuses it too
+function UI.refuseVisScript(self, what, fn)
+  local w = tostring(what)
+  if w == 'OnShow' or w == 'OnHide' then error("Frame:SetScript(): Cannot assign script handler for '" .. w:lower() .. "' (blocked by secret aspects)", 2) end
+  return W.Frame.SetScript(self, what, fn)
+end
+-- the game sets the aura button's own scripts (OnEnter tooltip...) after initializeFrame: an add-on's SetScript there
+-- leaves "cannot replace a forbidden script handler" (BugSack 2026-11-17), so the stand-in refuses any SetScript
+local function refuseSet(self, what) error("Button:SetScript(): Cannot assign script handler for '" .. tostring(what):lower() .. "' (cannot replace a forbidden script handler)", 2) end
+UI.refuseSet = refuseSet
 refuseHook = function(self, what) error("Button:HookScript(): Cannot assign script handler for '" .. tostring(what):lower() .. "' (blocked by secret aspects)", 2) end
 -- AddAuraSlot: ONE button showing the first matching aura, outside the flow layout (the add-on anchors it itself)
 function C.AddAuraSlot(self, key, filter, opts)
@@ -336,7 +353,7 @@ function C.AddAuraSlot(self, key, filter, opts)
   if type(filter) ~= 'string' then error('AuraContainer:AddAuraSlot: filter must be a string', 2) end
   if type(opts) ~= 'table' or type(opts.initializeFrame) ~= 'function' then error('AuraContainer:AddAuraSlot: needs initializeFrame', 2) end
   local g = { key = key, filter = filter, opts = opts, enabled = true, filters = opts.candidateFilters, max = 1, slot = true, buttons = {} }
-  local b = obj('AuraButton'); b.shown = false; link(b, self); b.HookScript = refuseHook
+  local b = obj('AuraButton'); b.shown = false; link(b, self); b.HookScript = refuseHook; b.SetScript = UI.refuseSet
   opts.initializeFrame(b)
   g.buttons[1] = b
   self.built = self.built + 1; UI.aura.buttons = UI.aura.buttons + 1

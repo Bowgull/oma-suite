@@ -610,7 +610,8 @@ local function start()
   end)
   ns.bus:On('DOTS', function() for k = 1, TOKENS do local r = rows[k]; if r and r.shown then killbar(r) end end end)
   -- sheet 78: someone else's crowd control on a mob: its row goes quiet (rings and threat glow at 35%, no tick
-  -- flash); the bar is already that crowd control's teal timer. The game shows the timer button; we only follow it.
+  -- flash); the bar is already that crowd control's teal timer. On Forever nothing fires this any more: whether the
+  -- game shows that button is secret, so it can't be watched (Rings.lua, 2026-11-17). Kept for a safe signal later.
   ns.bus:On('OCC', function(owner, on)
     for k = 1, TOKENS do
       local r = rows[k]

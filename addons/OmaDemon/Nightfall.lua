@@ -76,7 +76,14 @@ local function chime()
   pcall(PlaySound, (SOUNDKIT and SOUNDKIT.UI_POWER_AURA_GENERIC) or 23287, 'SFX')
 end
 -- the two crescents, on a frame of their own under `parent` (the game's aura button, or UIParent for the preview).
--- The frame is ours, so its OnShow is allowed: it fires when the game shows the button.
+-- Under the game's button no OnShow/OnHide is allowed, not even on our own frame (BugSack 2026-11-17: "blocked by
+-- secret aspects"; whether it shows is the secret). So there the pulse just loops from the start and the game's
+-- showing the button is the whole effect: no fade-in and no chime on a real proc. The preview keeps both.
+local function settle(f)
+  local off = ns.groupDB().nfOverlayBlizz or ns.groupDB().nfOn == false
+  f:SetAlpha(off and 0 or opacity())
+end
+N.settle = settle
 function N.crescents(parent)
   local f = CreateFrame('Frame', nil, parent); f:SetSize(LONG, LONG); f:ClearAllPoints(); f:SetPoint('CENTER', UIParent, 'CENTER')
   pcall(f.SetFrameStrata, f, 'BACKGROUND')
@@ -96,6 +103,11 @@ function N.crescents(parent)
   local a = fade:CreateAnimation('Alpha'); a:SetFromAlpha(0); a:SetToAlpha(1); a:SetDuration(.2)
   f.sides, f.fade = sides, fade
   paint(f)
+  if parent ~= UIParent then
+    settle(f)
+    if not (ns.reduced and ns.reduced()) then for _, sd in ipairs(sides) do sd.pulse:Play() end end
+    return f
+  end
   f:SetScript('OnShow', function(self)
     if ns.groupDB().nfOverlayBlizz or ns.groupDB().nfOn == false then self:SetAlpha(0); return end
     paint(self)
@@ -187,7 +199,7 @@ end
 ns.onSetting[#ns.onSetting + 1] = function(key)
   if key ~= 'nfColour' and key ~= 'nfOn' then return end
   for _, f in ipairs({ N.live, N.previewFrame }) do
-    if f then paint(f); if key == 'nfOn' and ns.groupDB().nfOn == false then f:SetAlpha(0) end end
+    if f then paint(f); if key == 'nfOn' then if f == N.live then settle(f) elseif ns.groupDB().nfOn == false then f:SetAlpha(0) end end end
   end
 end
 

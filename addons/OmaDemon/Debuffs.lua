@@ -89,9 +89,9 @@ function D.button(b)
     n:SetPoint('BOTTOMRIGHT', b, 'BOTTOMRIGHT', -2, 2)
     pcall(b.SetApplicationsText, b, n)
   end
-  -- hover shows its tooltip (keep Blizzard's own if the button already has one)
-  pcall(b.EnableMouse, b, true)
-  if not (b.GetScript and type(b:GetScript('OnEnter')) == 'function') then b:SetScript('OnEnter', onEnter); b:SetScript('OnLeave', onLeave) end
+  -- hover shows the game's own tooltip: the game sets the button's OnEnter after this, and ours would block it
+  -- ("cannot replace a forbidden script handler", BugSack 2026-11-17). Mouse motion only, so clicks pass through.
+  if b.EnableMouseMotion then pcall(b.EnableMouseMotion, b, true) else pcall(b.EnableMouse, b, true) end
 end
 
 -- just above the action bars: the highest bottom bar that is showing, else the screen's bottom centre

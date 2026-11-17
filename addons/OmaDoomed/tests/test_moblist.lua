@@ -224,17 +224,15 @@ return {
     T.ok(not r.quiet, 'back'); T.near(r.pair.sring:GetAlpha(), 1, 1e-6, 'rings full again')
     noErrors(T)
   end,
-  ["list: the game showing the crowd-control slot quiets the row, with no hook on the game's button"] = function(W, T)
+  ["list: the crowd-control slot builds with no scripts on the game's button or inside it (Forever refuses them)"] = function(W, T)
     local ns, F, UI = setup(W)
     W.advance(1)
     mob(W, F, 1, 'Raptor'); W.advance(.5)
     local r = ns.moblist.rows[1]
     local b = r.pair.main.groupByKey.occ.buttons[1]
-    T.ok(b, 'the slot exists (its set-up did not stop at a refused hook)')
+    T.ok(b, 'the slot exists')
     W.combat = true; W.advance(.3); W.fire('PLAYER_REGEN_DISABLED'); W.advance(.5)
-    T.ok(UI.isVisible(r), 'in a fight the row is on screen')
-    b:Show(); T.ok(r.quiet, 'the game shows it: quiet')
-    b:Hide(); T.ok(not r.quiet, 'the game hides it: back')
+    b:Show(); b:Hide()
     noErrors(T)
   end,
   ['list sizing keeps its top-left corner on the same spot of the screen (the grip no longer slides it)'] = function(W, T)
