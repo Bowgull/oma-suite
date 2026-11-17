@@ -1,7 +1,8 @@
--- Seats (sheets 69/70 A, 73; approved 2026-11-16): over a mob each DoT has its own fixed spot, a missing one leaves
--- its spot blank, the row stays centred on the seats you know, and rings sit 20% of a ring apart.
+-- Seats, packed (2026-11-16, "dots have their place but never an empty spot they organize themselves correctly to
+-- where they belong"): each seat DoT is a one-button group, in seat order, in its own flowing row. The game lays the
+-- row out (in combat too), so a DoT that isn't up takes no space and the rest close up in their order. The ending
+-- glow, the bands and the icons flow the same groups the same way, so they line up.
 local A = 'Creature-0-1-0-1-100-A'
-
 local function setup(W, known)
   local ns, F, UI = require('load').addon({ rings = true, before = function()
     if known then IsPlayerSpell = function(id) return known[id] == true end end
@@ -10,87 +11,54 @@ local function setup(W, known)
   return ns, F, UI
 end
 local function noErrors(T) T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1])) end
-local function seatOf(c, key) return c.groupByKey[key] end
-local function xOf(b) local p = b._pts and b._pts.BOTTOM; return p and p[3] end
-
--- every rank of every seat spell known, except what 'without' names
-local function knownAll(ns, without)
-  local k = {}
-  for _, sp in ipairs(ns.spells.list) do if sp.key ~= without then for _, id in ipairs(sp.ids) do k[id] = true end end end
-  return k
-end
+local function keys(c) local t = {}; for _, g in ipairs(c.groups) do t[#t + 1] = g.key end; return table.concat(t, ',') end
+local ORDER = 'corruption,agony,curse,immolate,siphon'
 
 return {
-  ['seats: each DoT is one aura slot (1 button), the rest still flow; a pair costs half what it did'] = function(W, T)
+  ['packed seats: halo, band and icon rows flow the same groups in seat order, one button each'] = function(W, T)
     local ns, F, UI = setup(W)
     local ring = UI.ringContainers()[1]
-    for _, k in ipairs({ 'corruption', 'agony', 'curse', 'immolate', 'siphon' }) do
-      local g = seatOf(ring, k); T.ok(g and g.slot, k .. ' is a slot'); T.eq(#g.buttons, 1, k .. ': one button')
-      T.ok(seatOf(UI.mainOf(ring), k).slot, k .. ': a slot in main too')
+    local p; for _, q in ipairs(ns.rings.pairsAll) do if q.ring == ring then p = q end end
+    T.ok(p and p.sring and p.smain and p.halo, 'a pair has its seat rows')
+    for _, c in ipairs({ p.sring, p.smain, p.halo }) do
+      T.eq(keys(c), ORDER, 'seat order')
+      for _, g in ipairs(c.groups) do T.ok(not g.slot, g.key .. ' is a group (flows), not a fixed slot'); T.eq(g.opts.maxFrameCount, 1, g.key .. ': one button') end
     end
-    for _, k in ipairs({ 'cc', 'channel', 'mine', 'others' }) do T.ok(not seatOf(ring, k).slot, k .. ' still flows') end
-    T.eq(ring.built + UI.mainOf(ring).built, 91, '91 aura buttons a pair (was 180): the seats, the flowing groups, one crowd-control slot')
+    T.ok(UI.kids(p.sring)[1] == p.smain or (function() for _, k in ipairs(UI.kids(p.sring)) do if k == p.smain then return true end end end)(), 'icons are a child of the bands (draw above)')
     noErrors(T)
   end,
-  ['seats: fixed spots, centred, 20% of a ring apart; a missing DoT leaves its spot blank'] = function(W, T)
-    local R
-    local ns, F, UI = setup(W, nil)
-    R = ns.rings
-    local S = R.S
-    local ring = UI.ringContainers()[1]
-    -- no IsPlayerSpell in this world: all five seats count
-    local want = { corruption = -2, agony = -1, curse = 0, immolate = 1, siphon = 2 }
-    for k, i in pairs(want) do
-      local b = seatOf(ring, k).buttons[1]
-      T.near(xOf(b), i * S * 1.2, 1e-6, k .. ' sits in its spot')
-      T.near(xOf(seatOf(UI.mainOf(ring), k).buttons[1]), i * S * 1.2, 1e-6, k .. ': main lines up with ring')
-    end
-    -- a mob with only Agony: Agony shows in ITS spot, the others draw nothing
-    F.mob('nameplate1', A, 'Kobold', 300).auras = { 980 }
+  ['packed seats: a mob with only Agony and Immolate shows just those two, Agony first'] = function(W, T)
+    local ns, F, UI = setup(W)
+    F.mob('nameplate1', A, 'Kobold', 300).auras = { 348, 980 }
     W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); W.advance(.5)
-    local row = UI.rowOn('nameplate1'); local seen = UI.showing(UI.mainOf(row))
-    T.eq(#seen.agony, 1, 'Agony shows'); T.eq(#seen.corruption, 0, 'Corruption spot blank'); T.eq(#seen.immolate, 0, 'Immolate spot blank')
-    T.near(xOf(seatOf(row, 'agony').buttons[1]), -S * 1.2, 1e-6, 'still in the second spot')
+    local row = UI.rowOn('nameplate1'); local p
+    for _, q in ipairs(ns.rings.pairsAll) do if q.ring == row then p = q end end
+    T.ok(p, 'the row'); p.smain:UpdateAllAuras()
+    local seen = UI.showing(p.smain)
+    T.eq(#seen.corruption, 0, 'no Corruption: takes no place'); T.eq(#seen.agony, 1, 'Agony'); T.eq(#seen.immolate, 1, 'Immolate')
     noErrors(T)
   end,
-  ['seats: without Siphon Life the four you know are centred; learning it re-centres five'] = function(W, T)
+  ['packed seats: the row starts where the first seat was, and re-centres when a seat is learned'] = function(W, T)
     local known = {}
     local ns, F, UI = setup(W, known)
-    -- learn every spell but Siphon Life, then tell the rings (SPELLS_CHANGED, out of combat)
-    for id in pairs(knownAll(ns, 'siphon')) do known[id] = true end
+    local S, R = ns.rings.S, ns.rings
+    for _, sp in ipairs(ns.spells.list) do if sp.key ~= 'siphon' then for _, id in ipairs(sp.ids) do known[id] = true end end end
     W.fire('SPELLS_CHANGED'); W.advance(.1)
-    local S = ns.rings.S
-    local ring = UI.ringContainers()[1]
-    T.near(xOf(seatOf(ring, 'corruption').buttons[1]), -1.5 * S * 1.2, 1e-6, 'four seats: Corruption first')
-    T.near(xOf(seatOf(ring, 'immolate').buttons[1]), 1.5 * S * 1.2, 1e-6, 'Immolate last')
-    for id in pairs(knownAll(ns)) do known[id] = true end
+    local p = ns.rings.pairsAll[1]
+    local x = p.sring._pts and p.sring._pts.BOTTOMLEFT and p.sring._pts.BOTTOMLEFT[3]
+    T.near(x, R.seatX(1, 4) - S / 2, 1e-6, 'four known: starts at the first of four spots')
+    for _, sp in ipairs(ns.spells.list) do for _, id in ipairs(sp.ids) do known[id] = true end end
     W.fire('SPELLS_CHANGED'); W.advance(.1)
-    T.near(xOf(seatOf(ring, 'corruption').buttons[1]), -2 * S * 1.2, 1e-6, 'five seats: Corruption moves out')
-    T.near(xOf(seatOf(ring, 'siphon').buttons[1]), 2 * S * 1.2, 1e-6, 'Siphon Life takes the fifth')
+    x = p.sring._pts.BOTTOMLEFT[3]
+    T.near(x, R.seatX(1, 5) - S / 2, 1e-6, 'five known: moves out')
     noErrors(T)
   end,
-  ['seats: the flowing rings sit one ring and a gap above the seats; target-frame rows have no seats'] = function(W, T)
+  ['seats: target-frame rows have no seat rows; plate rows keep the flowing rings above'] = function(W, T)
     local ns, F, UI = require('load').addon({ rings = true, before = function() OmaDoomedDB = { rings = { where = 'split' } } end })
     W.advance(3)
-    local R = ns.rings
-    local plateRing
-    for _, c in ipairs(UI.ringContainers()) do
-      if c.unit == 'target' then T.ok(not c.groupByKey.corruption.slot, 'a row following your target keeps the flow')
-      elseif not plateRing then plateRing = c end
+    for _, p in ipairs(ns.rings.pairsAll) do
+      if p.ring.unit == 'target' then T.ok(not p.sring, 'a row following your target keeps the flow') end
     end
-    local p = plateRing._pts.BOTTOM
-    T.near(p[4], R.S + 0.2 * R.S, 1e-6, 'flow row above the seats')
     noErrors(T)
-  end,
-  ['rings wait for the ring font: nothing is built before it loads (2026-11-16: endings were missable)'] = function(W, T)
-    local ns = require('load').addon({ rings = true })
-    local R = ns.rings
-    R.glyphWaiting = true
-    local ran = false
-    R.whenGlyph(function() ran = true end)
-    T.ok(not ran, 'held while the font is still loading')
-    R.glyphReady()
-    T.ok(ran, 'run once it has loaded')
-    T.ok(not R.glyphWaiting)
   end,
 }

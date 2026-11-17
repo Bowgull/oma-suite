@@ -75,9 +75,8 @@ local function newRow(k)
   -- DoTs' damage; the skull rides its end and reaches the little window only when the damage covers the health)
   local SW, SH = PORT * .78, PORT * .78 * 54 / 78
   r.skullWin = CreateFrame('Frame', nil, r); r.skullWin:SetClipsChildren(true)
-  -- off the face (sheet 86): at the right end of the name line, above the bar's end. Whether it shows is decided by
-  -- the game (hidden health), so it can't push the name aside; names are cut short of it instead.
-  r.skullWin:SetSize(SW, SH); r.skullWin:SetPoint('BOTTOMRIGHT', r, 'TOPLEFT', PADX + PORT + GAPP + BAR, -(ROW / 2 - (NAME + 3 + BARH) / 2 + NAME + 2)); r.skullWin:SetFrameLevel(r:GetFrameLevel() + 6)
+  -- on the portrait's top rim, as the big skull sits on the target frame (2026-11-16: "On the portrait")
+  r.skullWin:SetSize(SW, SH); r.skullWin:SetPoint('BOTTOM', r.face, 'TOP', 0, -PORT * .3); r.skullWin:SetFrameLevel(r:GetFrameLevel() + 6)
   r.skullBar = CreateFrame('StatusBar', nil, r.skullWin); r.skullBar:SetSize(SW * 400, SH); r.skullBar:SetPoint('RIGHT', r.skullWin, 'RIGHT')
   r.skullBar:SetStatusBarTexture('Interface\\Buttons\\WHITE8X8'); r.skullBar:SetStatusBarColor(0, 0, 0, 0)
   r.skullBar:SetMinMaxValues(0, 1); r.skullBar:SetValue(0)
@@ -106,7 +105,7 @@ local function newRow(k)
   local cb = r.cast:CreateTexture(nil, 'BACKGROUND'); cb:SetAllPoints(); cb:SetColorTexture(0, 0, 0, .7)
   r.name = r:CreateFontString(nil, 'OVERLAY'); r.name:SetFont(K.font, NAME, 'OUTLINE')
   r.name:SetTextColor(1, 1, 1); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
-  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 6); r.name:SetWidth(BAR - PORT * .8 - 4); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
+  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 6); r.name:SetWidth(BAR); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
   -- shields and anti-magic: only while the mob has one (HELPFUL|IMPORTANT, what the game itself flags)
   local ok, buffs = pcall(CreateFrame, 'AuraContainer', nil, r, 'CustomAuraContainerTemplate')
   if ok and buffs then
@@ -423,7 +422,7 @@ local function buildPairs()
       local r = rows[k]
       if r and not r.pair then
         r.pair = R.newListPair(r) or false
-        if r.pair then placeSeats(r); r.pair.bar:SetAllPoints(r.bar); r.pair.ring:SetUnit(r.unit); r.pair.main:SetUnit(r.unit); if r.pair.halo then r.pair.halo:SetUnit(r.unit) end end
+        if r.pair then placeSeats(r); r.pair.bar:SetAllPoints(r.bar); r.pair.ring:SetUnit(r.unit); r.pair.main:SetUnit(r.unit); if r.pair.halo then r.pair.halo:SetUnit(r.unit) end; if r.pair.sring then r.pair.sring:SetUnit(r.unit); r.pair.smain:SetUnit(r.unit) end end
         return
       end
     end

@@ -84,7 +84,7 @@ return {
     local r = ns.moblist.rows[1]
     T.ok(r.pair, 'the row has its rings')
     T.eq(r.pair.ring.unit, 'nameplate1', 'bound to its own token')
-    UI.mainOf(r.pair.ring):UpdateAllAuras()
+    UI.mainOf(r.pair.ring):UpdateAllAuras(); r.pair.smain:UpdateAllAuras()
     local seen = UI.showing(UI.mainOf(r.pair.ring))
     T.eq(#seen.corruption, 1, 'Corruption'); T.eq(#seen.agony, 1, 'Agony'); T.eq(#seen.immolate, 0, 'Immolate blank')
     T.ok(not UI.group(r.pair.ring, 'others').enabled, "other players' DoTs are not in the list")

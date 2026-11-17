@@ -137,7 +137,7 @@ return {
     T.ok(UI.rowOn('nameplate1'), 'a row')
     local pulses = 0
     ns.bus:Fire('TICK', 'target', 'Corruption')
-    for _, c in ipairs(UI.ringContainers()) do if c.unit == 'nameplate1' then for _, g in ipairs(c.groups) do for _, b in ipairs(g.buttons) do
+    for _, c in ipairs(UI.aura.containers) do if c.unit == 'nameplate1' then for _, g in ipairs(c.groups) do for _, b in ipairs(g.buttons) do
       local g2 = rawget(b, 'omPulse'); if g2 and rawget(g2, '_plays') then pulses = pulses + g2._plays end end end end end
     T.eq(pulses, 1, "Corruption's ring breathed once")
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))

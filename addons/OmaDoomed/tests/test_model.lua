@@ -213,7 +213,7 @@ return {
   ["no eyes: each plate gets a ring, a main, a side container (other players' debuffs) and the ending glow, nothing else"] = function(W, T)
     local ns, F, UI = require('load').addon({ rings = true }); W.advance(3)
     local rings = #UI.ringContainers()
-    T.ok(rings > 0); T.eq(#UI.aura.containers, 4 * rings, 'four containers per pair (sheet 78 + the ending glow)')
+    T.ok(rings > 0); T.eq(#UI.aura.containers, 6 * rings, 'six containers per pair (flow ring + main, packed seat ring + main, side, ending glow)')
     for _, c in ipairs(UI.aura.containers) do T.eq(UI.group(c, 'isb'), nil, 'no eyes group') end
     T.eq(ns.eyes, nil); T.eq(ns.eyesUnits, nil); T.eq(ns.eyeKeyFor, nil)
   end,

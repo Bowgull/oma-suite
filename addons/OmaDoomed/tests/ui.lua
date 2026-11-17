@@ -292,13 +292,15 @@ function UI.reads(c) local r = c.rereads; return (r.SetUnit or 0) + (r.UpdateAll
 -- What a container shows: group key -> list of spell IDs on shown buttons
 function UI.showing(c)
   local out = {}
-  for _, g in ipairs(c.groups) do
+  local all = {}; for _, g in ipairs(c.groups) do all[#all + 1] = g end
+  local seat = rawget(c, 'omSeat'); if seat then for _, g in ipairs(seat.groups) do all[#all + 1] = g end end   -- the packed seat row
+  for _, g in ipairs(all) do
     local ids = {}; for _, b in ipairs(g.buttons) do if b.shown then ids[#ids + 1] = b._spell end end
     out[g.key] = ids
   end
   return out
 end
-function UI.group(c, key) return c.groupByKey[key] end
+function UI.group(c, key) local seat = rawget(c, 'omSeat'); return c.groupByKey[key] or (seat and seat.groupByKey[key]) end
 local function group(c, key)
   local g = c.groupByKey[key]
   if not g then error('AuraContainer: no aura group "' .. tostring(key) .. '"', 3) end
@@ -367,7 +369,9 @@ end
 function UI.ringContainers()
   local out = {}
   for _, c in ipairs(UI.aura.containers) do
-    for _, k in ipairs(UI.kids(c)) do if rawget(k, 'groups') then out[#out + 1] = c; break end end
+    if not rawget(c, 'omIsSeat') then
+      for _, k in ipairs(UI.kids(c)) do if rawget(k, 'groups') then out[#out + 1] = c; break end end
+    end
   end
   return out
 end

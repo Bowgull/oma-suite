@@ -83,7 +83,9 @@ return {
     local ring = UI.ringContainers()[1]
     T.ok(ring, 'a pair was built')
     local keys = {}; for _, g in ipairs(ring.groups) do keys[#keys + 1] = g.key end
-    T.eq(table.concat(keys, ','), 'cc,corruption,agony,immolate,siphon,curse,channel,mine,others', 'groups in layout order')
+    T.eq(table.concat(keys, ','), 'cc,channel,mine,others', 'the flowing groups in layout order')
+    local sk = {}; for _, g in ipairs(ring.omSeat.groups) do sk[#sk + 1] = g.key end
+    T.eq(table.concat(sk, ','), 'corruption,agony,curse,immolate,siphon', 'the DoTs in their own packed row, in seat order')
     T.eq(#UI.mainOf(ring).groups, #ring.groups + 1, "ring and main have the same groups, so buttons line up; main adds someone else's crowd control (sheet 78)")
     T.ok(UI.group(UI.mainOf(ring), 'occ'), 'the crowd-control slot is on main')
     noErrors(T)

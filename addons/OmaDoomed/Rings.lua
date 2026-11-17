@@ -39,11 +39,7 @@ local function setupContainer(c, kind, gap, seats, anchor)
   c:SetFlowLayoutMaximumLineSize(S * R.PER_ROW + 0.01)
   for _, g in ipairs(R.GROUPS) do
     if seats and g.seat then
-      local init = g[kind]
-      local ok, err = pcall(c.AddAuraSlot, c, g.key, g.filter, {
-        initializeFrame = function(b) init(b); seats[b] = g.key; R.placeSeats({ [b] = g.key }, anchor) end,
-        candidateFilters = R.filtersFor(g.key), sortMethod = SORT })
-      if not ok then log(kind .. ' seat ' .. g.key .. ' failed: ' .. tostring(err)); error(err) end
+      -- the seats live in their own packed row (seatRow below)
     elseif g.key ~= 'others' or R.othersOK then
       local ok, err = pcall(c.AddAuraGroup, c, g.key, g.filter, {
         initializeFrame = (gap and kind == 'main' and g.mainFrame) or g[kind], candidateFilters = R.filtersFor(g.key), sortMethod = SORT,
@@ -53,6 +49,37 @@ local function setupContainer(c, kind, gap, seats, anchor)
         if g.key == 'others' then R.othersOK = false else error(err) end
       end
     end
+  end
+end
+
+-- 2026-11-16 ("dots have their place but never an empty spot they organize themselves correctly to where they
+-- belong"): the seat DoTs are one small group each, in seat order (Corruption, Agony, the curse, Immolate, Siphon
+-- Life), in their own flowing row. Blizzard lays the row out, in combat too: a DoT that isn't up takes no space, so the
+-- others close up in their order, and it slots back into its place when it lands. Three rows flow identically: the
+-- ending glow (halo), the bands (ring) and the icons and numbers (main, a child of ring so it draws above).
+local function groupByKey(key) for _, g in ipairs(R.GROUPS) do if g.key == key then return g end end end
+local function seatRow(c, kind)
+  pcall(c.SetEditModePreviewEnabled, c, false)
+  c:SetFlowLayoutAnchorPoint('BOTTOMLEFT')
+  c:SetFlowLayoutGrowthDirection(1, 1)
+  c:SetFlowLayoutMaximumLineSize(S * 12)
+  for _, key in ipairs(R.SEATS) do
+    local g = groupByKey(key)
+    if g then
+      local init = kind == 'halo' and R.haloFor(key) or g[kind]
+      local ok, err = pcall(c.AddAuraGroup, c, key, g.filter, { initializeFrame = init, candidateFilters = R.filtersFor(key),
+        sortMethod = SORT, maxFrameCount = 1, layout = { groupSpacing = R.SEAT_GAP } })
+      if not ok then log(kind .. ' seat ' .. key .. ' failed: ' .. tostring(err)); if kind ~= 'halo' then error(err) end end
+    end
+  end
+end
+-- the packed row starts where the first seat's spot is, so a full row sits exactly where the old seats did
+function R.placeSeatRow(p)
+  if not (p and p.sring) then return end
+  local _, n = R.seatSpots()
+  local x = R.seatX(1, n) - S / 2
+  for _, c in ipairs({ p.halo, p.sring, p.smain }) do
+    if c then c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOM', x, 0) end
   end
 end
 
@@ -69,19 +96,11 @@ local function newPair(gap, spare, flow, list)
     local anchor = CreateFrame('Frame', nil, holder); anchor:SetSize(1, 1); anchor:Hide()
     local seats = not flow and {} or nil
     -- the ending glow, under the rings: one slot per seat, placed with the seats (RingsLook.lua R.haloFor)
-    local halo
+    local halo, sring, smain
     if seats then
-      halo = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
-      pcall(halo.SetEditModePreviewEnabled, halo, false)
-      for _, g in ipairs(R.GROUPS) do
-        if g.seat then
-          local init = R.haloFor(g.key)
-          local okH, errH = pcall(halo.AddAuraSlot, halo, g.key, g.filter, { sortMethod = SORT, candidateFilters = R.filtersFor(g.key),
-            initializeFrame = function(b) init(b); seats[b] = g.key; R.placeSeats({ [b] = g.key }, anchor) end })
-          if not okH then log('ending glow ' .. g.key .. ' failed: ' .. tostring(errH)) end
-        end
-      end
-      halo:SetPoint('BOTTOM', anchor, 'BOTTOM')
+      halo = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate'); seatRow(halo, 'halo')
+      sring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate'); seatRow(sring, 'ring')
+      smain = CreateFrame('AuraContainer', nil, sring, 'CustomAuraContainerTemplate'); seatRow(smain, 'main')
     end
     local ring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
     setupContainer(ring, 'ring', gap, seats, anchor)
@@ -113,7 +132,11 @@ local function newPair(gap, spare, flow, list)
       else side:SetPoint('LEFT', bar, 'RIGHT', R.LEVEL_BOX, 0) end
     end
     if halo then halo:SetFrameLevel(math.max(0, ring:GetFrameLevel() - 1)) end
-    return { anchor = anchor, ring = ring, main = main, seats = seats, up = up, bar = bar, side = side, halo = halo }
+    local pp = { anchor = anchor, ring = ring, main = main, seats = seats, up = up, bar = bar, side = side, halo = halo, sring = sring, smain = smain }
+    if sring then sring.omIsSeat, smain.omIsSeat = true, true; ring.omSeat, main.omSeat = sring, smain end   -- tests and diagnostics
+    R.placeSeatRow(pp)
+    if halo and sring then halo:SetFrameLevel(math.max(0, sring:GetFrameLevel() - 1)) end
+    return pp
   end)
   if not ok then log('new pair failed: ' .. tostring(p)); return nil end
   if t0 then
@@ -247,6 +270,7 @@ local function attach(unit)
   hostOn(p.anchor, plate, unit)
   place(p.anchor, plate, unit); placeBar(p, plate, unit)
   p.ring:SetUnit(unit); p.main:SetUnit(unit); if p.halo then p.halo:SetUnit(unit) end   -- while hidden: no event churn; Show re-reads every aura
+  if p.sring then p.sring:SetUnit(unit); p.smain:SetUnit(unit) end
   p.want = nil; p.anchor:SetAlpha(0); p.anchor:Hide(); look(p); p.want = false; p.curA = 0; visible()
   if #free < POOL_MIN_FREE and not InCombatLockdown() then fill() end   -- keep spares for the next pull
 end
@@ -354,7 +378,7 @@ local function releaseAll() local us = {}; for u in pairs(active) do us[#us + 1]
 
 -- a seat learned or lost (Siphon Life at 30): every row's seats move so the row stays centred. Out of combat only.
 local function placeAllSeats()
-  for _, p in ipairs(pairsAll) do if p.seats then R.placeSeats(p.seats, p.anchor) end end
+  for _, p in ipairs(pairsAll) do if p.sring then R.placeSeatRow(p) end end
 end
 R.placeAllSeats = placeAllSeats
 
@@ -365,8 +389,10 @@ local function refreshFilters()
   for _, p in ipairs(pairsAll) do
     for _, c in ipairs({ p.ring, p.main }) do
       for _, g in ipairs(R.GROUPS) do
-        if p.seats and g.seat then pcall(c.SetAuraSlotCandidateFilters, c, g.key, R.filtersFor(g.key))
-          if c == p.ring and p.halo then pcall(p.halo.SetAuraSlotCandidateFilters, p.halo, g.key, R.filtersFor(g.key)) end
+        if p.seats and g.seat then
+          if c == p.ring then
+            for _, sc in ipairs({ p.sring, p.smain, p.halo }) do if sc then pcall(sc.SetAuraGroupCandidateFilters, sc, g.key, R.filtersFor(g.key)) end end
+          end
         elseif g.key ~= 'others' or R.othersOK then pcall(c.SetAuraGroupCandidateFilters, c, g.key, R.filtersFor(g.key)) end
       end
     end
