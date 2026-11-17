@@ -142,6 +142,13 @@ end
 local function anchorHolder()
   if not holder then return end
   holder:ClearAllPoints()
+  -- moved by you (sheet 83 "everything can be moved"): your saved place and size win
+  local pos = db and db.ccPos
+  if pos and pos.x then
+    holder:SetPoint('RIGHT', UIParent, 'BOTTOMLEFT', pos.x, pos.y)
+    if not InCombatLockdown() then holder:SetScale(pos.scale or 1) end
+    return
+  end
   local main = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
   local bars = main and main.HealthBarsContainer
   if bars then holder:SetPoint('RIGHT', bars, 'LEFT', -GAP, 0)
@@ -301,6 +308,36 @@ function CC.test()
   return h
 end
 
+-- ---------- moving it (2026-11-16, plan phase 6): unlocked with the mob list (Move button, key, hover tab) ----------
+local mover
+local function savePlace()
+  local r, b = holder:GetRight(), holder:GetBottom()
+  local s = holder:GetEffectiveScale() / UIParent:GetEffectiveScale()
+  if r and b then db.ccPos = { x = r * s, y = (b + SIZE / 2) * s, scale = holder:GetScale() } end
+end
+function CC.unlock(on)
+  if not holder or InCombatLockdown() then return end
+  if on and not mover then
+    mover = CreateFrame('Frame', nil, UIParent); mover:SetFrameStrata('HIGH'); mover:EnableMouse(true); mover:EnableMouseWheel(true)
+    mover:SetPoint('TOPRIGHT', holder, 'TOPRIGHT', 6, 6); mover:SetSize(SIZE * 3 + 12, SIZE + 12)
+    local f = mover:CreateTexture(nil, 'BACKGROUND'); f:SetAllPoints(); f:SetColorTexture(.12, .43, .86, .16)
+    local tag = mover:CreateFontString(nil, 'OVERLAY'); tag:SetFont(STANDARD_TEXT_FONT, 12, ''); tag:SetText('Crowd control'); tag:SetPoint('BOTTOM', mover, 'TOP', 0, 2)
+    holder:SetMovable(true); holder:SetClampedToScreen(true)
+    mover:SetScript('OnMouseDown', function(_, b) if b == 'LeftButton' and not InCombatLockdown() then holder:StartMoving() end end)
+    mover:SetScript('OnMouseUp', function(_, b)
+      holder:StopMovingOrSizing(); savePlace()
+      if b == 'RightButton' and ns.moblist and ns.moblist.unlock then ns.moblist.unlock(false) end
+    end)
+    mover:SetScript('OnMouseWheel', function(_, d)
+      if InCombatLockdown() then return end
+      holder:SetScale(math.max(.5, math.min(3, holder:GetScale() + d * .1))); savePlace()
+    end)
+  end
+  if mover then mover:SetShown(on) end
+  if on then CC.test() end
+end
+function CC.resetPlace() db.ccPos = nil; anchorHolder() end
+
 -- the plate ring group follows the setting (out of combat: groups can't change in a fight)
 local function plateGroups()
   if InCombatLockdown() or not R.pairsAll then return end
@@ -319,10 +356,11 @@ local function start()
   anchorHolder()
   local ev = CreateFrame('Frame')
   pcall(ev.RegisterUnitEvent, ev, 'UNIT_SPELLCAST_SUCCEEDED', 'player', 'pet')
-  for _, e in ipairs({ 'PLAYER_REGEN_ENABLED', 'PLAYER_TARGET_CHANGED', 'PLAYER_DEAD', 'UI_SCALE_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
+  for _, e in ipairs({ 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'PLAYER_TARGET_CHANGED', 'PLAYER_DEAD', 'UI_SCALE_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
   ev:SetScript('OnEvent', function(_, e, unit, _, spellID)
     local ok, err = pcall(function()
       if e == 'UNIT_SPELLCAST_SUCCEEDED' then CC.cast(unit, spellID)
+      elseif e == 'PLAYER_REGEN_DISABLED' then if mover then mover:Hide() end
       elseif e == 'PLAYER_REGEN_ENABLED' then
         -- out of combat: no mob is held any more
         CC.clear(); anchorHolder(); plateGroups()

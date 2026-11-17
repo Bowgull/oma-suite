@@ -403,6 +403,8 @@ local function unlock(on)
   if sel then sel:SetShown(on) end
   -- unlocked, it shows the five test rows, so you place and size the list you will really see
   if L.test and (on and not L.testing or (not on and L.testing and L.testForMove)) then L.testForMove = on or nil; L.test(on, true) end
+  -- your crowd-control ring moves with the same unlock (sheet 83: everything can be moved)
+  if ns.cc and ns.cc.unlock then pcall(ns.cc.unlock, on) end
   visible(); fitBack()
 end
 L.toggleMove = function() unlock(not db.unlocked) end

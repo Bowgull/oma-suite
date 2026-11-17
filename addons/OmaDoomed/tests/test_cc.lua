@@ -140,4 +140,15 @@ return {
     T.eq(UI.group(UI.rowOn('nameplate1'), 'cc').enabled, false, 'plate group off too')
     noErrors(T)
   end,
+  ['cc ring: unlocking the list lets you move it; your place is kept'] = function(W, T)
+    local ns = require('load').addon({ rings = true }); W.advance(3)
+    T.ok(ns.cc and ns.cc.unlock, 'mover exists')
+    ns.moblist.slash('move')
+    ns.cc.unlock(true)
+    OmaDoomedDB.rings.ccPos = { x = 300, y = 400, scale = 1.2 }
+    ns.cc.anchorHolder()
+    ns.moblist.slash('lock')
+    T.eq(OmaDoomedDB.rings.ccPos.x, 300, 'kept after locking')
+    T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
+  end,
 }
