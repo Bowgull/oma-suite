@@ -405,7 +405,9 @@ R.LIT_HALO = 0.5
 -- The ring font against the ring art, measured with /omadoomed glyph: the font's ring is drawn GLYPH_K times the
 -- size asked for, its centre off by (GLYPH_DX, GLYPH_DY) of the size. Until measured, the font-drawn light and its
 -- bloom stay off (GLYPH_MEASURED): two attempts without it hung huge and off-centre.
-R.GLYPH_K, R.GLYPH_DX, R.GLYPH_DY, R.GLYPH_MEASURED = 1, 0, 0, false
+-- Measured 2026-11-16 19:40 (his PC, 1920x1080, sizes 34/64/128): the font's ring is 0.90 of the size asked for and
+-- its centre 8.7% of that size to the left, level vertically (same at every size).
+R.GLYPH_K, R.GLYPH_DX, R.GLYPH_DY, R.GLYPH_MEASURED = 0.90, -0.097, 0, true
 R.HALO_K, R.HALO_A = 1.12, 0.45     -- the bloom: a ring 12% wider, at 45%
 R.HALO = true
 R.GLYPH_LIGHT = true
