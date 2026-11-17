@@ -76,7 +76,11 @@ local function refresh(k, now)
   local ok, st = pcall(UnitThreatSituation, 'player', u)
   e.threat = ok and plain(st) and st > 0 and st or nil
   local tp = plateOf('target'); e.target = tp ~= nil and tp == plate
-  local pp = plateOf('pettarget'); e.petOn = pp ~= nil and pp == plate
+  -- your demon is on it: its target's plate is this plate; or (in a fight the game may not answer that) the demon
+  -- is tanking it, by the threat list, which is never hidden (19:38 shot: Kondok on a Zhevra, no mark)
+  local pp = plateOf('pettarget')
+  local okP, pst = pcall(UnitThreatSituation, 'pet', u)
+  e.petOn = (pp ~= nil and pp == plate) or (okP and plain(pst) and pst >= 2) or false
   local okR, inr = pcall(function() local f = C_Spell and C_Spell.IsSpellInRange; return f and f('Corruption', u) end)
   e.far = okR and plain(inr) and inr == false or false
   local okM, mk = pcall(GetRaidTargetIndex, u)

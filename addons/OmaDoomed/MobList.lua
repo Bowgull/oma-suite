@@ -269,10 +269,15 @@ end
 local function placeClicks()
   if not (geo and holder and header) or InCombatLockdown() then return end
   pcall(function()
-    local p, _, rp, x, y = header:GetPoint(1)
     local sc = header:GetScale()
     geo:SetScale(sc); holder:SetScale(sc)
-    geo:ClearAllPoints(); geo:SetPoint(p or 'TOPRIGHT', UIParent, rp or 'TOPRIGHT', x or 0, y or 0)
+    -- geo's top-left IS the list's top-left, whatever corner the list is saved by (2026-11-16 "its only targeting
+    -- top mob": geo was anchored by the list's own point but is 16 rows tall to the list's 8, so with any point but a
+    -- top corner, e.g. RIGHT after a drag, every click area sat rows away from its row)
+    geo:ClearAllPoints()
+    local l, t = header:GetLeft(), header:GetTop()
+    if l and t then geo:SetPoint('TOPLEFT', UIParent, 'BOTTOMLEFT', l, t)
+    else local p, _, rp, x, y = header:GetPoint(1); geo:SetPoint(p or 'TOPRIGHT', UIParent, rp or 'TOPRIGHT', x or 0, y or 0) end
     geo:SetSize(width(), PADY * 2 + ROW * TOKENS)
     for k = 1, TOKENS do
       local r = rows[k]
