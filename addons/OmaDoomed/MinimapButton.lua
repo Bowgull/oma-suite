@@ -36,7 +36,7 @@ local function tooltip(self)
   local shown = not (ns.moblist and ns.moblist.isShown) or ns.moblist.isShown()
   GameTooltip:AddLine(shown and 'Mob list: on' or 'Mob list: off', 1, 1, 1)
   GameTooltip:AddLine('Left-click: mob list on / off', .8, .8, .8)
-  GameTooltip:AddLine('Right-click: options', .8, .8, .8)
+  GameTooltip:AddLine('Right-click: options, move, reset', .8, .8, .8)
   GameTooltip:Show()
 end
 
@@ -53,7 +53,18 @@ function MB.build()
   btn.icon:AddMaskTexture(m)
   local border = btn:CreateTexture(nil, 'OVERLAY'); border:SetTexture('Interface\\Minimap\\MiniMap-TrackingBorder'); border:SetSize(53, 53); border:SetPoint('TOPLEFT')
   btn:SetScript('OnClick', function(self, b)
-    if b == 'RightButton' then if ns.openSettings then ns.openSettings() end
+    if b == 'RightButton' then
+      -- right-click: a small menu (options, unlock / lock the list, reset it); plain options if the client has no menus
+      local L = ns.moblist
+      if MenuUtil and MenuUtil.CreateContextMenu and L and L.toggleMove then
+        MenuUtil.CreateContextMenu(self, function(_, root)
+          root:CreateTitle('OmaDoomed')
+          root:CreateButton('Options', function() if ns.openSettings then ns.openSettings() end end)
+          root:CreateButton(L.isUnlocked and L.isUnlocked() and 'Lock the mob list' or 'Unlock the mob list to move', function() L.toggleMove() end)
+          root:CreateButton('Reset the mob list to default', function() if L.resetPlace then L.resetPlace() end end)
+        end)
+        return
+      elseif ns.openSettings then ns.openSettings() end
     elseif ns.moblist and ns.moblist.setShown then ns.moblist.setShown(not ns.moblist.isShown()) end
     MB.refresh(); tooltip(self)
   end)

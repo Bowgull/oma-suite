@@ -384,6 +384,30 @@ L.update = update
 
 -- ---------- moving and sizing: Blizzard's Edit Mode look ----------
 local function savePos() local p, _, rp, x, y = header:GetPoint(1); db.point, db.rel, db.x, db.y = p, rp, x, y end
+-- Size the list about its top-left corner. A frame's anchor offsets are in its own scale, so a plain SetScale slides the
+-- whole list across the screen while you drag (2026-11-17: the corner grip "glitched it the fuck out"). Measure the
+-- corner on screen first, scale, then pin the corner back to the same screen spot.
+local function scaleKeep(s)
+  local okL, l = pcall(header.GetLeft, header); local okT, t = pcall(header.GetTop, header)
+  local e0 = header:GetEffectiveScale()
+  header:SetScale(s)
+  if okL and okT and type(l) == 'number' and type(t) == 'number' then
+    local e1 = header:GetEffectiveScale()
+    header:ClearAllPoints(); header:SetPoint('TOPLEFT', UIParent, 'BOTTOMLEFT', l * e0 / e1, t * e0 / e1)
+  end
+end
+L.scaleKeep = scaleKeep
+local function wheel(d)
+  if InCombatLockdown() then return end
+  db.scale = math.max(60, math.min(180, (db.scale or 100) + d * 5)); scaleKeep(db.scale / 100); savePos(); placeClicks()
+end
+-- back to where it started: top right, full size
+local function resetPlace()
+  if InCombatLockdown() or not header then return end
+  db.point, db.rel, db.x, db.y, db.scale = nil, nil, nil, nil, nil
+  header:ClearAllPoints(); header:SetScale(1); header:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -40, -330); placeClicks()
+end
+L.resetPlace = resetPlace
 local function buildEditMode()
   sel = CreateFrame('Frame', nil, header)
   sel:SetPoint('TOPLEFT', header, 'TOPLEFT', -6, 2); sel:SetWidth(width() + 12); sel:SetHeight(PADY * 2 + ROW * 3)
@@ -398,22 +422,21 @@ local function buildEditMode()
   sel:SetScript('OnMouseDown', function(_, b) if b == 'LeftButton' and not InCombatLockdown() then header:StartMoving() end end)
   sel:SetScript('OnMouseUp', function(_, b)
     header:StopMovingOrSizing(); savePos(); placeClicks()
-    if b == 'RightButton' and L.unlock then L.unlock(false) end   -- right-click: done
+    if b == 'RightButton' and L.menu then L.menu(sel) end   -- right-click: lock or reset
   end)
   -- the mouse wheel sizes it (5% a notch), as easy as the corner
   sel:EnableMouseWheel(true)
-  sel:SetScript('OnMouseWheel', function(_, d)
-    if InCombatLockdown() then return end
-    db.scale = math.max(60, math.min(180, (db.scale or 100) + d * 5)); header:SetScale(db.scale / 100); savePos(); placeClicks()
-  end)
+  sel:SetScript('OnMouseWheel', function(_, d) wheel(d) end)
   grip = CreateFrame('Button', nil, sel); grip:SetSize(24, 24); grip:SetPoint('BOTTOMRIGHT', sel, 'BOTTOMRIGHT', -2, 2)
   grip:SetNormalTexture(K.sizeGrip); grip:SetHighlightTexture(K.sizeGripHi); grip:SetPushedTexture(K.sizeGripDown)
-  local from, start = 0, 1
+  -- the drag is measured once, at the press (the list's width on screen then), so the grip moving with the list
+  -- can't feed back into its own size
+  local from, start, wpx = 0, 1, 1
   grip:SetScript('OnMouseDown', function()
-    from, start = GetCursorPosition(), header:GetScale()
+    if InCombatLockdown() then return end
+    from, start, wpx = GetCursorPosition(), header:GetScale(), math.max(1, width() * header:GetEffectiveScale())
     grip:SetScript('OnUpdate', function()
-      local w = width() * header:GetEffectiveScale()
-      header:SetScale(math.max(.6, math.min(1.8, start * (1 + (GetCursorPosition() - from) / w))))
+      scaleKeep(math.max(.6, math.min(1.8, start * (1 + (GetCursorPosition() - from) / wpx))))
     end)
   end)
   grip:SetScript('OnMouseUp', function() grip:SetScript('OnUpdate', nil); db.scale = math.floor(header:GetScale() * 100 + .5); savePos(); placeClicks() end)
@@ -442,6 +465,20 @@ local function unlock(on)
   visible(); fitBack()
 end
 L.toggleMove = function() unlock(not db.unlocked) end
+L.isUnlocked = function() return db and db.unlocked == true end
+-- right-click menu (2026-11-17: "right click and either lock unlock or reset to default"), Blizzard's own menu
+function L.menu(owner)
+  local function lock() if db.unlocked then unlock(false) end; db.tabLocked = true; if L.peekOff then L.peekOff() end; if L.tabShown then L.tabShown() end end
+  local function free() unlock(true) end
+  local function reset() resetPlace(); say('list back in its first place, full size.') end
+  if MenuUtil and MenuUtil.CreateContextMenu then
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+      root:CreateTitle('Mob list')
+      if db.unlocked or (sel and sel:IsShown()) then root:CreateButton('Lock in place', lock) else root:CreateButton('Unlock to move', free) end
+      root:CreateButton('Reset to default', reset)
+    end)
+  else lock() end   -- no menu in this client: right-click locks, as before
+end
 
 -- ---------- seats: one row of your rings per token, built one per frame out of combat ----------
 local function placeSeats(r)
@@ -498,6 +535,7 @@ local function peek(on)
     sel:Hide(); visible(); tabLook(false)
   else tabLook(false) end
 end
+L.peekOff = function() peek(false) end
 local function tabShown()
   if not tab then return end
   tab:SetShown(not fighting and db.tabLocked ~= true and db.on ~= false and db.hidden ~= true)
@@ -524,10 +562,9 @@ local function buildTab()
   tab:SetScript('OnEnter', function() peek(true) end)
   tab:SetScript('OnDragStart', function(self) if InCombatLockdown() then return end; self.dragging = true; peek(true); header:StartMoving() end)
   tab:SetScript('OnDragStop', function(self) self.dragging = false; header:StopMovingOrSizing(); savePos(); placeClicks() end)
-  tab:SetScript('OnMouseWheel', function(_, d)
-    if InCombatLockdown() then return end
-    db.scale = math.max(60, math.min(180, (db.scale or 100) + d * 5)); header:SetScale(db.scale / 100); savePos(); placeClicks()
-  end)
+  tab:SetScript('OnMouseWheel', function(_, d) wheel(d) end)
+  tab:RegisterForClicks('RightButtonUp')
+  tab:SetScript('OnClick', function(self, b) if b == 'RightButton' then L.menu(self) end end)
   -- leaving: the outline goes once the mouse is off both the tab and the outline (and nothing is being dragged)
   tab:SetScript('OnUpdate', function(self, el)
     if not (sel and sel:IsShown()) or db.unlocked then return end
@@ -805,8 +842,7 @@ function L.slash(msg)
     local n = tonumber(arg); if n then db.rows = math.max(4, math.min(TOKENS, n)); relayout(); say(('the list shows up to %d mobs.'):format(db.rows)) end
   elseif cmd == 'reset' then
     if InCombatLockdown() then return end
-    db.point, db.rel, db.x, db.y, db.scale = nil, nil, nil, nil, nil
-    header:ClearAllPoints(); header:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -40, -330); header:SetScale(1); placeClicks(); say('list back in its first place.')
+    resetPlace(); say('list back in its first place.')
   else
     local n = 0; for k = 1, TOKENS do if rows[k] and rows[k].shown then n = n + 1 end end
     say(('mob list: %d shown of up to %d. /omadoomed list test | boxes | unlock | lock | rows 4-16 | reset'):format(n, db.rows))

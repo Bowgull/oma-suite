@@ -237,6 +237,36 @@ return {
     b:Hide(); T.ok(not r.quiet, 'the game hides it: back')
     noErrors(T)
   end,
+  ['list sizing keeps its top-left corner on the same spot of the screen (the grip no longer slides it)'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local h = OmaDoomedList
+    rawset(h, 'GetLeft', function() return 100 end); rawset(h, 'GetTop', function() return 500 end)
+    rawset(h, 'GetEffectiveScale', function(self) return self:GetScale() end)
+    ns.moblist.scaleKeep(1.5)
+    T.near(h:GetScale(), 1.5, 1e-9, 'scaled')
+    local p = rawget(h, '_pts').TOPLEFT
+    T.ok(p, 'pinned by its top-left'); T.eq(p[2], 'BOTTOMLEFT', 'to the screen corner')
+    T.near(p[3] * 1.5, 100, 1e-6, 'left edge stays at 100 px'); T.near(p[4] * 1.5, 500, 1e-6, 'top edge stays at 500 px')
+    noErrors(T)
+  end,
+  ['right-click on the list: a menu to lock it or reset it to default'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local made = {}
+    MenuUtil = { CreateContextMenu = function(owner, gen)
+      local root = { CreateTitle = function() end, CreateButton = function(_, text, fn) made[text] = fn end }
+      gen(owner, root)
+    end }
+    ns.moblist.toggleMove(); T.ok(ns.moblist.isUnlocked(), 'unlocked to move')
+    ns.moblist.menu(OmaDoomedList)
+    T.ok(made['Lock in place'] and made['Reset to default'], 'lock and reset offered')
+    ns.db.list.scale = 140; ns.db.list.x = 12
+    made['Reset to default']()
+    T.eq(ns.db.list.scale, nil, 'size back to default'); T.eq(ns.db.list.x, nil, 'place back to default')
+    T.ok(rawget(OmaDoomedList, '_pts').TOPRIGHT, 'top right again')
+    made['Lock in place'](); T.ok(not ns.moblist.isUnlocked(), 'locked')
+    MenuUtil = nil
+    noErrors(T)
+  end,
   ['minimap button: left-click turns the mob list off and on; a fight shows it only when on'] = function(W, T)
     local ns, F, UI = setup(W)
     if not Minimap then Minimap = CreateFrame('Frame', 'Minimap', UIParent); Minimap:SetSize(140, 140) end
