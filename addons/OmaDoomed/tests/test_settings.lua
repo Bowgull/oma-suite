@@ -136,4 +136,14 @@ return {
     local n = 0; for _ in pairs(db.track) do n = n + 1 end
     T.ok(n <= 12, 'nothing put back by the engine: ' .. n .. ' keys in db.track')
   end,
+  ['preview: the mob list block follows the list settings (rows, sort, cast lines, range)'] = function(W, T)
+    local ns, F, UI = setup(W)
+    T.ok(pcall(ns.previewOpen), 'opens')
+    OmaDoomedDB.list = OmaDoomedDB.list or {}
+    OmaDoomedDB.list.casts = true; OmaDoomedDB.list.range = true
+    local ok, err = pcall(ns.previewDrawList, .5); T.ok(ok, 'draws the list: ' .. tostring(err))
+    OmaDoomedDB.list.sort = 'soonest'; OmaDoomedDB.list.casts = false
+    ok, err = pcall(ns.previewDrawList, 1); T.ok(ok, 'and again with other settings: ' .. tostring(err))
+    T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
+  end,
 }

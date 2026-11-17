@@ -17,7 +17,7 @@ local look, ask = K.new(), {}
 local RING = { c = SP.corruption.color, a = SP.agony.color, i = SP.immolate.color }    -- rings and tick light
 local NAME = { c = 'Corruption', a = 'Bane of Agony', i = 'Immolate' }
 local MAXHP, START = 198, 124      -- your DoTs finish this one, so the skull shows
-local H = 420                      -- the scene's height inside the window (stacked: the enemy above, your target frame below)
+local H = 560                      -- the scene's height inside the window: the enemy, your target frame, the mob list (sheet 83 part 2)
 local PLATE_K, FRAME_K = 1.5, 1.6  -- how much bigger than life the enemy and the target frame are drawn
 local WIN_W, WIN_H = 470, H + 52    -- the window: narrow enough to sit beside Options on a 1080p screen
 
@@ -28,6 +28,7 @@ local function barTex(t)
   else t:SetTexture('Interface\\TargetingFrame\\UI-StatusBar') end
   t:SetDesaturated(true)
 end
+local BEAST_ICON, HAWK_ICON, BIRD_ICON = 'Interface\\Icons\\Ability_Mount_WhiteDireWolf', 'Interface\\Icons\\Ability_Hunter_Pet_WindSerpent', 'Interface\\Icons\\Ability_Hunter_Pet_TallStrider'
 local function icon(name) local ok, t = pcall(function() return C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(name) end); return ok and t or 136197 end
 
 -- the fight: Corruption cast 0-2 s, Bane of Agony at 2.4 s, Immolate cast 2.4-4.4 s; ticks from DoesItDie's log
@@ -162,6 +163,32 @@ local function build(host)
     bd:SetTexture('Interface/Buffs/UI-Debuff-Overlays'); bd:SetTexCoord(.296875, .5703125, 0, .515625); bd:SetVertexColor(.8, 0, 0)
     squares[i] = q
   end
+  -- sheet 83 part 2: the mob list, three rows, drawn the way the list draws them (portrait, name, bar, rings); it
+  -- follows the list settings live: Rows, Sort, Threat, Fade out of range, Health numbers, Cast lines, Backing
+  local tag3 = P:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall'); tag3:SetPoint('TOPLEFT', 8, -412); tag3:SetText('Mob list')
+  P.list = CreateFrame('Frame', nil, P); P.list:SetSize(300, 132); P.list:SetPoint('TOP', P, 'TOP', 0, -424)
+  local back = P.list:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. 'list_back'); back:SetPoint('TOPLEFT', -14, 8); back:SetPoint('BOTTOMRIGHT', 14, -8)
+  pcall(back.SetTextureSliceMargins, back, 30, 30, 30, 30); P.listBack = back
+  P.rows = {}
+  local MOBS = { { 'Zhevra Runner', BEAST_ICON, 213, 300 }, { 'Sunscale Screecher', HAWK_ICON, 265, 400 }, { 'Fleeting Plainstrider', BIRD_ICON, 120, 300 } }
+  for i, m in ipairs(MOBS) do
+    local r = CreateFrame('Frame', nil, P.list); r:SetSize(300, 42); r:SetPoint('TOPLEFT', P.list, 'TOPLEFT', 0, -(i - 1) * 44)
+    local glow = r:CreateTexture(nil, 'BACKGROUND', nil, 2); glow:SetTexture(ART .. 'list_rowglow'); glow:SetPoint('TOPLEFT', -10, 0); glow:SetPoint('BOTTOMRIGHT', -60, 0); glow:SetBlendMode('ADD'); glow:SetAlpha(0)
+    local face = r:CreateTexture(nil, 'ARTWORK'); face:SetSize(30, 30); face:SetPoint('LEFT', 4, 0); face:SetTexture(m[2])
+    local fm = r:CreateMaskTexture(); fm:SetTexture(ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); fm:SetAllPoints(face); face:AddMaskTexture(fm)
+    local rim = r:CreateTexture(nil, 'OVERLAY'); rim:SetTexture(ART .. 'list_ring'); rim:SetSize(36, 36); rim:SetPoint('CENTER', face, 'CENTER'); rim:SetVertexColor(0, 0, 0, .9)
+    local nm = r:CreateFontString(nil, 'OVERLAY'); nm:SetFont(STANDARD_TEXT_FONT, 11, 'OUTLINE'); nm:SetPoint('TOPLEFT', face, 'TOPRIGHT', 6, 2); nm:SetText(m[1])
+    local hb = CreateFrame('StatusBar', nil, r); hb:SetSize(130, 9); hb:SetPoint('TOPLEFT', nm, 'BOTTOMLEFT', 0, -3)
+    hb:SetStatusBarTexture('Interface\\TargetingFrame\\UI-StatusBar'); hb:SetStatusBarColor(.77, .07, .07); hb:SetMinMaxValues(0, m[4]); hb:SetValue(m[3])
+    local hbg = hb:CreateTexture(nil, 'BACKGROUND'); hbg:SetAllPoints(); hbg:SetColorTexture(.07, .03, .03, 1)
+    local hpn = hb:CreateFontString(nil, 'OVERLAY'); hpn:SetFont(STANDARD_TEXT_FONT, 9, 'OUTLINE'); hpn:SetPoint('CENTER'); hpn:SetText(m[3])
+    local cast = CreateFrame('StatusBar', nil, r); cast:SetSize(130, 3); cast:SetPoint('TOPLEFT', hb, 'BOTTOMLEFT', 0, -2)
+    cast:SetStatusBarTexture('Interface\\TargetingFrame\\UI-StatusBar'); cast:SetStatusBarColor(.9, .16, .1); cast:SetMinMaxValues(0, 2); cast:Hide()
+    local rw = {}
+    for j = 1, 2 do local w = ringWidget(r); w:SetScale(.7); w:SetPoint('LEFT', r, 'LEFT', (180 + (j - 1) * 30) / .7, 0); rw[j] = w end
+    P.rows[i] = { f = r, glow = glow, rim = rim, hp = hpn, cast = cast, rings = rw, name = m[1] }
+  end
+
   P.plan = plan(); t0 = GetTime()
   P:SetScript('OnUpdate', function() local ok, err = pcall(ns.previewDraw); if not ok then P:SetScript('OnUpdate', nil); ns.fail('preview: ' .. tostring(err), 'the preview') end end)
   built = true
@@ -172,7 +199,37 @@ local function place(tex, x, w)
   tex:ClearAllPoints(); tex:SetPoint('TOPLEFT', frame, 'TOPLEFT', bar.x + x, bar.y); tex:SetSize(w, bar.h); tex:Show()
 end
 
+-- the mob list block: follows the list settings live
+local function drawList(t)   -- (ns.previewDrawList for tests)
+  if not (P and P.rows) then return end
+  local ldb = ns.db.list or {}
+  local n = math.min(3, math.max(1, (ldb.rows or 8) >= 3 and 3 or ldb.rows or 3))
+  local order = { 1, 2, 3 }
+  if ldb.sort == 'soonest' then order = { 3, 1, 2 } end   -- 'Ending soonest': the Plainstrider's DoT ends first
+  pcall(P.listBack.SetVertexColor, P.listBack, 0, 0, 0, (ldb.back or 35) / 100)
+  P.list:SetScale((ldb.scale or 100) / 100)
+  local COL = { RING.c, RING.a }
+  for slot, i in ipairs(order) do
+    local r = P.rows[i]
+    r.f:ClearAllPoints(); r.f:SetPoint('TOPLEFT', P.list, 'TOPLEFT', 0, -(slot - 1) * 44); r.f:SetShown(slot <= n)
+    r.hp:SetShown(ldb.hp ~= false)
+    -- row 1 holds your threat: the glow breathes red (Threat glow)
+    if i == 1 and ldb.threat ~= false then local a = .45 + .35 * math.sin(t * 2.4); r.glow:SetVertexColor(.95, .12, .12); r.glow:SetAlpha(a); r.rim:SetVertexColor(.95, .12, .12, 1)
+    else r.glow:SetAlpha(0); r.rim:SetVertexColor(0, 0, 0, .9) end
+    -- row 2 casts (Cast lines)
+    if i == 2 and ldb.casts ~= false then local ph = t % 3; r.cast:SetShown(ph < 2); r.cast:SetValue(ph) else r.cast:Hide() end
+    -- row 3 is out of range (Fade out of range)
+    r.f:SetAlpha((i == 3 and ldb.range ~= false) and .5 or 1)
+    for j, w in ipairs(r.rings) do
+      local c = COL[j]; w.ring:SetVertexColor(c[1], c[2], c[3]); w.ic:SetTexture(icon(j == 1 and 'Corruption' or 'Bane of Agony')); w.ic:SetSize(28, 28)
+      local left = math.floor((({ 9, 15, 4 })[i] + (j - 1) * 6 - t) % 18) + 1
+      w.num:SetText(left)
+    end
+  end
+end
+ns.previewDrawList = function(t) return drawList(t) end
 function ns.previewDraw()
+  local okL, errL = pcall(drawList, GetTime() - (t0 or GetTime())); if not okL and not P.listErr then P.listErr = true; ns.error('preview list: ' .. tostring(errL)) end
   local db, rdb = ns.db, OmaDoomedDB.rings
   local t = GetTime() - t0
   if t > 26 then t0 = GetTime(); t = 0; P.plan = plan() end
@@ -318,8 +375,10 @@ local GROUP = {   -- which part of the scene each setting lights (keys from Sett
   doomed = 'tf', skull = 'tf', cast = 'tf', tick = 'tf', low = 'tf', lowlook = 'tf', targetPath = 'tf',
   platebar = 'np', enabled = 'np', which = 'np', othersAlpha = 'np', cc = 'np',
   where = 'where', look = 'rings', size = 'rings', alpha = 'rings', othersMode = 'np',
+  recast = 'np', occ = 'np', odeb = 'np',
+  on = 'list', rows = 'list', scale = 'list', sort = 'list', threat = 'list', range = 'list', hp = 'list', back = 'list', casts = 'list',
 }
-local HEADER = { ['Your target frame'] = 'tf', ['Over enemies'] = 'np', ['Where the rings go'] = 'where', ['Ring look'] = 'rings' }
+local HEADER = { ['Your target frame'] = 'tf', ['Over enemies'] = 'np', ['Where the rings go'] = 'where', ['Ring look'] = 'rings', ['Mob list'] = 'list' }
 
 local function makeHighlight()
   -- 2026-11-13 (Joshua: "it defeats the purpose of LOOKING at it if it obscures it"): nothing is drawn over the part you
@@ -343,7 +402,8 @@ local function lightUp(g)
   if g == 'tf' then hl:SetPoint('TOPLEFT', frame, 'TOPLEFT', 16, -14); hl:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -6, 8)
   elseif g == 'np' then hl:SetPoint('TOPLEFT', P.plate, 'TOPLEFT', -2, 44); hl:SetPoint('BOTTOMRIGHT', P.plate, 'BOTTOMRIGHT', 10, -10)
   elseif g == 'where' then hl:SetPoint('TOPLEFT', P, 'TOPLEFT', 6, -6); hl:SetPoint('BOTTOMRIGHT', P, 'BOTTOMRIGHT', -6, 22)
-  elseif g == 'rings' then hl:SetPoint('TOPLEFT', P, 'TOPLEFT', 6, -6); hl:SetPoint('BOTTOMRIGHT', P, 'BOTTOMRIGHT', -6, 6) end
+  elseif g == 'rings' then hl:SetPoint('TOPLEFT', P, 'TOPLEFT', 6, -6); hl:SetPoint('BOTTOMRIGHT', P, 'BOTTOMRIGHT', -6, 6)
+  elseif g == 'list' and P.list then hl:SetPoint('TOPLEFT', P.list, 'TOPLEFT', -10, 10); hl:SetPoint('BOTTOMRIGHT', P.list, 'BOTTOMRIGHT', 10, -10) end
   hl:Show()
   local L, T, R, B = hl:GetLeft(), hl:GetTop(), hl:GetRight(), hl:GetBottom()
   local pl, pt, pr, pb = P:GetLeft(), P:GetTop(), P:GetRight(), P:GetBottom()
