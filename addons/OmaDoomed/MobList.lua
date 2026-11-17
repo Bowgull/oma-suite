@@ -4,11 +4,11 @@
 -- and a shield or anti-magic buff while it has one. One soft dark backing behind the whole list, no boxes.
 -- Built on the engines: Roster (who and what), Scheduler (when), Motion (how things move), Layout (sizes), Skin (art).
 --
--- Clicking (research, 2026-11-16): the game refuses targeting a nameplate token from an add-on button, but hovering a
--- secure UNIT button for nameplateN makes that mob your mouseover. So each row has an invisible button that runs
--- '/target [@mouseover]', and mouseover DoT keys / Mouseover Cast work from the list. Those buttons are locked in
--- place in a fight, so in a fight each mob keeps its row (no re-sorting under your mouse); between fights and at the
--- pull the list sorts: missing a DoT first, then the soonest ending.
+-- Clicking (measured 2026-11-16, rechecked on 1.60.1.70959 on 2026-11-17): Forever's engine refuses every add-on route
+-- that names a nameplateN token (target, spell, '/target [@mouseover]', and hovering such a button sets no mouseover).
+-- So the rows are display only. Hover-cast happens on the real nameplate (Mouseover Cast). Full write-up:
+-- reports/OmaDoomed click and hover casting, deep dive 2026-11-17.md. Rows sort: missing a DoT first, then the
+-- soonest ending.
 --
 -- Shown in fights. Moving and sizing: /omadoomed list unlock (Blizzard's Edit Mode look; drag it, size it with the
 -- corner grip), /omadoomed list lock.
