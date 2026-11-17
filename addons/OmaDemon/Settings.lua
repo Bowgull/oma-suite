@@ -82,6 +82,17 @@ ns.settings = Core.NewSettings({
     { key = 'armor', store = R, default = true, control = 'check', label = 'Armor missing',
       tip = 'Your Demon Skin or Demon Armor button glows softly when the armor is off. Out of combat only.' },
 
+    { header = 'Nightfall' },
+    { key = 'nfOn', store = R, default = true, control = 'check', label = 'Nightfall overlay',
+      tip = "When Nightfall procs (Shadow Trance: your next Shadow Bolt is instant), Blizzard's thorned crescents show either side of you until the Shadow Bolt goes." },
+    { key = 'nfColour', store = R, default = 'violet', control = 'dropdown', label = 'Colour', parent = 'nfOn',
+      choices = { { 'violet', "Blizzard's violet" }, { 'fel', 'Fel green' }, { 'ember', 'Hellfire ember' }, { 'blood', 'Blood red' } },
+      tip = "Blizzard's violet is the art as Blizzard made it. The others recolour it, the same way Blizzard tints its own proc art." },
+    { key = 'nfSound', store = R, default = true, control = 'check', label = 'Proc chime', parent = 'nfOn',
+      tip = "Blizzard's proc chime, once, when it lights." },
+    { button = 'Preview', name = '', click = function() if ns.nightfall and ns.nightfall.preview then ns.nightfall.preview(4) end end,
+      tip = 'Shows it for 4 seconds, with its chime, so you can see it before you have the talent (level 25).' },
+
     { header = 'Extra Shards' },
     { key = 'keep', store = S, default = 6, control = 'slider', label = 'Shards to keep', min = 1, max = 20, step = 1, format = tostring,
       tip = 'Above this many, you get one line in chat so you can clear bag space.' },
@@ -119,6 +130,12 @@ SlashCmdList.OMADEMON = function(msg)
   if cmd == 'preview' then return ns.previewWarning and ns.previewWarning() end
   if cmd == 'stone' then return ns.stoneTest and ns.stoneTest(rest ~= '' and rest or nil) end
   if cmd == 'armor' then return ns.armorTest and ns.armorTest() end
+  if cmd == 'nightfall' then
+    if rest == 'sound off' or rest == 'sound on' then ns.groupDB().nfSound = (rest == 'sound on'); print('|cff9b6bffOmaDemon|r: Nightfall chime ' .. rest:sub(7)); return end
+    if ns.nightfall and ns.nightfall.preview then ns.nightfall.preview(4) end
+    print('|cff9b6bffOmaDemon|r: Nightfall for 4 s (art from the ' .. tostring(ns.nightfall and ns.nightfall.artFrom) .. '). /omademon nightfall sound off|on')
+    return
+  end
   if cmd == 'motion' then
     local off = rest:lower() == 'off'
     ns.glowDB().reduced = off; ns.shardsDB().reduced = off

@@ -18,6 +18,7 @@ SetOverrideBindingClick = function(owner, prio, key, btn) binds[key] = btn end
 ClearOverrideBindings = function() binds = {} end
 HideUIPanel = HideUIPanel or function(f) f:Hide() end
 local count = 3
+PlaySound = function() end
 C_Item = C_Item or {}; C_Item.GetItemCount = function() return count end
 local files = {}
 for line in io.lines('OmaDemon.toc') do if not line:match('^##') and line:match('%S') then files[#files + 1] = (line:gsub('\\', '/'):gsub('%s+$', '')) end end
@@ -121,9 +122,30 @@ check(nc and nc.unit == 'player', 'Nightfall slot built on player' .. (N.failed 
 local ng = UIx.group(nc, 'nightfall')
 check(ng and ng.slot and ng.filters.includeSpellIDs[17941], 'slot allows Shadow Trance (17941)')
 W.units.player.otherAuras = { 101, 17941 }; W.fire('UNIT_AURA', 'player')
-check(UIx.showing(nc).nightfall[1] == 17941 and #UIx.showing(dc).debuffs == 2, 'proc: the portrait glow shows')
+check(UIx.showing(nc).nightfall[1] == 17941 and #UIx.showing(dc).debuffs == 2, 'proc: the slot shows')
+check(N.live and UIx.isVisible(N.live), 'proc: the crescents show (they ride the game button)')
+check(N.chimed == 1, 'proc: the chime plays once: ' .. tostring(N.chimed))
+local sl, sr = N.live.sides[1].frame, N.live.sides[2].frame
+check(math.abs(sl:GetWidth() - 102.4) < 1e-6 and math.abs(sl:GetHeight() - 204.8) < 1e-6, "crescents at Blizzard's size (0.4 x 0.8 of 256)")
+check(rawget(sl, '_pts').RIGHT and rawget(sr, '_pts').LEFT, 'one each side of the centre square')
+check(N.artFrom == 'add-on', 'no game file in the fake: the add-on copy of the art')
 W.units.player.otherAuras = { 101 }; W.fire('UNIT_AURA', 'player')
-check(#UIx.showing(nc).nightfall == 0, 'Shadow Bolt used: the glow is gone')
+check(#UIx.showing(nc).nightfall == 0 and not UIx.isVisible(N.live), 'Shadow Bolt used: the crescents are gone')
+local pv = N.preview(4); check(UIx.isVisible(pv) and N.chimed == 2, '/omademon nightfall: shown, with its chime')
+W.advance(5); check(not UIx.isVisible(pv), 'and gone after 4 s')
+ns.groupDB().nfSound = false; N.preview(4); check(N.chimed == 2, 'chime off: silent'); ns.groupDB().nfSound = nil; W.advance(5)
+local function set(k, v) OmaDemonDB.group[k] = v; for _, fn in ipairs(ns.onSetting) do fn(k, 'group') end end
+set('nfColour', 'fel'); local r, g = N.previewFrame.sides[1].tex:GetVertexColor()
+check(math.abs(r - .42) < 1e-6 and g == 1, 'Colour: Fel green repaints it at once')
+set('nfColour', 'violet'); r, g = N.previewFrame.sides[1].tex:GetVertexColor()
+check(r == 1 and g == 1, "Colour: back to Blizzard's violet (the art as made)")
+local before = N.chimed; set('nfOn', false); N.preview(4)
+check(N.chimed == before and N.previewFrame:GetAlpha() == 0, 'Nightfall overlay off: nothing shows, no chime'); set('nfOn', nil); W.advance(5)
+W.fire('SPELL_ACTIVATION_OVERLAY_SHOW', 17941)
+check(OmaDemonDB.group.nfOverlayBlizz == true, "Blizzard's own Shadow Trance overlay seen: ours stands down")
+W.units.player.otherAuras = { 17941 }; W.fire('UNIT_AURA', 'player')
+check(N.live:GetAlpha() == 0, 'and stays out of the way on the next proc')
+W.units.player.otherAuras = {}; W.fire('UNIT_AURA', 'player'); OmaDemonDB.group.nfOverlayBlizz = nil
 SPELL[6] = 'Shadow Bolt'
 local sbBtn = CreateFrame('Button', 'ActionButton2', UIParent); sbBtn.action = 9; sbBtn:Show()
 GetActionInfo = function(slot) if slot == 5 then return 'spell', 4 elseif slot == 9 then return 'spell', 6 end end

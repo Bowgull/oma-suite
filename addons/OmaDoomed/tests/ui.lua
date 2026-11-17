@@ -281,9 +281,9 @@ local function reread(c, why)
       local ok = true
       if f.includeSpellIDs and not f.includeSpellIDs[id] then ok = false end
       if f.excludeSpellIDs and f.excludeSpellIDs[id] then ok = false end
-      if ok and n < g.max then n = n + 1; g.buttons[n].shown = true; g.buttons[n]._spell = id end
+      if ok and n < g.max then n = n + 1; g.buttons[n]._spell = id; setShown(g.buttons[n], true) end   -- shown like the game: OnShow fires down its children
     end
-    for i = n + 1, #g.buttons do g.buttons[i].shown = false; g.buttons[i]._spell = nil end
+    for i = n + 1, #g.buttons do g.buttons[i]._spell = nil; setShown(g.buttons[i], false) end
   end
 end
 -- How many times a container re-read its auras for a reason that takes effect (a new unit, an explicit
