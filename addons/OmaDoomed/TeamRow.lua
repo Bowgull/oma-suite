@@ -62,7 +62,8 @@ local function dotLayout(first) return { forceNewLine = first and true or false,
 
 function T.build()
   if T.c or InCombatLockdown() or not TargetFrame or not ns.CLASS_AURAS or not T.on() then return T.c end
-  local ok, c = pcall(CreateFrame, 'AuraContainer', nil, TargetFrame, 'CustomAuraContainerTemplate')
+  T.holder = T.holder or CreateFrame('Frame', nil, TargetFrame); T.holder:SetSize(1, 1)
+  local ok, c = pcall(CreateFrame, 'AuraContainer', nil, T.holder, 'CustomAuraContainerTemplate')
   if not ok or not c then R.log('team row failed: ' .. tostring(c)); return nil end
   pcall(c.SetEditModePreviewEnabled, c, false)
   c:SetSize(STEP * 8, 1)
@@ -89,13 +90,31 @@ function T.build()
   return c
 end
 
--- under the cast bar slot, and under your rings when they sit on the target frame
+-- under your rings when they sit on the target frame, else right under the bars; down by the cast bar while it shows.
+-- The container hangs off T.holder (a plain frame of ours), so the holder can move in a fight.
 function T.place()
-  local c = T.c; if not c or InCombatLockdown() then return end
-  c:ClearAllPoints()
+  local h, c = T.holder, T.c; if not h then return end
+  h:ClearAllPoints()
   local anchor, y = R.frameRowBottom and R.frameRowBottom()
-  if anchor then c:SetPoint('TOPLEFT', anchor, 'BOTTOMLEFT', 0, -(y or 4))
-  else c:SetPoint('TOPLEFT', TargetFrame, 'BOTTOMLEFT', 24, -(R.CAST_SLOT or 30)) end
+  if anchor then h:SetPoint('TOPLEFT', anchor, 'BOTTOMLEFT', 0, -(y or 4))
+  else h:SetPoint('TOPLEFT', TargetFrame, 'BOTTOMLEFT', 24, -(4 + (R.castDrop and R.castDrop() or 0))) end
+  if c and not InCombatLockdown() then c:ClearAllPoints(); c:SetPoint('TOPLEFT', h, 'TOPLEFT') end
+end
+-- Blizzard's target cast bar showing / hiding: slide the rows (our own frames only; allowed in a fight)
+local function castChanged(on)
+  R.castShown = on and true or false
+  if R.placeFrameRow then R.placeFrameRow() end
+  T.place()
+end
+T.castChanged = castChanged
+local hooked
+function T.hookCastBar()
+  local bar = _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar)
+  if hooked or type(bar) ~= 'table' or type(bar.HookScript) ~= 'function' then return end
+  hooked = true
+  bar:HookScript('OnShow', function() castChanged(true) end)
+  bar:HookScript('OnHide', function() castChanged(false) end)
+  local ok, shown = pcall(bar.IsShown, bar); if ok and shown == true then castChanged(true) end
 end
 
 -- which classes get a full line: your group's classes first (fixed order), then the rest, up to MAXLINES; the others dots
@@ -134,11 +153,11 @@ end
 local ev = CreateFrame('Frame')
 ns.starts[#ns.starts + 1] = function()
   for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'GROUP_ROSTER_UPDATE', 'PLAYER_REGEN_ENABLED', 'PLAYER_TARGET_CHANGED' }) do pcall(ev.RegisterEvent, ev, e) end
-  C_Timer.After(1, function() if R.db and not T.c then T.build(); T.visible() end end)
+  C_Timer.After(1, function() if R.db and not T.c then T.build(); T.visible() end; T.hookCastBar() end)
 end
 ev:SetScript('OnEvent', function(_, e)
   if not R.db then return end
   if e == 'PLAYER_TARGET_CHANGED' then T.visible(); return end
   if not T.c then T.build() end
-  T.roster(); T.place(); T.visible()
+  T.hookCastBar(); T.roster(); T.place(); T.visible()
 end)

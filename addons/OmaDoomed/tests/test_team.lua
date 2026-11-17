@@ -55,6 +55,21 @@ return {
     T.eq(UI.group(c, 'dot_priest').opts.layout.forceNewLine, false, 'the others share it')
     noErrors(T)
   end,
+  ['team row: the rings sit tight under the bars and slide down only while the target casts'] = function(W, T)
+    local bar
+    local ns, F, UI = setup(W, { where = 'both' }, function()
+      bar = CreateFrame('StatusBar', 'TargetFrameSpellBar', UIParent); bar:Hide()
+    end)
+    F.mob('nameplate1', A, 'Skum', 300); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
+    local fp = ns.rings.framePair; T.ok(fp, 'rings on the target frame')
+    local function y() local pts = rawget(fp.anchor, '_pts'); return pts and pts.BOTTOMLEFT and pts.BOTTOMLEFT[4] end
+    local tight = y()
+    W.combat = true; bar:Show(); local casting = y()
+    T.ok(casting < tight, 'a cast starts: they slide down (' .. tostring(tight) .. ' -> ' .. tostring(casting) .. ')')
+    bar:Hide(); T.eq(y(), tight, 'the cast ends: back up tight')
+    T.eq(rawget(ns.team.holder, '_pts').TOPLEFT[1], fp.anchor, 'the team row hangs under the rings and follows them')
+    noErrors(T)
+  end,
   ['team row: off in settings, nothing is built'] = function(W, T)
     local ns, F, UI = setup(W, { team = false })
     T.eq(ns.team.c, nil, 'no team row'); noErrors(T)

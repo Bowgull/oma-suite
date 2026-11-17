@@ -328,6 +328,18 @@ local function channelGroup(p, on)
     pcall(p.ring.SetAuraGroupEnabled, p.ring, key, k); pcall(p.main.SetAuraGroupEnabled, p.main, key, k)
   end
 end
+-- 2026-11-17 (09:58 screenshot, Joshua: "the rings are hanging with nothing there ... they should sit tight"): the
+-- rings sit right under the bars; only while the target is casting do they (and the team row under them) slide down to
+-- make room for its cast bar. Blizzard's own cast bar showing and hiding is the signal (R.castShown, TeamRow.lua).
+function R.castDrop() return (R.castShown and ns.team and ns.team.on()) and R.CAST_SLOT or 0 end
+function R.placeFrameRow()
+  local p = framePair; if not p or not TargetFrame then return end
+  local main = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
+  local low = main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
+  p.anchor:ClearAllPoints()
+  if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', R.FRAME_LEFT, -(S + R.FRAME_GAP) - R.castDrop() / R.FRAME_SCALE)
+  else p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14) end
+end
 local function makeFramePair()
   if framePair or InCombatLockdown() or not TargetFrame then return end
   local p = newPair(R.FRAME_SPACE, nil, true); if not p then return end
@@ -335,13 +347,8 @@ local function makeFramePair()
   p.anchor:SetParent(TargetFrame); p.anchor:SetFrameLevel(TargetFrame:GetFrameLevel() + 20)
   -- sheet 42 B: a row UNDER the bars, where WoW itself puts your debuffs on a target, 40 px. Hung on the mana bar's
   -- bottom left (the frame's lowest bar); the row's own bottom sits S + gap below it, in the row's own scaled units.
-  local main = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
-  local low = main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
-  p.anchor:ClearAllPoints(); p.anchor:SetSize(S * R.FRAME_ROW, 1)
-  -- sheet 104: with the team row on, the target's cast bar keeps its fixed spot under the bars, so the rings go below it
-  local castSlot = (ns.team and ns.team.on()) and (R.CAST_SLOT / R.FRAME_SCALE) or 0
-  if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', R.FRAME_LEFT, -(S + R.FRAME_GAP) - castSlot)
-  else p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14) end
+  p.anchor:SetSize(S * R.FRAME_ROW, 1)
+  R.placeFrameRow()
   p.frameScale = R.FRAME_SCALE
   p.pt = 'BOTTOMLEFT'
   for _, c in ipairs({ p.ring, p.main }) do
