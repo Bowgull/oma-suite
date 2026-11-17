@@ -212,6 +212,19 @@ end
 
 -- ---------- casts and targets ----------
 local function targetPlate() return C_NamePlate.GetNamePlateForUnit('target', false) or false end
+-- the mob a cast is going to (2026-11-16 "the rings glitched when i hovered and tried to cast"): his DoT keys are
+-- mouseover keys ([@mouseover,harm,nodead][]), so while the mouse is on an enemy (its nameplate or its mob-list row)
+-- the cast goes there, not to the target. Plate frames are never secret.
+local function castPlate()
+  local PM = ns.plates
+  local ok, mp = pcall(C_NamePlate.GetNamePlateForUnit, 'mouseover', false)
+  if ok and mp and PM and PM.unitOf then
+    local u = PM.unitOf[mp]
+    if u and PM.enemy[u] then return mp end
+  end
+  return targetPlate()
+end
+M.castPlate = castPlate
 -- a landed piece shows on the mob its cast went to: the tracking's mob key for that cast when it knows it, else the
 -- plate it was cast at
 function M.landedHere(ld, here)
@@ -224,7 +237,7 @@ end
 -- the start of a cast: the mob it belongs to
 function M.castStart(castGUID)
   cast.guid = Secret.readable(castGUID) and castGUID or nil
-  cast.plate = targetPlate()
+  cast.plate = castPlate()
 end
 -- a cast went off: a DoT the tracking won't list until its first tick shows as landed. Its mob, matched by cast ID:
 -- where the tracking put that cast (a [@mouseover] or [@focus] cast too), else the plate its START was on; an instant
@@ -235,7 +248,7 @@ function M.castSucceeded(castGUID, spellID)
   if not (n and Spells.dot(n) and fullBy[n]) then return end
   local same = Secret.readable(castGUID)
   local plate
-  if same and cast.guid ~= nil and cast.guid == castGUID then plate = cast.plate else plate = targetPlate() end
+  if same and cast.guid ~= nil and cast.guid == castGUID then plate = cast.plate else plate = castPlate() end
   local lc = Track and Track.tracking and Track.tracking.omaLastCast
   local key = same and lc and Secret.readable(lc.guid) and lc.guid == castGUID and lc.key or nil
   snap.landed = { name = n, at = GetTime(), dmg = fullBy[n], plate = plate, key = key }

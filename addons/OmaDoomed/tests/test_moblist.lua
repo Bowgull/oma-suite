@@ -14,7 +14,7 @@ local function secure(W)
   end
   local function eval(cond)
     if cond == '[combat] show; hide' then return W.combat and 'show' or 'hide' end
-    local t = cond:match('^%[@(nameplate%d+),exists')
+    local t = cond:match('^%[@(nameplate%d+),harm,nodead%]')   -- [harm,nodead]: a live enemy
     local u = t and W.units[t]
     return (u and u.enemy and not u.dead) and 'show' or 'hide'
   end
@@ -155,6 +155,48 @@ return {
     dots[2] = nil; ns.bus:Fire('DOTS')
     T.ok(not ns.motion.running('bite1'), 'a DoT ended: no flash')
     ns.model.listInto = real
+    noErrors(T)
+  end,
+  ["list: a plate that's up but not in your fight is parked off screen (no live click area in the list's empty places)"] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    mob(W, F, 1, 'Raptor'); mob(W, F, 2, 'Lost Barrens Kodo').idle = true; mob(W, F, 3, 'Hyena')
+    W.advance(.3)
+    W.combat = true; W.fire('PLAYER_REGEN_DISABLED'); pump()
+    T.eq(L.slotOf[1], 1); T.eq(L.slotOf[3], 2, 'the fight packed to the top, the Kodo not between them')
+    T.ok(L.parked[2], 'the idle Kodo is parked')
+    T.ok(L.rows[2].click._anchor ~= nil and L.rows[2].click._anchor ~= L.rows[1].click._anchor, 'its click area is not in the list')
+    T.ok(not L.parked[4], 'a token with no plate keeps a place for a newcomer')
+    T.eq(L.slotOf[4], 3, 'right under the fight')
+    -- the Kodo joins mid-fight: its row takes the first free place, not slot 16
+    W.units.nameplate2.idle = false; W.advance(.3)
+    T.ok(L.rows[2].shown, 'the Kodo row shows once it fights you')
+    T.ok(L.slotOf[2] <= 4, 'in the first free place: ' .. tostring(L.slotOf[2]))
+    noErrors(T)
+  end,
+  ['list: the skull shows only when your DoTs will finish the mob AND it still has an empty seat'] = function(W, T)
+    local ns, F, UI = setup(W)
+    mob(W, F, 1, 'Raptor'); W.advance(.3)
+    local r, e = ns.moblist.rows[1], ns.roster.entries[1]
+    T.ok(r.shown, 'row up')
+    e.missing = 0; ns.moblist.update()
+    T.ok(not r.skullWin:IsShown(), 'every seat full: nothing to tell you, no skull')
+    e.missing = 1; ns.sched.mark('moblist'); W.advance(.05)
+    noErrors(T)
+  end,
+  ['list test: five pretend rows out of combat, the real list untouched; a fight ends it'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    L.slash('test')
+    T.ok(L.testing, 'on'); T.ok(L.header:IsShown(), 'the list shows out of combat')
+    local n = 0; for k = 1, 16 do if L.rows[k].shown then n = n + 1 end end
+    T.eq(n, 5, 'five rows')
+    W.advance(3.2)
+    T.ok(L.rows[1].fk and next(L.rows[1].fk.rings), 'stand-in rings drawn')
+    L.slash('boxes'); T.eq(OmaDoomedDB.list.boxes, true, 'click areas on')
+    L.slash('boxes')
+    W.combat = true; W.fire('PLAYER_REGEN_DISABLED')
+    T.ok(not L.testing, 'a fight ends the test')
     noErrors(T)
   end,
 }

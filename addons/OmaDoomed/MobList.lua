@@ -22,11 +22,13 @@ local u = G and G.u or 2
 local ROW, PORT, GAPP, BAR, BARH, NAME = G.row * u, G.portrait * u, G.gapPortrait * u, G.bar * u, G.barH * u, G.name * u
 local GAPR, RING, RINGGAP, PADX, PADY = G.gapRings * u, G.ring * u, G.ringGap * u, G.padX * u, G.padY * u
 local BUFF = 22
+local FEATHER = 18     -- how far the backing reaches past the rows, above and below
 L.RH = ROW
 
 local db
+local testOff    -- the test list (below)
 local header, holder, geo, back, sel, grip
-local rows, slotOf = {}, {}
+local rows, slotOf, parked = {}, {}, {}
 local fighting = false
 local function say(m) print('|cffb48cffOmaDoomed:|r ' .. m) end
 local function tok(k) return 'nameplate' .. k end
@@ -44,7 +46,7 @@ local function texCoord(t, c) t:SetTexCoord(c[1], c[2], c[3], c[4]) end
 local function newRow(k)
   local r = CreateFrame('Frame', nil, header)
   r.k, r.unit, r.shown, r.pair = k, tok(k), false, false
-  r.y, r.lv, r.wantA = false, false, false   -- set, never nil (a frame answers unknown keys)
+  r.y, r.lv, r.wantA, r.fk, r.lastBite = false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
   r:SetSize(width(), ROW); r:Hide(); r:SetAlpha(0)
   -- threat: a soft swell of light behind the row, in Blizzard's threat colour, breathing (Motion)
   r.glow = r:CreateTexture(nil, 'BACKGROUND', nil, 2); r.glow:SetTexture(K.rowGlow, nil, nil, 'TRILINEAR')
@@ -118,7 +120,10 @@ local function newRow(k)
   b:RegisterForClicks('AnyUp', 'AnyDown')
   b:HookScript('OnEnter', function() M.tween('hov' .. k, r.hover:GetAlpha(), .22, .12, function(v) r.hover:SetAlpha(v) end) end)
   b:HookScript('OnLeave', function() M.tween('hov' .. k, r.hover:GetAlpha(), 0, .25, function(v) r.hover:SetAlpha(v) end) end)
-  RegisterStateDriver(b, 'visibility', ('[@%s,exists] show; hide'):format(tok(k)))
+  -- only a live enemy has a click area (2026-11-16 "mouse over was very inaccurate": every plate had one, friendly
+  -- and dead too, live but invisible in the list's empty places)
+  RegisterStateDriver(b, 'visibility', ('[@%s,harm,nodead] show; hide'):format(tok(k)))
+  b.box = b:CreateTexture(nil, 'OVERLAY'); b.box:SetAllPoints(); b.box:SetColorTexture(.2, .8, 1, .25); b.box:SetShown(db.boxes == true)
   r.click = b
   return r
 end
@@ -168,8 +173,11 @@ local function castLook(r)
   r.cast.s, r.cast.e, r.cast.chan = s, e, chan
   r.cast:Show(); r.cast:SetScript('OnUpdate', castStep); castStep(r.cast)
 end
-local function skull(r)
-  if ns.db.skull == false then r.skullWin:Hide(); return end
+-- the skull (2026-11-16): your DoTs will finish this mob AND it still has an empty seat, i.e. "don't spend a GCD
+-- filling it". A mob with every seat full needs nothing from you, so it gets no skull (at level 19 nearly every
+-- DoTed mob would carry one, which told him nothing).
+local function skull(r, e)
+  if ns.db.skull == false or not (e and (e.missing or 0) > 0) then r.skullWin:Hide(); return end
   r.skullWin:Show()
   local ok = pcall(ns.model.listInto, r.unit, true, dl, ds)
   local total = 0
@@ -210,7 +218,7 @@ end
 local function fill(r, e)
   pcall(r.name.SetText, r.name, UnitName(r.unit))
   pcall(SetPortraitTexture, r.face, r.unit); pcall(SetPortraitTexture, r.lift, r.unit)
-  health(r); skull(r)   -- the kill bar paints on DOTS and when the row appears (not five times a second)
+  health(r); skull(r, e)   -- the kill bar paints on DOTS and when the row appears (not five times a second)
   r.tgt:SetShown(e.target == true)
   threatLook(r, e); petLook(r, e); markLook(r, e)
   local a = (db.range ~= false and e.far) and .5 or 1
@@ -235,8 +243,16 @@ local function fitBack()
   for k = 1, TOKENS do local r = rows[k]; if r and r.shown and (slotOf[k] or k) > low then low = slotOf[k] or k end end
   if db.unlocked then low = math.max(low, 3) end
   local h = PADY * 2 + ROW * math.max(low, 1)
-  local want = low > 0 and 1 or 0
-  M.tween('backH', back:GetHeight(), h, .22, function(v) back:SetHeight(v); if sel then sel:SetHeight(v) end end, M.ease.out)
+  local want = (low > 0 or L.testing) and 1 or 0
+  -- the backing reaches FEATHER past the rows above and below; its soft ends are never more than half its height,
+  -- so a list of one row stays soft (16:51 shots: margins 48 on a 72 px backing squashed into hard lines)
+  local function setH(v)
+    local bh = v + 2 * FEATHER
+    back:SetHeight(bh)
+    if back.SetTextureSliceMargins then local m = math.min(48, math.floor(bh / 2) - 1); pcall(back.SetTextureSliceMargins, back, 48, m, 48, m) end
+    if sel then sel:SetHeight(v) end
+  end
+  M.tween('backH', back.h or h, h, .22, function(v) back.h = v; setH(v) end, M.ease.out)
   if back.want ~= want then back.want = want; M.tween('backA', back:GetAlpha(), want, .25, function(v) back:SetAlpha(v) end) end
 end
 
@@ -251,27 +267,34 @@ local function placeClicks()
     for k = 1, TOKENS do
       local r = rows[k]
       if r and r.click then
-        r.click:ClearAllPoints(); r.click:SetPoint('TOPLEFT', geo, 'TOPLEFT', 0, slotY(slotOf[k] or k)); r.click:SetSize(width(), ROW)
+        r.click:ClearAllPoints(); r.click:SetSize(width(), ROW)
+        if parked[k] then r.click:SetPoint('TOPLEFT', UIParent, 'BOTTOMRIGHT', 4000, -4000)   -- off screen: no click area
+        else r.click:SetPoint('TOPLEFT', geo, 'TOPLEFT', 0, slotY(slotOf[k] or k)) end
       end
     end
   end)
 end
 
--- places: between fights and at the pull, the DPS order (missing a DoT first, then the soonest ending); the rest of
--- the tokens after, likely joiners (hostile) before idle neutral mobs. In a fight nothing moves (the buttons are locked).
+-- places: between fights and at the pull, the DPS order (missing a DoT first, then the soonest ending). Then the
+-- places for newcomers (tokens with no plate yet: a mob that joins takes one). A plate that is up but not in your
+-- fight (an idle Kodo, a friendly guard) is parked: its click area goes off screen, so the list's empty places are
+-- never a live mouseover for a mob you can't see in it. In a fight nothing moves (the buttons are locked).
 local function pack(instant)
   if InCombatLockdown() and fighting then return end
   local n, done = 0, {}
+  wipe(parked)
   for _, e in ipairs(RO.order(db.sort ~= 'soonest')) do n = n + 1; slotOf[e.k] = n; done[e.k] = true end
-  local function hostile(k)
-    local ok, re = pcall(UnitReaction, tok(k), 'player')
-    return ns.plates.live[tok(k)] and ok and type(re) == 'number' and re <= 3
-  end
-  for _, pass in ipairs({ hostile, function() return true end }) do
-    for k = 1, TOKENS do if not done[k] and pass(k) then n = n + 1; slotOf[k] = n; done[k] = true end end
-  end
+  for k = 1, TOKENS do if not done[k] and not ns.plates.live[tok(k)] then n = n + 1; slotOf[k] = n; done[k] = true end end
+  for k = 1, TOKENS do if not done[k] then n = n + 1; slotOf[k] = n; parked[k] = true end end
   for k = 1, TOKENS do if rows[k] then moveTo(rows[k], slotOf[k], instant) end end
   placeClicks(); fitBack()
+end
+-- a parked mob joins mid-fight: its row takes the first place no row is using and no plate owns (it can't be
+-- clicked until the fight ends: its click area is locked off screen)
+local function placeJoiner(k)
+  local used = {}
+  for j = 1, TOKENS do local r = rows[j]; if j ~= k and r and (r.shown or ns.plates.live[tok(j)]) then used[slotOf[j] or j] = true end end
+  for s2 = 1, TOKENS do if not used[s2] then slotOf[k] = s2; moveTo(rows[k], s2, true); return end end
 end
 
 local function setShown(r, on)
@@ -289,10 +312,11 @@ local function setShown(r, on)
 end
 
 local function update()
-  if not header then return end
+  if not header or L.testing then return end
   for k = 1, TOKENS do
     local r, e = rows[k], RO.entries[k]
     if r and e then
+      if e.on and not r.shown and fighting and parked[k] then placeJoiner(k) end
       setShown(r, e.on == true)
       if e.on then local ok, err = pcall(fill, r, e); if not ok then ns.error('list row: ' .. tostring(err)) end end
     end
@@ -329,7 +353,7 @@ local function buildEditMode()
   grip:SetScript('OnMouseUp', function() grip:SetScript('OnUpdate', nil); db.scale = math.floor(header:GetScale() * 100 + .5); savePos(); placeClicks() end)
 end
 
-local function visible() if header then header:SetShown(fighting or db.unlocked == true) end end
+local function visible() if header then header:SetShown(fighting or db.unlocked == true or L.testing == true) end end
 local function unlock(on)
   if InCombatLockdown() then say('the list can be moved after this fight.'); return end
   db.unlocked = on
@@ -385,9 +409,8 @@ local function start()
   RegisterStateDriver(holder, 'visibility', '[combat] show; hide')
   -- the one soft backing (no box, no edges): wide feathered shape, 9-slice so its soft ends keep their shape
   back = header:CreateTexture(nil, 'BACKGROUND', nil, -8); back:SetTexture(K.listBack, nil, nil, 'TRILINEAR')
-  if back.SetTextureSliceMargins then pcall(back.SetTextureSliceMargins, back, 48, 48, 48, 48) end
-  back:SetVertexColor(0, 0, 0, .62); back:SetPoint('TOPLEFT', header, 'TOPLEFT', -24, 10)
-  back:SetWidth(width() + 48); back:SetHeight(1); back:SetAlpha(0)
+  back:SetVertexColor(0, 0, 0, .5); back:SetPoint('TOPLEFT', header, 'TOPLEFT', -24, FEATHER)
+  back:SetWidth(width() + 48); back:SetHeight(1); back:SetAlpha(0); back.h = false; back.want = false
   for k = 1, TOKENS do rows[k] = newRow(k); rows[k]:SetFrameLevel(header:GetFrameLevel() + 2) end
   relayout()
   unlock(db.unlocked == true)
@@ -410,6 +433,7 @@ local function start()
   for e in pairs(CASTS) do pcall(ev.RegisterEvent, ev, e) end
   ev:SetScript('OnEvent', function(_, e, unit)
     if e == 'PLAYER_REGEN_DISABLED' then
+      if L.testing then testOff() end
       RO.refreshAll(); pack(true)        -- the places for this fight, set before Blizzard locks the buttons
       fighting = true; visible(); update()
     elseif e == 'PLAYER_REGEN_ENABLED' then
@@ -429,10 +453,157 @@ local function start()
 end
 ns.starts[#ns.starts + 1] = start
 
+
+-- ---------- the test list: /omadoomed list test ----------
+-- Five pretend rows, out of combat, so the real list can be compared with sheet 83 without a fight (2026-11-16: "it
+-- looks nothing like mockups"; the sheets were drawn in a browser, this is the game's own drawing). Every part is the
+-- list's own (rows, backing, glow, skull, bar art, cast line, tick flash); only the DoT rings and the kill pieces are
+-- stand-ins in the rings' own art (the real ones need real auras). /omadoomed list boxes tints the click areas.
+local ART = K.ART
+local SPB = ns.spells.byKey
+local BEAST, HAWK, RAPTOR = 'Interface\\Icons\\Ability_Mount_WhiteDireWolf', 'Interface\\Icons\\Ability_Hunter_Pet_WindSerpent', 'Interface\\Icons\\Ability_Hunter_Pet_Raptor'
+local FAKE = {
+  { name = 'Zhevra Runner', hp = 244, max = 300, icon = BEAST, seats = { corruption = 7, agony = 19 }, threat = 1, tick = true },
+  { name = 'Sunscale Screecher', hp = 312, max = 400, icon = HAWK, seats = { corruption = 12, agony = 16, immolate = 9 }, cast = true },
+  { name = 'Zhevra Runner', hp = 96, max = 300, icon = BEAST, seats = { corruption = 2, agony = 12 }, threat = 3, skull = true, pet = true },
+  { name = 'Zhevra Runner', hp = 186, max = 300, icon = BEAST, seats = { corruption = 10, agony = 16, curse = 240 }, target = true, mark = 8 },
+  { name = 'Sunscale Lashtail', hp = 330, max = 350, icon = RAPTOR, seats = {}, far = true },
+}
+local function fakeRing(parent, key)
+  local w = CreateFrame('Frame', nil, parent); w:SetSize(RING, RING); w:SetFrameLevel(parent:GetFrameLevel() + 5)
+  local bk = w:CreateTexture(nil, 'BACKGROUND'); bk:SetTexture(ART .. 'rings\\backing_flat', nil, nil, 'TRILINEAR'); bk:SetAllPoints()
+  local ic = w:CreateTexture(nil, 'ARTWORK'); ic:SetPoint('CENTER'); ic:SetSize(RING * .72, RING * .72); ic:SetTexCoord(.08, .92, .08, .92)
+  local sp = SPB[key]
+  local okI, tex = pcall(function() return C_Spell.GetSpellTexture(sp and sp.names[1] or 'Corruption') end)
+  ic:SetTexture(okI and tex or 136197)
+  local m = w:CreateMaskTexture(); m:SetTexture(ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(ic); ic:AddMaskTexture(m)
+  local band = w:CreateTexture(nil, 'ARTWORK', nil, 2); band:SetTexture(ART .. 'rings\\ring_plain', nil, nil, 'TRILINEAR'); band:SetAllPoints()
+  local c = sp and sp.color or { 1, 1, 1 }; band:SetVertexColor(c[1], c[2], c[3])
+  local bez = w:CreateTexture(nil, 'ARTWORK', nil, 3); bez:SetTexture(ART .. 'rings\\bezel', nil, nil, 'TRILINEAR'); bez:SetAllPoints()
+  local num = w:CreateFontString(nil, 'OVERLAY'); num:SetFont(K.font, math.floor(RING * .42), 'OUTLINE'); num:SetPoint('CENTER')
+  w.num = num
+  return w
+end
+local function fakeParts(r)
+  if r.fk then return r.fk end
+  local fk = { rings = {}, pieces = {} }
+  local spots = R.seatSpots()
+  for key, i in pairs(spots) do
+    local w = fakeRing(r, key)
+    w:SetPoint('CENTER', r, 'LEFT', PADX + PORT + GAPP + BAR + GAPR + (i - .5) * RING + (i - 1) * RINGGAP, 0)
+    fk.rings[key] = w
+  end
+  for i = 1, 3 do local t = r.bar:CreateTexture(nil, 'ARTWORK', nil, 2); t:SetTexture(K.statusbar); fk.pieces[i] = t end
+  r.fk = fk
+  return fk
+end
+local boxes = {}
+local function showBoxes(on)
+  for k = 1, TOKENS do local r = rows[k]; if r and r.click and r.click.box then r.click.box:SetShown(on and not L.testing) end end
+  for s2 = 1, #FAKE do
+    local b = boxes[s2]
+    if on and L.testing then
+      if not b then b = geo:CreateTexture(nil, 'OVERLAY'); b:SetColorTexture(.2, .8, 1, .25); boxes[s2] = b end
+      b:ClearAllPoints(); b:SetPoint('TOPLEFT', geo, 'TOPLEFT', 0, slotY(s2) - 1); b:SetSize(width(), ROW - 2); b:Show()
+    elseif b then b:Hide() end
+  end
+end
+-- the kill pieces: your DoTs' damage left, laid back from the health's end (the one ending first nearest the green)
+local ORDER = { 'corruption', 'agony', 'immolate' }
+local function fakePieces(r, d, dmg)
+  local bw = BAR - 4
+  local x = d.hp / d.max * bw
+  for i, key in ipairs(ORDER) do
+    local t, amt = r.fk.pieces[i], dmg[key] or 0
+    local w = math.min(x, amt / d.max * bw)
+    if w > 0 then
+      local c = SPB[key].deep or SPB[key].color
+      t:SetVertexColor(c[1], c[2], c[3]); t:ClearAllPoints(); t:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', x - w, 0); t:SetSize(w, BARH - 6); t:Show()
+      x = x - w
+    else t:Hide() end
+  end
+end
+local function testStep()
+  local t = GetTime() - (L.t0 or 0)
+  for i, d in ipairs(FAKE) do
+    local r = rows[i]
+    for key, w in pairs(r.fk.rings) do
+      local left = d.seats[key]
+      if left then
+        local v = left - (t % math.max(3, left)); if v < .5 then v = left end
+        w.num:SetText(v >= 60 and (math.floor(v / 60 + .5) .. 'm') or tostring(math.floor(v + .5)))
+        local c = SPB[key] and SPB[key].color or { 1, 1, 1 }
+        if v < 3 then w.num:SetTextColor(c[1], c[2], c[3]) else w.num:SetTextColor(1, 1, 1) end
+        w:Show()
+      else w:Hide() end
+    end
+    local bite = 0
+    if d.tick then
+      local n = math.floor(t / 3)
+      if r.lastBite ~= n then r.lastBite = n; M.flash('bite' .. i, .45, function(v) r.bite:SetAlpha(v * .55) end) end
+      bite = (n % 4) * 8
+    end
+    fakePieces(r, d, { corruption = d.seats.corruption and math.max(0, 50 - bite) or 0, agony = d.seats.agony and 70 or 0, immolate = d.seats.immolate and 60 or 0 })
+    if d.cast then
+      local ph = t % 3
+      if ph < 2 then r.cast:SetStatusBarColor(K.castRed[1], K.castRed[2], K.castRed[3]); r.cast:SetMinMaxValues(0, 2); r.cast:SetValue(ph); r.cast:Show() else r.cast:Hide() end
+    end
+  end
+end
+local function clearFake(r)
+  if r.fk then for _, w in pairs(r.fk.rings) do w:Hide() end; for _, p2 in ipairs(r.fk.pieces) do p2:Hide() end end
+  if r.pair then r.pair.anchor:Show() end
+  if r.buffs then r.buffs:Show() end
+  r.cast:Hide(); r.tgt:Hide(); r.pet:Hide(); r.petRim:Hide(); r.mark:Hide(); r.skullWin:Hide()
+  M.stop('thr' .. r.k); r.lv = false; r.glow:SetAlpha(0); r.ring:SetVertexColor(0, 0, 0, .9)
+  r.shown = false; r:Hide(); r:SetAlpha(0); r.wantA = false
+end
+testOff = function()
+  L.testing = nil
+  ns.sched.remove('listtest')
+  for i = 1, #FAKE do clearFake(rows[i]) end
+  showBoxes(db.boxes == true)
+end
+local function testOn(on)
+  if InCombatLockdown() then say('the test list is for out of combat.'); return end
+  if not on then testOff(); visible(); update(); say('test list off.'); return end
+  L.testing = true
+  L.t0 = GetTime()
+  for i, d in ipairs(FAKE) do
+    local r = rows[i]
+    local fk = fakeParts(r)
+    if r.pair then r.pair.anchor:Hide() end
+    if r.buffs then r.buffs:Hide() end
+    r.name:SetText(d.name); r.face:SetTexture(d.icon); r.lift:SetTexture(d.icon)
+    r.bar:SetMinMaxValues(0, d.max); r.bar:SetValue(d.hp); r.hp:SetText(db.hp ~= false and tostring(d.hp) or '')
+    r.tgt:SetShown(d.target == true)
+    r.lv = false; threatLook(r, { threat = d.threat })
+    if d.pet then
+      if not (UnitExists('pet') and pcall(SetPortraitTexture, r.pet, 'pet')) then r.pet:SetTexture('Interface\\Icons\\Spell_Shadow_SummonImp') end
+      r.pet:Show(); r.petRim:Show()
+    else r.pet:Hide(); r.petRim:Hide() end
+    markLook(r, { mark = d.mark })
+    r.skullWin:SetShown(d.skull == true and ns.db.skull ~= false); r.skullBar:SetMinMaxValues(0, 1); r.skullBar:SetValue(d.skull and 1 or 0)
+    r.cast:Hide(); r.cast:SetScript('OnUpdate', nil)
+    for _, w in pairs(fk.rings) do w:Show() end
+    slotOf[i] = i; r.shown = true; r:Show(); r:SetAlpha(d.far and .5 or 1); r.wantA = d.far and .5 or 1
+    r.y = false; moveTo(r, i, true)
+  end
+  for k = #FAKE + 1, TOKENS do local r = rows[k]; if r then r.shown = false; r:Hide() end end
+  placeClicks(); visible(); fitBack()
+  ns.sched.add('listtest', .05, testStep)
+  showBoxes(db.boxes == true)
+  say('test list on: five pretend rows. /omadoomed list boxes shows the click areas. /omadoomed list test again to stop.')
+end
+L.test = testOn
+L.showBoxes = showBoxes
+
 function L.slash(msg)
   local cmd, arg = (msg or ''):match('^(%S*)%s*(.-)$'); cmd = (cmd or ''):lower()
   if not header then say('the mob list is off (it needs the rings on).'); return end
-  if cmd == 'unlock' then unlock(true); say('drag the list, and size it with the corner grip. /omadoomed list lock when done.')
+  if cmd == 'test' then testOn(not L.testing)
+  elseif cmd == 'boxes' then db.boxes = not db.boxes; showBoxes(db.boxes); say(db.boxes and 'click areas shown (tinted blue).' or 'click areas hidden.')
+  elseif cmd == 'unlock' then unlock(true); say('drag the list, and size it with the corner grip. /omadoomed list lock when done.')
   elseif cmd == 'lock' then unlock(false); say('list locked: it shows in fights.')
   elseif cmd == 'rows' then
     local n = tonumber(arg); if n then db.rows = math.max(4, math.min(TOKENS, n)); relayout(); say(('the list shows up to %d mobs.'):format(db.rows)) end
@@ -442,10 +613,11 @@ function L.slash(msg)
     header:ClearAllPoints(); header:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -40, -330); header:SetScale(1); placeClicks(); say('list back in its first place.')
   else
     local n = 0; for k = 1, TOKENS do if rows[k] and rows[k].shown then n = n + 1 end end
-    say(('mob list: %d shown of up to %d. /omadoomed list unlock | lock | rows 4-16 | reset'):format(n, db.rows))
+    say(('mob list: %d shown of up to %d. /omadoomed list test | boxes | unlock | lock | rows 4-16 | reset'):format(n, db.rows))
   end
 end
 function L.unlock(on) unlock(on) end
 function L.relayout() relayout(); update() end
 L.rows = rows
 L.slotOf = slotOf
+L.parked = parked
