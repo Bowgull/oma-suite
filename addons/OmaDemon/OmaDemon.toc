@@ -18,3 +18,5 @@ Shards.lua
 Stones.lua
 Armor.lua
 ShardTrim.lua
+Debuffs.lua
+Nightfall.lua

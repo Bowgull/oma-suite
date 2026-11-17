@@ -96,4 +96,40 @@ auras['player:Demon Skin'] = nil; W.fire('UNIT_AURA', 'player'); W.advance(1); c
 W.combat = true; W.fire('PLAYER_REGEN_DISABLED'); check(not g:IsShown(), 'never in combat')
 W.combat = false; W.fire('PLAYER_REGEN_ENABLED'); W.advance(1)
 G.armor = false; for _, fn in ipairs(ns.onSetting) do fn('armor', 'group') end; check(not g:IsShown(), 'switch turns it off')
+-- ---- sheet 78 / plan phase 7: debuffs on you, Nightfall ----
+local UIx = require('ui')
+local D, N = ns.debuffs, ns.nightfall
+local dc = D.container
+check(dc and dc.unit == 'player', 'debuff container built on player' .. (D.failed and (': ' .. D.failed) or ''))
+local dg = UIx.group(dc, 'debuffs')
+check(dg and dg.filter == 'HARMFUL' and dg.max == 8, 'HARMFUL group, up to 8 squares')
+local b1 = dg.buttons[1]
+check(b1:GetWidth() == 44, 'squares are 44 px: ' .. tostring(b1:GetWidth()))
+W.units.player.otherAuras = { 101, 102 }; W.fire('UNIT_AURA', 'player')
+check(#UIx.showing(dc).debuffs == 2, 'two debuffs on you, two squares')
+W.units.player.otherAuras = {}; W.fire('UNIT_AURA', 'player')
+check(#UIx.showing(dc).debuffs == 0, 'gone when they wear off (the game hides them)')
+local tipped, shown = nil, false
+GameTooltip = { SetOwner = function() end, SetUnitDebuffByAuraInstanceID = function(_, u, id) tipped = u .. ':' .. id end,
+  Show = function() shown = true end, Hide = function() shown = false end }
+b1.auraInstanceID = 77; D.onEnter(b1)
+check(tipped == 'player:77' and shown, 'hover shows that debuff\'s tooltip')
+D.onLeave(b1); check(not shown, 'leaving hides it')
+-- Nightfall: one slot, Shadow Trance only
+local nc = N.container
+check(nc and nc.unit == 'player', 'Nightfall slot built on player' .. (N.failed and (': ' .. N.failed) or ''))
+local ng = UIx.group(nc, 'nightfall')
+check(ng and ng.slot and ng.filters.includeSpellIDs[17941], 'slot allows Shadow Trance (17941)')
+W.units.player.otherAuras = { 101, 17941 }; W.fire('UNIT_AURA', 'player')
+check(UIx.showing(nc).nightfall[1] == 17941 and #UIx.showing(dc).debuffs == 2, 'proc: the portrait glow shows')
+W.units.player.otherAuras = { 101 }; W.fire('UNIT_AURA', 'player')
+check(#UIx.showing(nc).nightfall == 0, 'Shadow Bolt used: the glow is gone')
+SPELL[6] = 'Shadow Bolt'
+local sbBtn = CreateFrame('Button', 'ActionButton2', UIParent); sbBtn.action = 9; sbBtn:Show()
+GetActionInfo = function(slot) if slot == 5 then return 'spell', 4 elseif slot == 9 then return 'spell', 6 end end
+W.fire('ACTIONBAR_SLOT_CHANGED'); W.advance(1)
+check(N.on == sbBtn, 'Shadow Bolt button found for our proc glow')
+W.fire('SPELL_ACTIVATION_OVERLAY_GLOW_SHOW', 6); W.advance(1)
+check(OmaDemonDB.group.nfBlizz == true and N.on == nil, "Blizzard's own Shadow Bolt glow seen: ours stands down")
+W.fire('PLAYER_ENTERING_WORLD'); W.advance(1); check(N.on == nil, 'and stays down')
 io.write(('OmaDemon smoke: %d checks passed\n'):format(ok))

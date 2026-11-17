@@ -78,6 +78,7 @@ local function refresh()
   end
 end
 ns.armorRefresh, ns.armorGlows = refresh, glows
+ns.actionButtons, ns.spellName = buttons, spellName   -- Nightfall.lua finds Shadow Bolt the same way
 
 local ev = CreateFrame('Frame')
 for _, e in ipairs({ 'PLAYER_LOGIN', 'PLAYER_ENTERING_WORLD', 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'UNIT_AURA',
