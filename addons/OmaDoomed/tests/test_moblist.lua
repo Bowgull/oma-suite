@@ -47,21 +47,17 @@ local function mob(W, F, k, name, o) local u = F.mob('nameplate' .. k, 'C-' .. k
 local function shownRows(ns) local t = {}; for k = 1, 16 do if ns.moblist.rows[k].shown then t[#t + 1] = k end end; return table.concat(t, ',') end
 
 return {
-  ['list: one row per nameplate, enemies only, packed to the top; clicks are secure target buttons'] = function(W, T)
+  ['list: one row per nameplate, enemies only, packed to the top; display only (no click buttons)'] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist
     mob(W, F, 2, 'Raptor'); mob(W, F, 3, 'Guard', { friendly = true }); mob(W, F, 5, 'Lashtail')
     pump(); W.advance(.3)
     T.eq(shownRows(ns), '2,5', 'the two enemies show; the friendly guard has no row')
     T.eq(L.slotOf[2], 1, 'packed: the first enemy at the top'); T.eq(L.slotOf[5], 2, 'the second just under it')
-    local b = L.rows[2].click
-    T.eq(b._template, 'SecureUnitButtonTemplate', 'a secure unit button: hovering it makes it your mouseover')
-    T.eq(b:GetAttribute('*type1'), 'macro', 'a click runs the macro'); T.eq(b:GetAttribute('*macrotext1'), '/target [@mouseover,harm,nodead]', 'which targets the hovered mob'); T.eq(b:GetAttribute('unit'), 'nameplate2', 'its own token, for good')
-    T.ok(b._anchor ~= L.rows[2], 'placed by screen position, never anchored to its row (that made the row secure: ADDON_ACTION_BLOCKED)')
-    T.ok(b._anchor ~= nil, 'and it IS placed, though the list is hidden out of combat (2026-11-16: clicking stopped working)')
-    W.combat = true; pump()
-    T.ok(b:IsShown() or b.shown, "an enemy's button shows in a fight")
-    T.ok(L.rows[3].click:IsShown(), "every click area shows in a fight (no rule naming a nameplate: the game never made those true)")
+    -- display only (2026-11-16, measured: Forever refuses add-on clicks/hovers through nameplate tokens)
+    T.eq(L.rows[2].click, false, 'no secure click button')
+    T.ok(_G.OmaDoomedListClick2 == nil, 'none made at all')
+    T.ok(L.rows[2]:GetScript('OnEnter') ~= nil, 'the row lights and shows the tooltip on hover')
     noErrors(T)
   end,
   ['list: in a fight nothing moves; a dead mob leaves its place empty; a newcomer takes its own place'] = function(W, T)
@@ -167,8 +163,6 @@ return {
     T.eq(L.slotOf[2], 3, 'the idle enemy right under the fight: it can still join and be clicked')
     T.ok(not L.parked[2], 'an enemy is never parked (19:07: the mob he was hitting got parked and could not be clicked)')
     T.ok(not L.parked[5], 'nothing is parked off screen any more (a token can pass to a new enemy mid-fight)')
-    W.combat = true; pump()
-    T.ok(L.rows[5].click:IsShown(), "every click area shows with the holder in a fight")
     T.ok(not L.parked[4], 'a token with no plate keeps a place for a newcomer')
     W.units.nameplate2.idle = false; W.advance(.3)
     T.ok(L.rows[2].shown, 'the Kodo row shows once it fights you, in its own place')
