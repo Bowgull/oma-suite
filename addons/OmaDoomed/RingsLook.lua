@@ -378,6 +378,7 @@ end
 R.LIT_HALO = 0.5
 R.HALO_K = 1.5
 R.HALO = false
+R.GLYPH_LIGHT = false   -- the whole-ring ending light (font glyph): off, see ringOwn
 function R.haloFor(key)
   local sp = Spells.byKey[key]
   local color, curve = sp and sp.color, haloCurves[key]
@@ -429,7 +430,10 @@ local function ringOwn(color, curve, key, light)
     -- sheet 58 C: in the last seconds the WHOLE ring, drained part too, breathes in the DoT's own lit colour. Only a
     -- font string can follow the time left on a locked button, so this needs the ring font (R.GLYPH); it sits above
     -- the dark track.
-    if R.GLYPH and light then
+    -- off (2026-11-16, 19:19 shots: "a huge pulsing ring when ending" on Corruption, on the plate and the target
+    -- frame): the ring glyph draws far bigger than its size and off-centre, like the outer ring before it. Until a
+    -- glyph is measured in game, the ending shows as the number turning the DoT's own colour.
+    if R.GLYPH_LIGHT and R.GLYPH and light then
       top = top or CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
       local fl = top:CreateFontString(nil, 'ARTWORK')
       R.ringFont(fl, S); fl:SetSize(S * 2, S * 2); fl:SetPoint('CENTER', b, 'CENTER')

@@ -210,6 +210,7 @@ local function paintOn(unit, hb, addon, reversed)
         if not (st and not st.landAt and st.name == d.name) then
           st = { name = d.name, sp = sp, look = lk, hb = hb, ov = ov, ch = ch }
           charging[b] = st
+          ch.omV = 0   -- a new cast starts its fill empty (a recast showed the last cast's full fill for a frame)
         end
         st.dmg, st.s, st.e = d.damage, cStart / 1000, cEnd / 1000
         local o = styleOf(sp, true, lk, 0)
@@ -223,6 +224,7 @@ local function paintOn(unit, hb, addon, reversed)
         show(ov.pre, lk == 'stripes'); show(ov.motes, lk == 'motes')
       else
         show(ch, false); show(ov.pre, false); show(ov.motes, false)
+        if st and not st.landAt and st.name ~= d.name then charging[b] = nil; st = nil end   -- another DoT took this place
         if st and not st.landAt then   -- it landed: Charging's fill was already whole; the other looks ease up
           st.landAt = GetTime()
           chargeOne(b, st, st.landAt)

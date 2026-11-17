@@ -608,6 +608,11 @@ local function removeAvoidedDot(cast, action, school)
                 action, tostring(school), cast.name))
             return true
         end
+        -- OMA (2026-11-16): a recast was rolled back for any miss, usually the demon's melee. Another school's miss
+        -- is not the recast's: it stays.
+        trace(string.format("AVOID %s (school %s) right after %s recast: not its school, ignored", action,
+            tostring(school), cast.name))
+        return false
     end
     if cast.previous then
         dots[cast.name] = cast.previous
@@ -800,6 +805,7 @@ local function onPlayerCast(spellID, castGUID)
     dotsByTarget[key] = dotsByTarget[key] or {}
     local previous = dotsByTarget[key][name]
     local dot = newDot(spellID, tickKey, name, total, school, duration, statedInterval, now)
+    if previous and previous.expiresAt and previous.expiresAt > now then dot.phaseUnknown = true end -- OMA: a refresh
     dotsByTarget[key][name] = dot
     lastDotCast = { key = key, name = name, dot = dot, previous = previous, at = now,
         comboRead = isFinisher and comboSource == "read" and comboPoints or nil }
@@ -890,6 +896,13 @@ end
 -- once seen (ticks keep its rhythm; anchoring on the latest tick would let jitter add up), else on the cast.
 -- Using the nearest multiple of the interval means one missed tick doesn't lose the DoT.
 local function distanceToExpectedTick(dot, now)
+    -- OMA (2026-11-16, "i can cast anything once but the second time bugs out"): a recast of a DoT that was still
+    -- running may keep the old tick rhythm, so its first tick can come any time in its first interval. Until one is
+    -- seen, any hit of its school in that interval is tick 1 (anchorTick re-anchors on it).
+    if dot.phaseUnknown and not dot.firstTickAt and now > dot.appliedAt + 0.05
+        and now <= dot.appliedAt + dot.interval + TICK_MATCH_WINDOW then
+        return 0, 1
+    end
     local anchor = dot.firstTickAt or dot.appliedAt
     if not dot.firstTickAt and dot.travel then
         -- Still in flight: the DoT started anywhere up to `travel` seconds after the cast.
@@ -952,6 +965,7 @@ ns.dropSnapshots = dropSnapshots
 -- Moves a DoT's tick bookkeeping to the tick in slot `index` that landed at `now`.
 local function anchorTick(dot, index, now)
     dot.missed = 0
+    dot.phaseUnknown = nil
     if dot.firstTickAt then
         dot.lastTickIndex = index
     else
@@ -1316,10 +1330,12 @@ local function housekeep(now)
     for key, dots in pairs(dotsByTarget) do
         for name, dot in pairs(dots) do
             local late = (dot.ticksSeen == 0 and dot.travel) or 0
+            -- OMA: a refresh whose rhythm is still unknown counts no misses in its first interval
+            if dot.phaseUnknown and now > dot.appliedAt + dot.interval + TICK_MATCH_WINDOW then dot.phaseUnknown = nil end
             while dot.nextTickAt < now - TICK_MATCH_WINDOW - late and dot.nextTickAt <= dot.expiresAt do
                 dot.nextTickAt = dot.nextTickAt + dot.interval
                 -- Only a tick that could have been seen counts as missed.
-                if isObservable(key) then dot.missed = dot.missed + 1 end -- OMA: misses after ticking count too
+                if isObservable(key) and not dot.phaseUnknown then dot.missed = dot.missed + 1 end -- OMA: misses after ticking count too
             end
             if now > dot.expiresAt + TICK_MATCH_WINDOW then
                 dots[name] = nil

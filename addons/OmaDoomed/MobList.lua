@@ -382,6 +382,7 @@ local function visible() if header then header:SetShown(fighting or db.unlocked 
 local function unlock(on)
   if InCombatLockdown() then say('the list can be moved after this fight.'); return end
   db.unlocked = on
+  if on then db.tabLocked = false; if L.tab and L.tab() then L.tab():Show() end end
   if on and not sel then buildEditMode() end
   if sel then sel:SetShown(on) end
   -- unlocked, it shows the five test rows, so you place and size the list you will really see
@@ -421,6 +422,69 @@ local function relayout()
   if sel then sel:SetWidth(width() + 12) end
   pack(true)
 end
+
+-- ---------- the anchor tab (sheet 84 A, approved 2026-11-16 "A, hover tab") ----------
+-- Between fights a small tab sits faintly at the list's top-left corner (the list itself hides out of combat, so
+-- unlike Details and Threat there's nothing else to grab). Point at it: it lights gold, the list's outline and its
+-- corner grip show. Drag the tab to move, the corner or the mouse wheel to size; click the padlock and the tab goes
+-- away until you unlock again (options' Move button, the key binding, /omadoomed list move). In a fight it's gone.
+local tab
+local TAB_W, TAB_H = 52, 22
+local function peeking() return tab and (tab:IsMouseOver() or (sel and sel:IsShown() and sel:IsMouseOver()) or tab.dragging) end
+local function tabLook(lit)
+  if not tab then return end
+  tab:SetAlpha(lit and 1 or .4)
+  tab.bg:SetVertexColor(.05, .035, .02, lit and .8 or .6)
+  tab.edge:SetVertexColor(.91, .77, .42, lit and .9 or .3)
+end
+local function peek(on)
+  if not header or fighting then return end
+  if on then
+    if not sel then buildEditMode() end
+    sel:Show(); header:Show(); tabLook(true)
+  elseif not db.unlocked then
+    sel:Hide(); visible(); tabLook(false)
+  else tabLook(false) end
+end
+local function tabShown()
+  if not tab then return end
+  tab:SetShown(not fighting and db.tabLocked ~= true and db.on ~= false)
+  if not tab:IsShown() then tab.peek = false end
+end
+local function buildTab()
+  tab = CreateFrame('Button', 'OmaDoomedListTab', UIParent)
+  tab:SetSize(TAB_W, TAB_H); tab:SetFrameStrata('MEDIUM'); tab:SetClampedToScreen(true)
+  tab:SetPoint('BOTTOMLEFT', header, 'TOPLEFT', -6, 2)
+  tab.bg = tab:CreateTexture(nil, 'BACKGROUND'); tab.bg:SetTexture(K.ART .. 'rings\\softsq_mask', nil, nil, 'TRILINEAR'); tab.bg:SetAllPoints()
+  tab.edge = tab:CreateTexture(nil, 'BORDER'); tab.edge:SetTexture(K.ART .. 'rings\\softsq_edge', nil, nil, 'TRILINEAR'); tab.edge:SetAllPoints()
+  -- Blizzard's own size grabber (the diagonal lines) as the grip, and its padlock
+  local g = tab:CreateTexture(nil, 'ARTWORK'); g:SetTexture(K.sizeGrip); g:SetSize(16, 16); g:SetPoint('LEFT', tab, 'LEFT', 5, 0)
+  g:SetTexCoord(1, 0, 0, 1)   -- mirrored: the lines lean like ////
+  local lock = CreateFrame('Button', nil, tab); lock:SetSize(18, 18); lock:SetPoint('RIGHT', tab, 'RIGHT', -4, 0)
+  lock:SetNormalTexture('Interface\\Buttons\\LockButton-Unlocked-Up'); lock:SetPushedTexture('Interface\\Buttons\\LockButton-Unlocked-Down')
+  lock:SetHighlightTexture('Interface\\Buttons\\ButtonHilight-Square', 'ADD')
+  lock:SetScript('OnClick', function()
+    db.tabLocked = true; peek(false); tabShown()
+    say('mob list locked in place. To move it again: Move the list in options, or the key binding.')
+  end)
+  lock:SetScript('OnEnter', function() peek(true) end)
+  tab:RegisterForDrag('LeftButton'); tab:EnableMouseWheel(true)
+  tab:SetScript('OnEnter', function() peek(true) end)
+  tab:SetScript('OnDragStart', function(self) if InCombatLockdown() then return end; self.dragging = true; peek(true); header:StartMoving() end)
+  tab:SetScript('OnDragStop', function(self) self.dragging = false; header:StopMovingOrSizing(); savePos(); placeClicks() end)
+  tab:SetScript('OnMouseWheel', function(_, d)
+    if InCombatLockdown() then return end
+    db.scale = math.max(60, math.min(180, (db.scale or 100) + d * 5)); header:SetScale(db.scale / 100); savePos(); placeClicks()
+  end)
+  -- leaving: the outline goes once the mouse is off both the tab and the outline (and nothing is being dragged)
+  tab:SetScript('OnUpdate', function(self, el)
+    if not (sel and sel:IsShown()) or db.unlocked then return end
+    self.off = peeking() and 0 or (self.off or 0) + el
+    if self.off > .35 then self.off = 0; peek(false) end
+  end)
+  tabLook(false); tabShown()
+end
+L.tab = function() return tab end
 
 local function start()
   if not (R.db and RO and M and K and G and RegisterStateDriver) then return end
@@ -468,9 +532,9 @@ local function start()
       if db.unlocked and sel then db.unlocked = false; sel:Hide(); L.testForMove = nil end
       if L.testing then testOff() end
       RO.refreshAll(); pack(true)        -- the places for this fight, set before Blizzard locks the buttons
-      fighting = true; visible(); update()
+      fighting = true; visible(); tabShown(); update()
     elseif e == 'PLAYER_REGEN_ENABLED' then
-      fighting = false; visible(); relayout(); buildPairs(); update()
+      fighting = false; visible(); tabShown(); relayout(); buildPairs(); update()
     elseif e == 'SPELLS_CHANGED' then relayout()
     elseif e == 'UNIT_HEALTH' then
       local k = type(unit) == 'string' and tonumber(unit:match('^nameplate(%d+)$'))
@@ -481,6 +545,7 @@ local function start()
     end
   end)
   L.header = header
+  buildTab()
   fighting = InCombatLockdown() and true or false; visible()
   RO.refreshAll(); update()
 end
