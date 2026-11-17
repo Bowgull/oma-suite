@@ -175,4 +175,15 @@ check(N.on == sbBtn, 'Shadow Bolt button found for our proc glow')
 W.fire('SPELL_ACTIVATION_OVERLAY_GLOW_SHOW', 6); W.advance(1)
 check(OmaDemonDB.group.nfBlizz == true and N.on == nil, "Blizzard's own Shadow Bolt glow seen: ours stands down")
 W.fire('PLAYER_ENTERING_WORLD'); W.advance(1); check(N.on == nil, 'and stays down')
+-- Nightfall chime probe: reads and logs only
+C_Spell.GetSpellInfo = function(n) if n == 'Shadow Bolt' then return { spellID = 6, castTime = W.now > 9000 and 0 or 2500 } end end
+SPELL[6] = 'Shadow Bolt'
+local PR = ns.nfProbe
+PR.toggle(); check(PR.on and OmaDemonDB.group.nfProbe.shadowBolt == 6, 'probe on, Shadow Bolt found')
+W.fire('UNIT_SPELLCAST_START', 'player', 'c', 6); W.fire('UNIT_SPELLCAST_SUCCEEDED', 'player', 'c', 6)
+W.fire('UNIT_SPELLCAST_SUCCEEDED', 'player', 'c', 6)
+check(OmaDemonDB.group.nfProbe.sum.instant == 1, 'an instant Shadow Bolt is counted')
+W.fire('SPELL_ACTIVATION_OVERLAY_GLOW_SHOW', 6); check(OmaDemonDB.group.nfProbe.sum.events == 1, 'overlay event logged')
+W.advance(301); check(not PR.on and #OmaDemonDB.group.nfProbe.log > 3, 'probe stops by itself after 5 min')
 io.write(('OmaDemon smoke: %d checks passed\n'):format(ok))
+

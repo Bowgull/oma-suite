@@ -134,6 +134,7 @@ SlashCmdList.OMADEMON = function(msg)
   if cmd == 'stone' then return ns.stoneTest and ns.stoneTest(rest ~= '' and rest or nil) end
   if cmd == 'armor' then return ns.armorTest and ns.armorTest() end
   if cmd == 'nightfall' then
+    if rest == 'probe' then return ns.nfProbe and ns.nfProbe.toggle() end
     if rest == 'sound off' or rest == 'sound on' then ns.groupDB().nfSound = (rest == 'sound on'); print('|cff9b6bffOmaDemon|r: Nightfall chime ' .. rest:sub(7)); return end
     if ns.nightfall and ns.nightfall.preview then ns.nightfall.preview(4) end
     print('|cff9b6bffOmaDemon|r: Nightfall for 4 s (art from the ' .. tostring(ns.nightfall and ns.nightfall.artFrom) .. '). /omademon nightfall sound off|on')

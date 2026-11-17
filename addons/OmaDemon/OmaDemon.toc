@@ -21,3 +21,4 @@ Armor.lua
 ShardTrim.lua
 Debuffs.lua
 Nightfall.lua
+NightfallProbe.lua
