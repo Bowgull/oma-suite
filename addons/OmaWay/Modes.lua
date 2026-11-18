@@ -22,9 +22,14 @@ local function guidelime(show)
   if not (Guidelime and Guidelime.toggleMainFrame and GuidelimeDataChar) then return end
   if (GuidelimeDataChar.mainFrameShowing and true or false) ~= show then pcall(Guidelime.toggleMainFrame) end
 end
+-- 2026-11-17 (Joshua: "i didnt know it would reload my entire screen everytime"): never '/questie tracker show|hide'.
+-- Those switch the tracker off at the root and ReloadUI(), and 'hide' also wipes Questie's tracked-quest list. Only
+-- the tracker window's own Hide() / Show(), which reload nothing and keep every setting.
 local function questie(show)
-  local f = SlashCmdList and SlashCmdList.ACECONSOLE_QUESTIE
-  if f then pcall(f, show and 'tracker show' or 'tracker hide') end
+  local L = _G.QuestieLoader
+  local ok, T = pcall(function() return L and L:ImportModule('QuestieTracker') end)
+  if not (ok and T and T.Hide and T.Show) then return end
+  if show then pcall(T.Show, T) else pcall(T.Hide, T) end
 end
 local function details(show)
   local f = SlashCmdList and SlashCmdList.DETAILS
@@ -87,6 +92,20 @@ SlashCmdList.OMAWAY = function(msg)
     if m and x then ns.setWaypoint(m, x + .03, y - .03, { title = 'OmaWay test', from = 'OmaWay' }); ns.say('a test waypoint a little north-east of you.')
     else ns.say("the game won't say where you are here (inside a dungeon?).") end
   elseif cmd == 'clear' then ns.clearWaypoint(); ns.say('waypoint cleared.')
+  elseif cmd == 'why' then
+    -- what OmaWay sees, in chat (2026-11-17: "i dont see the arrow or guide at all")
+    local L = _G.QuestieLoader
+    local okP, P = pcall(function() return L and L:ImportModule('QuestiePlayer') end)
+    local n = 0; if okP and P and type(P.currentQuestlog) == 'table' then for _ in pairs(P.currentQuestlog) do n = n + 1 end end
+    ns.say(('Questie: %s, quests in its log: %d. Guidelime: %s. Mode: %s.'):format(L and 'found' or 'NOT found', n,
+      (Guidelime and GuidelimeDataChar) and (GuidelimeDataChar.mainFrameShowing and 'on, window open' or 'on, window closed') or 'off', mode))
+    local okJ, j = pcall(function() return ns.quests and ns.quests.job() end)
+    if not okJ then ns.say('nearest job: error ' .. tostring(j))
+    elseif j then ns.say(('nearest job: %s (%s), %d yd, map %s'):format(tostring(j.title), tostring(j.line2), j.dist or -1, tostring(j.map)))
+    else ns.say('nearest job: none found') end
+    local w = ns.waypoint()
+    ns.say(w and ('arrow target: %s, from %s; world position %s; distance %s'):format(tostring(w.title), tostring(w.from), w.wx and 'known' or 'UNKNOWN', tostring(ns.distance and ns.distance()))
+      or 'arrow target: none (so no arrow)')
   else
     ns.say('mode: ' .. mode .. (db.mode == 'auto' and ' (automatic)' or ' (clicked)') .. (ns.standIn and '. Guidelime and Questie steer the arrow through its TomTom slot.' or '. TomTom is installed, so its own arrow is used.'))
     ns.say('/omaway quest | dungeon | auto | lock | unlock | reset | test | clear')

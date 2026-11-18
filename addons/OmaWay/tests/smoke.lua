@@ -71,10 +71,15 @@ GuidelimeDataChar = { mainFrameShowing = true }
 local glToggles = 0
 Guidelime = { toggleMainFrame = function() glToggles = glToggles + 1; GuidelimeDataChar.mainFrameShowing = not GuidelimeDataChar.mainFrameShowing end }
 local said = {}
+local reloads = 0
+function ReloadUI() reloads = reloads + 1 end
 SlashCmdList = {
-  ACECONSOLE_QUESTIE = function(m) said[#said + 1] = 'questie ' .. m end,
+  -- Questie's slash 'tracker show|hide' reloads the whole UI in the real game: OmaWay must never use it
+  ACECONSOLE_QUESTIE = function(m) said[#said + 1] = 'SLASH questie ' .. m; ReloadUI() end,
   DETAILS = function(m) said[#said + 1] = 'details ' .. m end,
 }
+local QT = { Hide = function() said[#said + 1] = 'questie tracker hide' end, Show = function() said[#said + 1] = 'questie tracker show' end }
+QuestieLoader = { ImportModule = function(_, n) if n == 'QuestieTracker' then return QT end end }
 
 -- ---------- load ----------
 local ns = {}
@@ -157,7 +162,7 @@ do
   function D.GetNearestFinisherOrStarter(fin) local dx, dy = 400 - player.x, 100 - player.y; return { 40, 10 }, 85, 'Apothecary Lydon', math.sqrt(dx * dx + dy * dy) end
   local P = { currentQuestlog = log }
   local Z = { GetUiMapIdByAreaId = function(_, z) return 1426 end }
-  QuestieLoader = { ImportModule = function(_, n) return ({ DistanceUtils = D, QuestiePlayer = P, ZoneDB = Z })[n] end }
+  QuestieLoader = { ImportModule = function(_, n) return ({ DistanceUtils = D, QuestiePlayer = P, ZoneDB = Z, QuestieTracker = QT })[n] end }
   Questie = { db = { char = {} } }
   player.x, player.y = 500, 100
   ns.quests.step()
@@ -240,6 +245,7 @@ do
   TomTom = savedTT; C_AddOns.IsAddOnLoaded = function() return false end
 end
 
+ok(reloads == 0, 'nothing ever reloads the UI (' .. reloads .. ' reloads)')
 print = print0
 print(('OmaWay smoke: %d checks, %d failed'):format(checks, fails))
 if fails > 0 then os.exit(1) end
