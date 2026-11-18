@@ -12,7 +12,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local V = 10                                   -- layout version: bump when LAYOUT changes
+local V = 11                                   -- layout version: bump when LAYOUT changes
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
 local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
@@ -60,14 +60,15 @@ local LAYOUT = {
   { 1, 'none', D, 'spell', 'Shadow Bolt' },
   -- RT + D-pad
   { 1, 'RT', U, 'spell', { 'Siphon Life', 'Drain Soul' } },              -- Drain Soul until 41, then Siphon Life (Drain Soul -> set 2)
-  { 1, 'RT', L, 'spell', { 'Curse of the Elements', 'Curse of Weakness' } },
+  { 1, 'RT', L, 'spell', { 'Curse of the Elements', 'Curse of Recklessness' } }, -- v11 (Joshua 2026-11-13): Recklessness 14-20, then Elements;
+                                                                         -- Recklessness then drops to set 2 RT+B ("let it go to set 2 after lvl 20")
   { 1, 'RT', D, 'spell', 'Will of the Forsaken' },
   { 1, 'RT', R, 'macro', 'Meters' },
   -- LT + D-pad: Cannibalize, and room for the emergency spells you learn later
   { 1, 'LT', U, 'spell', 'Cannibalize' },
   { 1, 'LT', R, 'spell', 'Death Coil' },
   { 1, 'LT', L, 'spell', 'Howl of Terror' },
-  { 1, 'LT', D, 'spell', 'Shadow Ward' },
+  { 1, 'LT', D, 'spell', { 'Shadow Ward', 'Curse of Weakness' } },      -- v11: Weakness borrows this empty button until Shadow Ward (32)
   -- LT + RT: out of the fight. v8 (Joshua 2026-11-10, "Is there a way to get them on page one?" / "Sounds good"):
   -- Hearthstone and the professions here; ONE demon button that follows your newest demon; every demon has its own
   -- button on set 2 for when you want a different one (rule 5 skips the set-2 copy of the one this button shows).
@@ -93,6 +94,7 @@ local LAYOUT = {
   { 2, 'RT', Y, 'spell', 'Curse of Tongues' },
   { 2, 'RT', B, 'spell', 'Curse of Recklessness' },
   { 2, 'RT', A, 'spell', 'Curse of Exhaustion' },
+  { 2, 'RT', L, 'spell', 'Curse of Weakness' },                         -- v11: Weakness's home once Shadow Ward takes set 1 LT+down
   { 2, 'LT', R, 'spell', 'Enslave Demon' },
   { 2, 'RT', R, 'spell', 'Eye of Kilrogg' },
   { 2, 'LT', L, 'spell', 'Detect Invisibility' },
@@ -331,9 +333,11 @@ local SIM_STEPS = {
   { 7,  { 'Shadow Bolt', 'Immolate', 'Corruption', 'Life Tap', 'Summon Imp', 'Demon Skin', 'Shoot', 'Will of the Forsaken', 'Cannibalize', 'Tailoring', 'Find Minerals' } },
   { 10, { 'Bane of Agony', 'Fear', 'Curse of Weakness', 'Drain Soul', 'Summon Voidwalker', 'Create Healthstone' } },
   { 12, { 'Health Funnel' }, 'his' },                                       -- here Joshua puts his own thing on RT up
-  { 20, { 'Drain Life', 'Summon Sayaad', 'Ritual of Summoning', 'Create Soulstone', 'Unending Breath', 'Demon Armor' } },
+  { 14, { 'Curse of Recklessness' } },
+  { 20, { 'Drain Life', 'Summon Sayaad', 'Ritual of Summoning', 'Create Soulstone', 'Unending Breath', 'Demon Armor', 'Curse of the Elements' } },
   { 30, { 'Summon Felhunter', 'Banish' } },
-  { 41, { 'Siphon Life', 'Curse of the Elements', 'Summon Felsteed' } },
+  { 32, { 'Shadow Ward' } },
+  { 41, { 'Siphon Life', 'Summon Felsteed' } },
 }
 local function simulate()
   local bars, st = {}, { mine = {}, his = {} }
