@@ -39,20 +39,40 @@ local function look()
   local db = ns.db()
   f:SetSize(db.size, db.size); art()
   f:SetAlpha((db.alpha or 100) / 100)
-  line1:SetFont(FONT, db.text or 12, ''); line2:SetFont(FONT, math.max(9, (db.text or 12) - 2), '')
-  plate:SetShown(db.yards ~= false)
-  grip:SetShown(not db.locked)
+  -- text only: a thicker outline so the letters hold on any ground without the plate behind them
+  local edge = (db.plate == 'text') and 'OUTLINE' or ''
+  line1:SetFont(FONT, db.text or 12, edge); line2:SetFont(FONT, math.max(9, (db.text or 12) - 2), edge)
+  if db.yards == false and db.plate == nil then db.plate = 'off' end   -- the old 'Show the plate' switch
+  plate:SetShown(db.plate ~= 'off')
+  grip:SetShown(false)   -- the //// grip shows only while the mouse is on an unlocked arrow (it read as a glitch)
 end
 A.look = look
 
 -- the plate sizes itself around its text: icon, line one (yards and name), line two (progress)
 local warnShown
+-- 2026-11-18 (in game: one line sat high and ran into the right gem, "OmaWay te|st|"): the text is laid out from the
+-- plate's own left edge, past the left cap and the icon if there is one; one line is centred, two lines straddle the
+-- middle; the width is the text plus both caps. Style (Joshua: "can i also have the frame off or perhaps just text?"):
+-- 'frame' the painted plate, 'text' the same text with no plate behind it, 'off' nothing under the arrow.
+local CAP_L, CAP_R, ICON_W = 24, 28, 22
 local function setPlate(t1, t2, iconPath, warn)
-  line1:SetText(t1 or ''); line2:SetText(t2 or ''); line2:SetShown(t2 ~= nil and t2 ~= '')
+  local style = ns.db().plate or 'frame'
+  local two = t2 ~= nil and t2 ~= ''
+  line1:SetText(t1 or ''); line2:SetText(t2 or ''); line2:SetShown(two)
   if iconPath then icon:SetTexture(iconPath); icon:Show() else icon:Hide() end
-  local tw = math.max(line1:GetStringWidth() or 0, (t2 and t2 ~= '') and (line2:GetStringWidth() or 0) or 0)
+  local framed = style == 'frame'
+  local left = (framed and CAP_L or 0) + (iconPath and ICON_W or 0)
+  icon:ClearAllPoints(); icon:SetPoint('LEFT', plate, 'LEFT', framed and CAP_L or 0, 0)
+  line1:ClearAllPoints(); line2:ClearAllPoints()
+  if two then
+    line1:SetPoint('BOTTOMLEFT', plate, 'LEFT', left, 1); line2:SetPoint('TOPLEFT', plate, 'LEFT', left, -1)
+  else
+    line1:SetPoint('LEFT', plate, 'LEFT', left, 0)
+  end
+  local tw = math.max(line1:GetStringWidth() or 0, two and (line2:GetStringWidth() or 0) or 0)
   local th = (ns.db().text or 12)
-  plate:SetSize(tw + (iconPath and 26 or 0) + 58, (t2 and t2 ~= '') and (th * 2 + 22) or (th + 24))
+  plate:SetSize(left + tw + (framed and CAP_R or 0), two and (th * 2 + (framed and 20 or 6)) or (th + (framed and 22 or 4)))
+  plateBg:SetShown(framed)
   if (warn and true or false) ~= warnShown then
     warnShown = warn and true or false
     plateBg:SetTexture(ART .. (warn and 'plate_warn' or 'plate'), nil, nil, 'TRILINEAR')
@@ -94,7 +114,6 @@ local function build()
   icon = plate:CreateTexture(nil, 'ARTWORK'); icon:SetSize(18, 18); icon:SetPoint('LEFT', plate, 'LEFT', 26, 0); icon:Hide()
   line1 = plate:CreateFontString(nil, 'OVERLAY'); line1:SetShadowColor(0, 0, 0, 1); line1:SetShadowOffset(1, -1); line1:SetTextColor(.94, .89, .74)
   line2 = plate:CreateFontString(nil, 'OVERLAY'); line2:SetShadowColor(0, 0, 0, 1); line2:SetShadowOffset(1, -1); line2:SetTextColor(.72, .68, .58)
-  line1:SetPoint('BOTTOMLEFT', icon, 'RIGHT', 6, 0); line2:SetPoint('TOPLEFT', icon, 'RIGHT', 6, -2)
   line1:SetJustifyH('LEFT'); line2:SetJustifyH('LEFT')
   grip = CreateFrame('Button', nil, f); grip:SetSize(16, 16); grip:SetPoint('BOTTOMRIGHT', f, 'BOTTOMRIGHT', 6, -6)
   grip:SetNormalTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up')
@@ -112,6 +131,7 @@ local function build()
   f:SetScript('OnDragStop', function(self) self:StopMovingOrSizing(); savePos() end)
   f:SetScript('OnMouseUp', function(self, b) if b == 'RightButton' then A.menu(self) end end)
   f:SetScript('OnEnter', function(self)
+    grip:SetShown(not ns.db().locked)
     local w = ns.waypoint(); if not (w and GameTooltip) then return end
     GameTooltip:SetOwner(self, 'ANCHOR_BOTTOM'); GameTooltip:SetText(w.title or 'Waypoint', 1, .82, 0)
     if w.line2 then GameTooltip:AddLine(w.line2, 1, 1, 1, true) end
@@ -119,9 +139,11 @@ local function build()
     GameTooltip:AddLine(ns.db().locked and 'Right-click: unlock, reset, look' or 'Drag to move, //// to size. Right-click: lock, reset, look', .6, .6, .6, true)
     GameTooltip:Show()
   end)
-  f:SetScript('OnLeave', function() if GameTooltip then GameTooltip:Hide() end end)
+  f:SetScript('OnLeave', function() if GameTooltip then GameTooltip:Hide() end; if not (grip:IsMouseOver() or grip:GetScript('OnUpdate')) then grip:Hide() end end)
+  grip:SetScript('OnLeave', function() if not (f:IsMouseOver() or grip:GetScript('OnUpdate')) then grip:Hide() end end)
   f:Hide()
   place(); look()
+  A.parts = { plate = plate, bg = plateBg, line1 = line1, line2 = line2, icon = icon, grip = grip }   -- for the offline test
 end
 
 -- ---------- every frame: turn, colour, yards ----------
@@ -172,7 +194,10 @@ function A.menu(owner)
     for _, v in ipairs({ 100, 85, 70, 50 }) do o:CreateRadio(v .. '%', function() return db.alpha == v end, function() db.alpha = v; look() end) end
     local t = root:CreateButton('Text size')
     for _, v in ipairs({ { 10, 'Small' }, { 12, 'Normal' }, { 15, 'Large' } }) do t:CreateRadio(v[2], function() return db.text == v[1] end, function() db.text = v[1]; look() end) end
-    root:CreateCheckbox('Show the plate', function() return db.yards ~= false end, function() db.yards = not (db.yards ~= false); look() end)
+    local pl = root:CreateButton('Under the arrow')
+    for _, v in ipairs({ { 'frame', 'Gold plate' }, { 'text', 'Text only' }, { 'off', 'Nothing' } }) do
+      pl:CreateRadio(v[2], function() return (db.plate or 'frame') == v[1] end, function() db.plate = v[1]; look(); textAcc = 1 end)
+    end
     root:CreateCheckbox('Point to the nearest quest job', function() return db.nearest ~= false end, function() db.nearest = not (db.nearest ~= false) end)
   end)
 end

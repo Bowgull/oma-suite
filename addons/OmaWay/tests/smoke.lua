@@ -23,6 +23,9 @@ function Obj.SetAlpha(s, a) s._alpha = a end
 function Obj.GetAlpha(s) return s._alpha or 1 end
 function Obj.SetRotation(s, r) s._rot = r end
 function Obj.SetSize(s, w, h) s._w, s._h = w, h end
+function Obj.SetPoint(s, a, rel, b, x, y) s._pts = s._pts or {}; s._pts[a] = { rel, b, x, y } end
+function Obj.ClearAllPoints(s) s._pts = {} end
+function Obj.IsMouseOver() return false end
 function Obj.GetLeft() return 900 end
 function Obj.GetTop() return 1000 end
 function Obj.GetEffectiveScale() return 1 end
@@ -228,6 +231,24 @@ do
   inside = false; fire('ZONE_CHANGED_NEW_AREA')
   ok(arrow:IsShown(), 'out again: all back')
   TomTom:RemoveWaypoint()
+end
+
+-- ---------- the plate (2026-11-18 in game: one line sat high and ran into the right gem) ----------
+do
+  local P = ns.arrow.parts
+  TomTom:AddWaypoint(1426, .5, .1, { title = 'OmaWay test' }); player.x, player.y = 0, 0; facing = 0; tick(10)
+  local l1 = P.line1._pts and (P.line1._pts.LEFT or P.line1._pts.BOTTOMLEFT)
+  ok(l1 and l1[1] == P.plate and l1[3] == 24, 'one line, no icon: it starts right after the left gem (24 px), from the plate itself')
+  ok(P.line1._pts.LEFT ~= nil, 'and it is centred top to bottom')
+  ok(P.plate._w == 24 + 80 + 28, 'the plate is the text plus both gems wide (' .. tostring(P.plate._w) .. ')')
+  ok(not P.grip:IsShown(), 'the //// grip is hidden until the mouse is on the arrow')
+  arrow:GetScript('OnEnter')(arrow); ok(P.grip:IsShown(), 'mouse on the arrow: the grip shows')
+  arrow:GetScript('OnLeave')(arrow); ok(not P.grip:IsShown(), 'mouse off: gone again')
+  OmaWayDB.plate = 'text'; ns.arrow.look(); ns.arrowChanged(); tick(10)
+  ok(not P.bg:IsShown() and P.plate._w == 80, 'Text only: no plate behind the text, no gem space')
+  OmaWayDB.plate = 'off'; ns.arrow.look()
+  ok(not P.plate:IsShown(), 'Nothing: no plate at all')
+  OmaWayDB.plate = nil; ns.arrow.look(); TomTom:RemoveWaypoint()
 end
 
 -- ---------- sizing: only the //// grip, 32 to 192 ----------
