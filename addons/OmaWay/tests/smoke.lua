@@ -136,15 +136,9 @@ ok(ns.modes.current() == 'quest', 'out of the dungeon: quest mode again')
 ok(arrow:IsShown() and GuidelimeDataChar.mainFrameShowing == true, 'guide and arrow back')
 s = table.concat(said, ',')
 ok(s:find('questie tracker show', 1, true) and s:find('details hide', 1, true), 'tracker back, meter away')
--- the chip: a click switches and holds until the next dungeon door
-local chip = _G.OmaWayModeChip
-ok(chip, 'the chip is under the minimap')
-chip:GetScript('OnClick')(chip)
-ok(ns.modes.current() == 'dungeon' and OmaWayDB.mode == 'dungeon', 'a click: dungeon mode, held')
-fire('ZONE_CHANGED_NEW_AREA')
-ok(ns.modes.current() == 'dungeon', 'a zone change outside does not undo the click')
-chip:GetScript('OnClick')(chip)
-ok(ns.modes.current() == 'quest', 'click again: quest mode')
+-- no chip any more (2026-11-17, "these should all be one thing"): the minimap button is the one control
+ok(_G.OmaWayModeChip == nil, 'there is no QUEST / DUNGEON chip')
+local chip = _G.OmaWayMinimapButton
 ok(chip:GetScript('OnMouseWheel') == nil and arrow:GetScript('OnMouseWheel') == nil, 'no mouse-wheel sizing anywhere')
 
 -- ---------- quests (sheet 115): focus > another add-on > the nearest job ----------
@@ -195,18 +189,33 @@ do
   ok(ns.waypoint() == nil, 'an empty quest log: no arrow')
 end
 
--- ---------- the minimap button: one click hides or shows the arrow ----------
+-- ---------- the minimap button: one click, everything together ----------
 do
   local mb = _G.OmaWayMinimapButton
   ok(mb ~= nil, 'there is a minimap button')
   TomTom:AddWaypoint(1426, .5, .1, { title = 'Test' })
-  ok(arrow:IsShown(), 'a waypoint: the arrow shows')
+  ok(arrow:IsShown() and GuidelimeDataChar.mainFrameShowing, 'on: the guide and the arrow show')
+  said = {}
   mb:GetScript('OnClick')(mb, 'LeftButton')
-  ok(not arrow:IsShown() and OmaWayDB.hidden == true, 'left-click: the arrow hides, even with a waypoint')
+  local s1 = table.concat(said, ',')
+  ok(not arrow:IsShown(), 'left-click: the arrow goes, even with a waypoint')
+  ok(GuidelimeDataChar.mainFrameShowing == false, 'and the guide')
+  ok(s1:find('questie tracker hide', 1, true), 'and the Questie tracker')
+  ok(s1:find('details show', 1, true), 'and the damage meter comes on')
   TomTom:AddWaypoint(1426, .4, .1, { title = 'Another' })
-  ok(not arrow:IsShown(), 'a new waypoint does not bring it back while it is off')
+  ok(not arrow:IsShown(), 'a new waypoint does not bring the arrow back while off')
+  fire('ZONE_CHANGED_NEW_AREA')
+  ok(not arrow:IsShown(), 'a zone change outside a dungeon keeps your click')
+  said = {}
   mb:GetScript('OnClick')(mb, 'LeftButton')
-  ok(arrow:IsShown() and not OmaWayDB.hidden, 'left-click again: back')
+  local s2 = table.concat(said, ',')
+  ok(arrow:IsShown() and GuidelimeDataChar.mainFrameShowing, 'left-click again: guide and arrow back')
+  ok(s2:find('questie tracker show', 1, true) and s2:find('details hide', 1, true), 'tracker back, meter away')
+  -- a dungeon door still switches it by itself, and ends the click's hold
+  inside = true; fire('ZONE_CHANGED_NEW_AREA')
+  ok(not arrow:IsShown() and OmaWayDB.mode == 'auto', 'into a dungeon: all off by itself')
+  inside = false; fire('ZONE_CHANGED_NEW_AREA')
+  ok(arrow:IsShown(), 'out again: all back')
   TomTom:RemoveWaypoint()
 end
 

@@ -153,7 +153,7 @@ end
 -- shown when there's a waypoint and quest mode allows it
 function ns.arrowChanged()
   if not f then return end
-  local want = ns.waypoint() ~= nil and (not ns.modes or ns.modes.allowArrow()) and not ns.db().hidden   -- hidden: the minimap button
+  local want = ns.waypoint() ~= nil and (not ns.modes or ns.modes.allowArrow())   -- off: the minimap button or a dungeon
   textAcc = 1                                                      -- a new target: its plate at once
   if want == shown then return end
   shown = want; cur = nil

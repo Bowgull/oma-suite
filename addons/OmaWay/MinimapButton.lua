@@ -1,6 +1,7 @@
--- OmaWay's minimap button (2026-11-17, Joshua: "this would help me quick hide or show"), made like OmaDoomed's: a
--- round button on the minimap's edge in Blizzard's tracking-button look, the Soul well as its icon.
---   Left-click: the arrow on / off (greyed while off).   Right-click: modes, lock, reset, nearest quest job.
+-- OmaWay's minimap button (2026-11-17, Joshua: "this would help me quick hide or show", then "these should all be one
+-- thing"): the one control, made like OmaDoomed's button (Blizzard's tracking-button look, the Soul well as its icon).
+--   Left-click: the guide, the Questie tracker and the arrow on / off together (off brings the damage meter; greyed
+--   while off). Dungeons still switch it off and back on by themselves.   Right-click: lock, reset, nearest quest job.
 --   Drag it round the edge; its place is kept (OmaWayDB.minimapAngle).
 local ADDON, ns = ...
 local MB = {}; ns.minimap = MB
@@ -14,9 +15,10 @@ local function place(angle)
   btn:ClearAllPoints(); btn:SetPoint('CENTER', Minimap, 'CENTER', math.cos(r) * w, math.sin(r) * h)
 end
 
+local function isOn() return not ns.modes or ns.modes.current() == 'quest' end
 function MB.refresh()
   if not btn then return end
-  local on = not ns.db().hidden
+  local on = isOn()
   btn.icon:SetDesaturated(not on); btn.icon:SetAlpha(on and 1 or .55)
 end
 
@@ -24,28 +26,22 @@ local function tooltip(self)
   if not GameTooltip then return end
   local db = ns.db()
   GameTooltip:SetOwner(self, 'ANCHOR_LEFT'); GameTooltip:AddLine('OmaWay')
-  GameTooltip:AddLine(db.hidden and 'Arrow: off' or 'Arrow: on', 1, 1, 1)
-  GameTooltip:AddLine('Mode: ' .. ((ns.modes and ns.modes.current()) or 'quest') .. (db.mode == 'auto' and ' (automatic)' or ''), 1, 1, 1)
-  GameTooltip:AddLine('Left-click: arrow on / off', .8, .8, .8)
-  GameTooltip:AddLine('Right-click: mode, lock, reset', .8, .8, .8)
+  GameTooltip:AddLine(isOn() and 'Guide, tracker and arrow: on' or 'Guide, tracker and arrow: off (damage meter on)', 1, 1, 1)
+  if db.mode == 'auto' then GameTooltip:AddLine('Dungeons switch it off by themselves', .6, .6, .6) end
+  GameTooltip:AddLine('Left-click: all on / off', .8, .8, .8)
+  GameTooltip:AddLine('Right-click: lock, reset, options', .8, .8, .8)
   GameTooltip:Show()
 end
 
-function MB.setHidden(h)
-  ns.db().hidden = h and true or nil
-  if ns.arrowChanged then ns.arrowChanged() end
-  MB.refresh()
-end
+function MB.toggle() if ns.modes and ns.modes.toggle then ns.modes.toggle() end; MB.refresh() end
 
 local function menu(self)
   local db = ns.db()
-  if not (MenuUtil and MenuUtil.CreateContextMenu) then MB.setHidden(not db.hidden); return end
+  if not (MenuUtil and MenuUtil.CreateContextMenu) then MB.toggle(); return end
   MenuUtil.CreateContextMenu(self, function(_, root)
     root:CreateTitle('OmaWay')
-    root:CreateCheckbox('Show the arrow', function() return not db.hidden end, function() MB.setHidden(not db.hidden) end)
-    root:CreateRadio('Quest mode', function() return db.mode == 'quest' end, function() SlashCmdList.OMAWAY('quest') end)
-    root:CreateRadio('Dungeon mode', function() return db.mode == 'dungeon' end, function() SlashCmdList.OMAWAY('dungeon') end)
-    root:CreateRadio('Automatic (dungeons switch it)', function() return db.mode == 'auto' end, function() SlashCmdList.OMAWAY('auto') end)
+    root:CreateCheckbox('Guide, tracker and arrow', function() return isOn() end, function() MB.toggle() end)
+    if db.mode ~= 'auto' then root:CreateButton('Let dungeons switch it again', function() SlashCmdList.OMAWAY('auto') end) end
     root:CreateButton(db.locked and 'Unlock the arrow to move' or 'Lock the arrow', function() SlashCmdList.OMAWAY(db.locked and 'unlock' or 'lock') end)
     root:CreateButton('Reset the arrow', function() SlashCmdList.OMAWAY('reset') end)
     root:CreateCheckbox('Point to the nearest quest job', function() return db.nearest ~= false end, function() db.nearest = not (db.nearest ~= false) end)
@@ -63,7 +59,7 @@ function MB.build()
   local border = btn:CreateTexture(nil, 'OVERLAY'); border:SetTexture('Interface\\Minimap\\MiniMap-TrackingBorder'); border:SetSize(53, 53); border:SetPoint('TOPLEFT')
   btn:SetScript('OnClick', function(self, b)
     if b == 'RightButton' then menu(self); return end
-    MB.setHidden(not ns.db().hidden); tooltip(self)
+    MB.toggle(); tooltip(self)
   end)
   btn:SetScript('OnEnter', tooltip)
   btn:SetScript('OnLeave', function() if GameTooltip then GameTooltip:Hide() end end)

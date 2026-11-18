@@ -1,9 +1,9 @@
--- OmaWay modes (sheet 111, approved 2026-11-17): quest mode and dungeon mode.
---   Quest:   the Guidelime guide, its arrow (OmaWay's) and the Questie tracker show; the Details meter is put away.
---   Dungeon: the guide, the arrow and the tracker are hidden completely ("Hide both completely"); Details shows.
--- It switches by itself inside dungeons only (not in a plain group: "Inside a dungeon only"). A small QUEST / DUNGEON
--- chip under the minimap shows the mode; a click switches it ("Chip click only": no key binding). A click holds until
--- you next go in or out of a dungeon, then the automatic choice takes over again.
+-- OmaWay modes (sheet 111, approved 2026-11-17): quest stuff on (quest mode) or off (dungeon mode).
+--   On:  the Guidelime guide, its arrow (OmaWay's) and the Questie tracker show; the Details meter is put away.
+--   Off: the guide, the arrow and the tracker are hidden completely ("Hide both completely"); Details shows.
+-- It switches by itself inside dungeons only ("Inside a dungeon only"). One control (2026-11-17, "these should all be
+-- one thing"; the QUEST / DUNGEON chip is gone): the minimap button's left-click turns it all on or off together. A
+-- click holds until you next go in or out of a dungeon, then the automatic choice takes over again.
 local ADDON, ns = ...
 local Mo = {}; ns.modes = Mo
 local mode = 'quest'
@@ -31,15 +31,7 @@ local function details(show)
   if f then pcall(f, show and 'show' or 'hide') end
 end
 
-local chip
-local function chipLook()
-  if not chip then return end
-  local q, d = chip.q, chip.d
-  local gold, dim = { 1, .82, 0 }, { .6, .56, .48 }
-  local a, b = mode == 'quest' and gold or dim, mode == 'dungeon' and gold or dim
-  q:SetTextColor(a[1], a[2], a[3]); d:SetTextColor(b[1], b[2], b[3])
-  chip.qBg:SetAlpha(mode == 'quest' and 1 or 0); chip.dBg:SetAlpha(mode == 'dungeon' and 1 or 0)
-end
+local function chipLook() if ns.minimap and ns.minimap.refresh then ns.minimap.refresh() end end   -- the button shows the state
 
 function Mo.apply(m, quiet)
   mode = m
@@ -49,7 +41,7 @@ function Mo.apply(m, quiet)
   guidelime(quest); questie(quest); details(not quest)
   if ns.arrowChanged then ns.arrowChanged() end
   chipLook()
-  if not quiet then ns.say((quest and 'quest' or 'dungeon') .. ' mode.') end
+  if not quiet then ns.say(quest and 'guide, tracker and arrow on.' or 'guide, tracker and arrow off; damage meter on.') end
 end
 
 local function auto(force)
@@ -62,43 +54,13 @@ local function auto(force)
   end
 end
 
-local function buildChip()
-  if not Minimap then return end
-  chip = CreateFrame('Button', 'OmaWayModeChip', Minimap, BackdropTemplateMixin and 'BackdropTemplate')
-  chip:SetSize(124, 18); chip:SetPoint('TOP', Minimap, 'BOTTOM', 0, -14); chip:SetFrameStrata('MEDIUM')
-  if chip.SetBackdrop then
-    chip:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8', edgeFile = 'Interface\\Buttons\\WHITE8X8', edgeSize = 1 })
-    chip:SetBackdropColor(0, 0, 0, .7); chip:SetBackdropBorderColor(.42, .33, .13, 1)
-  end
-  local function half(side)
-    local bg = chip:CreateTexture(nil, 'ARTWORK'); bg:SetColorTexture(.35, .26, .06, .85)
-    bg:SetPoint('TOP', chip, 'TOP', 0, -1); bg:SetPoint('BOTTOM', chip, 'BOTTOM', 0, 1)
-    if side == 'L' then bg:SetPoint('LEFT', chip, 'LEFT', 1, 0); bg:SetPoint('RIGHT', chip, 'CENTER', 0, 0)
-    else bg:SetPoint('LEFT', chip, 'CENTER', 0, 0); bg:SetPoint('RIGHT', chip, 'RIGHT', -1, 0) end
-    local t = chip:CreateFontString(nil, 'OVERLAY'); t:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', 10, '')
-    t:SetPoint('CENTER', bg, 'CENTER', 0, 0); t:SetShadowColor(0, 0, 0, 1); t:SetShadowOffset(1, -1)
-    return bg, t
-  end
-  chip.qBg, chip.q = half('L'); chip.dBg, chip.d = half('R')
-  chip.q:SetText('QUEST'); chip.d:SetText('DUNGEON')
-  chip:RegisterForClicks('LeftButtonUp')
-  chip:SetScript('OnClick', function() local db = ns.db(); local m = mode == 'quest' and 'dungeon' or 'quest'; db.mode = m; Mo.apply(m) end)
-  chip:SetScript('OnEnter', function(self)
-    if not GameTooltip then return end
-    GameTooltip:SetOwner(self, 'ANCHOR_BOTTOM'); GameTooltip:SetText('OmaWay mode', 1, .82, 0)
-    GameTooltip:AddLine('Quest: guide, arrow and Questie tracker; no damage meter.', 1, 1, 1, true)
-    GameTooltip:AddLine('Dungeon: guide, arrow and tracker put away; damage meter shows.', 1, 1, 1, true)
-    GameTooltip:AddLine('Switches by itself in dungeons. Click to switch now.', .6, .6, .6, true)
-    GameTooltip:Show()
-  end)
-  chip:SetScript('OnLeave', function() if GameTooltip then GameTooltip:Hide() end end)
-  chipLook()
-end
+-- a click on the minimap button: everything on or off together, held until the next dungeon door
+function Mo.toggle() local db = ns.db(); local m = mode == 'quest' and 'dungeon' or 'quest'; db.mode = m; Mo.apply(m) end
 
 local ev = CreateFrame('Frame')
 for _, e in ipairs({ 'PLAYER_LOGIN', 'PLAYER_ENTERING_WORLD', 'ZONE_CHANGED_NEW_AREA', 'PLAYER_REGEN_ENABLED' }) do ev:RegisterEvent(e) end
 ev:SetScript('OnEvent', function(_, e)
-  if e == 'PLAYER_LOGIN' then buildChip(); return end
+  if e == 'PLAYER_LOGIN' then return end
   if e == 'PLAYER_REGEN_ENABLED' then if pending then Mo.apply(mode, true) end; return end
   local db = ns.db()
   if e == 'PLAYER_ENTERING_WORLD' and wasInside == nil then
