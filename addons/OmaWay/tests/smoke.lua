@@ -30,6 +30,9 @@ function Obj.GetStringWidth() return 80 end
 function Obj.SetText(s, t) s._text = t end
 function Obj.GetText(s) return s._text end
 function Obj.SetTexture(s, t) s._tex = t end
+function Obj.GetCenter() return 100, 100 end
+function Obj.GetWidth() return 140 end
+function Obj.GetHeight() return 140 end
 function Obj.GetPoint(s) return 'TOPLEFT', nil, 'BOTTOMLEFT', 900, 1000 end
 function Obj.CreateTexture(s) local t = setmetatable({}, Obj); s._texs = s._texs or {}; s._texs[#s._texs + 1] = t; return t end
 function Obj.CreateFontString() return setmetatable({}, Obj) end
@@ -75,7 +78,7 @@ SlashCmdList = {
 
 -- ---------- load ----------
 local ns = {}
-for _, file in ipairs({ 'Core.lua', 'Arrow.lua', 'Quests.lua', 'Modes.lua' }) do
+for _, file in ipairs({ 'Core.lua', 'Arrow.lua', 'Quests.lua', 'Modes.lua', 'MinimapButton.lua' }) do
   local chunk = assert(loadfile(file)); chunk('OmaWay', ns)
 end
 local function fire(e) for _, f in ipairs(frames) do if f._events and f._events[e] and f._scripts and f._scripts.OnEvent then f._scripts.OnEvent(f, e) end end end
@@ -190,6 +193,21 @@ do
   ok(ns.waypoint().line2 == 'Elixir of Pain · hand in', 'and says so')
   log[100] = nil; ns.quests.step()
   ok(ns.waypoint() == nil, 'an empty quest log: no arrow')
+end
+
+-- ---------- the minimap button: one click hides or shows the arrow ----------
+do
+  local mb = _G.OmaWayMinimapButton
+  ok(mb ~= nil, 'there is a minimap button')
+  TomTom:AddWaypoint(1426, .5, .1, { title = 'Test' })
+  ok(arrow:IsShown(), 'a waypoint: the arrow shows')
+  mb:GetScript('OnClick')(mb, 'LeftButton')
+  ok(not arrow:IsShown() and OmaWayDB.hidden == true, 'left-click: the arrow hides, even with a waypoint')
+  TomTom:AddWaypoint(1426, .4, .1, { title = 'Another' })
+  ok(not arrow:IsShown(), 'a new waypoint does not bring it back while it is off')
+  mb:GetScript('OnClick')(mb, 'LeftButton')
+  ok(arrow:IsShown() and not OmaWayDB.hidden, 'left-click again: back')
+  TomTom:RemoveWaypoint()
 end
 
 -- ---------- sizing: only the //// grip, 32 to 192 ----------
