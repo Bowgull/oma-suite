@@ -47,6 +47,18 @@ local function mob(W, F, k, name, o) local u = F.mob('nameplate' .. k, 'C-' .. k
 local function shownRows(ns) local t = {}; for k = 1, 16 do if ns.moblist.rows[k].shown then t[#t + 1] = k end end; return table.concat(t, ',') end
 
 return {
+  ['list: only the //// corner grip sizes it; the mouse wheel does nothing (2026-11-17)'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    L.slash('move')
+    local tab = _G.OmaDoomedListTab
+    T.ok(tab == nil or tab:GetScript('OnMouseWheel') == nil, 'the tab does not size on the wheel')
+    local found = false
+    for _, k in ipairs(UI.kids(_G.OmaDoomedList)) do if k:GetScript('OnMouseWheel') then found = true end end
+    T.ok(not found, 'neither does the outline')
+    L.slash('lock')
+    noErrors(T)
+  end,
   ['list: snap lines it up under the Details window, same width, 3 px below; no Details, it says so'] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist
@@ -54,8 +66,9 @@ return {
     T.eq(L.snap(), false, 'no Details window: nothing moves')
     local d = CreateFrame('Frame', 'DetailsBaseFrame1', UIParent)
     d.GetRight = function() return 1913 end; d.GetBottom = function() return 574 end; d.GetWidth = function() return 348 end
+    OmaDoomedDB.list.scale = 120
     T.eq(L.snap(), true, 'lined up')
-    T.eq(OmaDoomedDB.list.scale, 100, 'same width: full size')
+    T.eq(OmaDoomedDB.list.scale, 120, 'your size is left alone: only the corner grip sizes it')
     local p = rawget(_G.OmaDoomedList, '_pts').TOPRIGHT
     T.eq(p[3], 1913, 'right edges match'); T.eq(p[4], 571, '3 px under the meter')
     _G.DetailsBaseFrame1 = nil

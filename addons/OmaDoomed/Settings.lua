@@ -92,9 +92,9 @@ ns.settings = Core.NewSettings({
       tip = 'How dark the soft backing behind the list is. 0 is none.' },
     { key = 'unlocked', store = L, default = false },
     { button = 'Line up', name = 'Under the damage meter', click = function() if ns.moblist and ns.moblist.snap then ns.moblist.snap() end end,
-      tip = "Puts the list right under your Details window, edge to edge and the same width. Details must be showing. Same as /omadoomed list snap." },
+      tip = "Puts the list right under your Details window, right edges lined up. Your size stays (at full size it is the meter's width). Details must be showing. Same as /omadoomed list snap." },
     { button = 'Move', name = 'Move the list', click = function() if ns.moblist and ns.moblist.unlock then ns.moblist.unlock(true) end end,
-      tip = 'Shows the list with five test rows: drag it anywhere, size it with the mouse wheel or its corner, right-click it when done. You can also bind a key: Key Bindings > AddOns > OmaDoomed.' },
+      tip = 'Shows the list with five test rows: drag it anywhere, size it with the //// grip in its bottom-right corner, right-click it when done. You can also bind a key: Key Bindings > AddOns > OmaDoomed.' },
     { key = 'calm', default = false, control = 'check', label = 'Calm motion',
       tip = 'Things change at once instead of easing, and nothing breathes.' },
 

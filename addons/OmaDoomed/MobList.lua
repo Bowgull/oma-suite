@@ -449,8 +449,8 @@ local function resetPlace()
 end
 L.resetPlace = resetPlace
 -- /omadoomed list snap (sheet 108 v2, 2026-11-17: "pushing it right to the edge and its still not fully in line with
--- my damage meter"): once, the list's top-right goes 3 px under the bottom-right of Details' first window and its
--- size matches the meter's width. A saved place like any drag: no live link to Details (which hides when solo).
+-- my damage meter"): once, the list's top-right goes 3 px under the bottom-right of Details' first window. Its size is
+-- left alone. A saved place like any drag: no live link to Details (which hides when solo).
 function L.snap()
   if InCombatLockdown() or not header then say('the list can be lined up after this fight.'); return false end
   local d = _G.DetailsBaseFrame1
@@ -460,13 +460,12 @@ function L.snap()
   if not (okR and okB and okW and type(right) == 'number' and type(bottom) == 'number' and type(dw) == 'number') then
     say("Details' window isn't up. Open it (/details show), then /omadoomed list snap again."); return false
   end
-  local ds, ls = d:GetEffectiveScale(), header:GetEffectiveScale() / header:GetScale()
-  local s = (dw * ds) / (width() * ls)                       -- the list's scale that makes it the meter's width
-  db.scale = math.floor(s * 100 + .5); header:SetScale(db.scale / 100)
-  local e = header:GetEffectiveScale()
+  -- position only (2026-11-17: sizing is the corner grip's job alone); at its full size the list is the meter's width
+  local ds, e = d:GetEffectiveScale(), header:GetEffectiveScale()
   header:ClearAllPoints(); header:SetPoint('TOPRIGHT', UIParent, 'BOTTOMLEFT', right * ds / e, (bottom * ds - 3) / e)
   savePos(); placeClicks()
-  say(('lined up under your damage meter (%d%% size). Drag it to move it again.'):format(db.scale))
+  local same = math.abs(width() * e - dw * ds) < 2
+  say(same and 'lined up under your damage meter, edge to edge.' or "lined up under your damage meter's right edge. Its width matches at full size: the //// grip sizes it.")
   return true
 end
 local function buildEditMode()
@@ -485,9 +484,8 @@ local function buildEditMode()
     header:StopMovingOrSizing(); savePos(); placeClicks()
     if b == 'RightButton' and L.menu then L.menu(sel) end   -- right-click: lock or reset
   end)
-  -- the mouse wheel sizes it (5% a notch), as easy as the corner
-  sel:EnableMouseWheel(true)
-  sel:SetScript('OnMouseWheel', function(_, d) wheel(d) end)
+  -- 2026-11-17 (Joshua: "it should only ever resize with a //// bottom right"): the corner grip is the only way to size
+  -- it; the mouse wheel no longer does (the old wheel() stays for /omadoomed list size)
   grip = CreateFrame('Button', nil, sel); grip:SetSize(24, 24); grip:SetPoint('BOTTOMRIGHT', sel, 'BOTTOMRIGHT', -2, 2)
   grip:SetNormalTexture(K.sizeGrip); grip:SetHighlightTexture(K.sizeGripHi); grip:SetPushedTexture(K.sizeGripDown)
   -- the drag is measured once, at the press (the list's width on screen then), so the grip moving with the list
@@ -578,7 +576,7 @@ end
 -- ---------- the anchor tab (sheet 84 A, approved 2026-11-16 "A, hover tab") ----------
 -- Between fights a small tab sits faintly at the list's top-left corner (the list itself hides out of combat, so
 -- unlike Details and Threat there's nothing else to grab). Point at it: it lights gold, the list's outline and its
--- corner grip show. Drag the tab to move, the corner or the mouse wheel to size; click the padlock and the tab goes
+-- corner grip show. Drag the tab to move, the //// corner grip to size; click the padlock and the tab goes
 -- away until you unlock again (options' Move button, the key binding, /omadoomed list move). In a fight it's gone.
 local tab
 local TAB_W, TAB_H = 52, 22
@@ -621,11 +619,10 @@ local function buildTab()
     say('mob list locked in place. To move it again: Move the list in options, or the key binding.')
   end)
   lock:SetScript('OnEnter', function() peek(true) end)
-  tab:RegisterForDrag('LeftButton'); tab:EnableMouseWheel(true)
+  tab:RegisterForDrag('LeftButton')
   tab:SetScript('OnEnter', function() peek(true) end)
   tab:SetScript('OnDragStart', function(self) if InCombatLockdown() then return end; self.dragging = true; peek(true); header:StartMoving() end)
   tab:SetScript('OnDragStop', function(self) self.dragging = false; header:StopMovingOrSizing(); savePos(); placeClicks() end)
-  tab:SetScript('OnMouseWheel', function(_, d) wheel(d) end)
   tab:RegisterForClicks('RightButtonUp')
   tab:SetScript('OnClick', function(self, b) if b == 'RightButton' then L.menu(self) end end)
   -- leaving: the outline goes once the mouse is off both the tab and the outline (and nothing is being dragged)
@@ -900,7 +897,7 @@ function L.slash(msg)
           ct and ('%.0f'):format(ct * r.click:GetEffectiveScale()) or '?', rt and ('%.0f'):format(rt * r:GetEffectiveScale()) or '?'))
       end
     end
-  elseif cmd == 'unlock' or cmd == 'move' then unlock(true); say('drag the list anywhere; mouse wheel or the corner grip sizes it; right-click it when done.')
+  elseif cmd == 'unlock' or cmd == 'move' then unlock(true); say('drag the list anywhere; the //// corner grip sizes it; right-click it when done.')
   elseif cmd == 'lock' then unlock(false); say('list locked: it shows in fights.')
   elseif cmd == 'snap' then L.snap()
   elseif cmd == 'rows' then
