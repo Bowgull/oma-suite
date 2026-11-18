@@ -1,11 +1,15 @@
--- OmaWay: the nearest quest (2026-11-17, Joshua: "oma also understands like where quests are right, it'll guide me
--- to the quest zones"). When nothing else is steering the arrow (no Guidelime step, nothing you picked on the map),
--- it points at the nearest thing your quest log still needs, as Questie knows it: the nearest spawn of an objective
--- you haven't finished, or the quest's hand-in once it's done. Questie's own maths (DistanceUtils), every 3 seconds,
--- out of combat; it only changes target when another is clearly closer (10%), so it doesn't flick between two.
+-- OmaWay: quests (sheet 115, 2026-11-17, Joshua: "oma also understands like where quests are right, it'll guide me to
+-- the quest zones"). Where the arrow points, in order:
+--   1. the quest you focused in Questie's tracker (its focus button): locked on it until it's done or unfocused
+--   2. what another add-on handed in (a Guidelime step, a Questie ctrl-click)
+--   3. the nearest job your quest log still needs: the nearest spawn of an unfinished objective, or the hand-in
+-- Questie's own data and maths (DistanceUtils), every 3 seconds, out of combat. The plate gets the job's Questie
+-- icon (kill, loot, object, hand in) and its progress ("Mountain Lion Blood 3/10"). Another quest only takes over
+-- when it's clearly closer (10%), so the arrow never flicks between two.
 local ADDON, ns = ...
 local Q = {}; ns.quests = Q
-local FROM = 'nearest quest'
+local ICONS = 'Interface\\Addons\\Questie\\Icons\\'
+local ICON_OF = { monster = 'slay', item = 'loot', object = 'object', event = 'event', killcredit = 'slay' }
 
 local function questie()
   local L = _G.QuestieLoader
@@ -13,55 +17,93 @@ local function questie()
   local ok1, D = pcall(L.ImportModule, L, 'DistanceUtils')
   local ok2, P = pcall(L.ImportModule, L, 'QuestiePlayer')
   local ok3, Z = pcall(L.ImportModule, L, 'ZoneDB')
-  if ok1 and ok2 and ok3 and D and P and Z and D.GetNearestSpawnForQuest and Z.GetUiMapIdByAreaId then return D, P, Z end
+  if ok1 and ok2 and ok3 and D and P and Z and D.GetNearestObjective and Z.GetUiMapIdByAreaId then return D, P, Z end
 end
 
--- the nearest thing to go to: spawn {x, y} in 0..100, its uiMapID, a title, the distance
-function Q.nearest()
-  local D, P, Z = questie(); if not D then return nil end
-  local log = P.currentQuestlog
-  if type(log) ~= 'table' then return nil end
+local function isDone(quest)
+  local ok, c = pcall(quest.IsComplete, quest)
+  return ok and (c == 1 or (c ~= -1 and quest.isComplete)) or false
+end
+
+-- the best job in one quest: { x, y (0..100), map, dist, title, line2, icon, quest }
+local function jobIn(id, quest, D, Z)
   local best
-  for id, quest in pairs(log) do
-    if type(quest) == 'table' then
-      local ok, spawn, zone, name, dist = pcall(D.GetNearestSpawnForQuest, quest)
-      if ok and type(spawn) == 'table' and zone and type(dist) == 'number' and (not best or dist < best.dist) then
-        local okM, map = pcall(Z.GetUiMapIdByAreaId, Z, zone)
-        if okM and map then
-          best = { x = spawn[1], y = spawn[2], map = map, dist = dist, quest = id,
-            title = (name and quest.name and name ~= quest.name) and (name .. ' · ' .. quest.name) or (name or quest.name or 'Quest') }
-        end
+  local function consider(spawn, zone, name, dist, line2, icon)
+    if type(spawn) ~= 'table' or not zone or type(dist) ~= 'number' then return end
+    if best and dist >= best.dist then return end
+    local okM, map = pcall(Z.GetUiMapIdByAreaId, Z, zone)
+    if okM and map then best = { x = spawn[1], y = spawn[2], map = map, dist = dist, quest = id, title = name or quest.name or 'Quest', line2 = line2, icon = icon } end
+  end
+  if isDone(quest) then
+    if D.GetNearestFinisherOrStarter and quest.Finisher then
+      local ok, spawn, zone, name, dist = pcall(D.GetNearestFinisherOrStarter, quest.Finisher)
+      if ok then consider(spawn, zone, name, dist, (quest.name or 'Quest') .. ' · hand in', ICONS .. 'complete') end
+    end
+    return best
+  end
+  for _, list in ipairs({ quest.Objectives or {}, quest.SpecialObjectives or {} }) do
+    for _, o in pairs(list) do
+      if type(o) == 'table' and o.spawnList and ((not o.Needed) or o.Needed ~= o.Collected) then
+        local ok, spawn, zone, name, dist = pcall(D.GetNearestObjective, o.spawnList)
+        local what = o.Description or name or quest.name
+        local line2 = o.Needed and ('%s  %d/%d'):format(what, o.Collected or 0, o.Needed) or what
+        if ok then consider(spawn, zone, name, dist, line2, ICONS .. (ICON_OF[o.Type] or 'object')) end
       end
     end
   end
   return best
 end
 
-local cur          -- the target we set: { quest, x, y, dist }
+-- the job to go to: one quest's (focus) or the nearest of all
+function Q.job(onlyId)
+  local D, P, Z = questie(); if not D then return nil end
+  local log = P.currentQuestlog
+  if type(log) ~= 'table' then return nil end
+  if onlyId then local q = log[onlyId]; return type(q) == 'table' and jobIn(onlyId, q, D, Z) or nil end
+  local best
+  for id, quest in pairs(log) do
+    if type(quest) == 'table' then local j = jobIn(id, quest, D, Z); if j and (not best or j.dist < best.dist) then best = j end end
+  end
+  return best
+end
+function Q.focus()
+  local f = Questie and Questie.db and Questie.db.char and Questie.db.char.TrackerFocus
+  return type(f) == 'number' and f or nil
+end
+local function inLog(id) local _, P = questie(); return id and P and type(P.currentQuestlog) == 'table' and P.currentQuestlog[id] ~= nil end
+
+local function aim(j, focus)
+  local a = ns.autoTarget()
+  if a and a.questId == j.quest and a.x == j.x / 100 and a.y == j.y / 100 and (a.focus and true or false) == focus then
+    a.line2 = j.line2; return                                   -- same spot: just the progress text
+  end
+  local w = ns.setAuto(j.map, j.x / 100, j.y / 100, { title = j.title, line2 = j.line2, icon = j.icon, from = focus and 'your focused quest' or 'nearest quest', focus = focus })
+  if w then w.questId, w.dist = j.quest, j.dist end
+end
+
 function Q.step()
   local db = ns.db()
-  if db.nearest == false or InCombatLockdown() or (ns.modes and not ns.modes.allowArrow()) then return end
-  local w = ns.waypoint()
-  if w and w.from ~= FROM then cur = nil; return end           -- something else steers: leave it
-  local n = Q.nearest()
-  if not n then if w then ns.clearWaypoint() end; cur = nil; return end
-  if w and cur and cur.quest == n.quest and cur.x == n.x and cur.y == n.y then return end   -- already there
-  -- another quest takes over only when it's clearly closer (10%) or ours is gone; the same quest's nearer spawn
-  -- (you killed the last one here) is followed at once
-  if w and cur and n.quest ~= cur.quest and Q.stillNeeded(cur) then
-    local now = (ns.distance and ns.distance()) or cur.dist
-    if n.dist >= now * .9 then return end
+  if InCombatLockdown() or (ns.modes and not ns.modes.allowArrow()) then return end
+  -- 1. your focused quest
+  local f = Q.focus()
+  if f and inLog(f) then local j = Q.job(f); if j then aim(j, true); return end end
+  -- 2. another add-on steers
+  if ns.external() then ns.clearAuto(); return end
+  -- 3. the nearest job
+  if db.nearest == false then ns.clearAuto(); return end
+  local j = Q.job()
+  if not j then ns.clearAuto(); return end
+  local a = ns.autoTarget()
+  if a and not a.focus and a.questId ~= j.quest and inLog(a.questId) then
+    local now = (ns.distance and ns.distance()) or a.dist or 0
+    if j.dist >= now * .9 then return end                      -- not clearly closer: keep going where you were
   end
-  cur = n
-  ns.setWaypoint(n.map, n.x / 100, n.y / 100, { title = n.title, from = FROM })
+  aim(j, false)
 end
--- is the quest we point at still in the log?
-function Q.stillNeeded(c) local _, P = questie(); return c and P and type(P.currentQuestlog) == 'table' and P.currentQuestlog[c.quest] ~= nil end
 
 local acc = 0
 local tick = CreateFrame('Frame')
 tick:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc >= 3 then acc = 0; pcall(Q.step) end end)
--- a quest changes: look again soon
 local ev = CreateFrame('Frame')
 for _, e in ipairs({ 'QUEST_LOG_UPDATE', 'QUEST_ACCEPTED', 'QUEST_TURNED_IN', 'PLAYER_ENTERING_WORLD' }) do ev:RegisterEvent(e) end
 ev:SetScript('OnEvent', function() acc = math.max(acc, 2.5) end)

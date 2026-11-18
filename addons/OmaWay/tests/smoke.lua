@@ -75,7 +75,7 @@ SlashCmdList = {
 
 -- ---------- load ----------
 local ns = {}
-for _, file in ipairs({ 'Core.lua', 'Arrow.lua', 'Modes.lua' }) do
+for _, file in ipairs({ 'Core.lua', 'Arrow.lua', 'Quests.lua', 'Modes.lua' }) do
   local chunk = assert(loadfile(file)); chunk('OmaWay', ns)
 end
 local function fire(e) for _, f in ipairs(frames) do if f._events and f._events[e] and f._scripts and f._scripts.OnEvent then f._scripts.OnEvent(f, e) end end end
@@ -109,7 +109,8 @@ facing = math.pi; tick(120)
 ok(near(off:GetAlpha(), 1) and near(on:GetAlpha(), 0), 'facing away: the red well')
 -- walk up to it: arrived
 player.x, player.y = w.wx - 3, w.wy; tick(2)
-ok(arrow._texs and on:GetAlpha() < .5, 'within 5 yards: it dims, the plate says Here')
+local hereTex = arrow._texs[3]
+ok(near(on:GetAlpha(), 0) and (hereTex:GetAlpha() or 0) > .5, "within 5 yards: the arrow gives way to the gold 'here' ring")
 player.x, player.y = w.wx - 200, w.wy; facing = 0; tick(40)
 -- remove: the arrow goes
 TomTom:RemoveWaypoint(uid)
@@ -142,6 +143,54 @@ ok(ns.modes.current() == 'dungeon', 'a zone change outside does not undo the cli
 chip:GetScript('OnClick')(chip)
 ok(ns.modes.current() == 'quest', 'click again: quest mode')
 ok(chip:GetScript('OnMouseWheel') == nil and arrow:GetScript('OnMouseWheel') == nil, 'no mouse-wheel sizing anywhere')
+
+-- ---------- quests (sheet 115): focus > another add-on > the nearest job ----------
+do
+  TomTom:RemoveWaypoint(); ns.clearWaypoint()
+  local function spawnsAt(x, y) return { x = x, y = y } end
+  local log = {
+    [100] = { name = 'Elixir of Pain', IsComplete = function() return 0 end, Finisher = { NPC = { 2216 } },
+      Objectives = { { Type = 'item', Description = 'Mountain Lion Blood', Collected = 3, Needed = 10, spawnList = spawnsAt(.6, .1) } } },
+    [200] = { name = 'Battle of Hillsbrad', IsComplete = function() return 0 end,
+      Objectives = { { Type = 'monster', Description = 'Hillsbrad Farmer slain', Collected = 4, Needed = 6, spawnList = spawnsAt(.5, .3) } } },
+  }
+  local D = {}
+  -- distance from the player in world yards (the fake world: map x*1000, y*1000)
+  function D.GetNearestObjective(sl) local dx, dy = sl.x * 1000 - player.x, sl.y * 1000 - player.y; return { sl.x * 100, sl.y * 100 }, 85, 'Thing', math.sqrt(dx * dx + dy * dy) end
+  function D.GetNearestFinisherOrStarter(fin) local dx, dy = 400 - player.x, 100 - player.y; return { 40, 10 }, 85, 'Apothecary Lydon', math.sqrt(dx * dx + dy * dy) end
+  local P = { currentQuestlog = log }
+  local Z = { GetUiMapIdByAreaId = function(_, z) return 1426 end }
+  QuestieLoader = { ImportModule = function(_, n) return ({ DistanceUtils = D, QuestiePlayer = P, ZoneDB = Z })[n] end }
+  Questie = { db = { char = {} } }
+  player.x, player.y = 500, 100
+  ns.quests.step()
+  local w = ns.waypoint()
+  ok(w and w.questId == 100, 'nothing else steers: the nearest job (the lion blood, 100 yd, not the farmers, 200 yd)')
+  ok(w and w.line2 == 'Mountain Lion Blood  3/10', 'its progress on the plate: ' .. tostring(w and w.line2))
+  ok(w and w.icon:find('loot', 1, true), 'a loot icon for an item to collect')
+  -- the farmers become only a little closer: no flick
+  player.x, player.y = 550, 180; tick(1)
+  ns.quests.step()
+  ok(ns.waypoint().questId == 100, 'another quest just a bit closer: the arrow keeps its target')
+  -- a Guidelime step arrives: it steers
+  local g = TomTom:AddWaypoint(1426, .2, .2, { title = 'Krusk', from = 'Guidelime' })
+  ns.quests.step()
+  ok(ns.waypoint().title == 'Krusk', 'a guide step beats the nearest job')
+  -- you focus a quest in Questie: it wins, even over the guide
+  Questie.db.char.TrackerFocus = 200; ns.quests.step()
+  ok(ns.waypoint().questId == 200 and ns.waypoint().focus, 'your focused quest beats the guide')
+  ok(ns.waypoint().icon:find('slay', 1, true), 'a kill icon for mobs to slay')
+  Questie.db.char.TrackerFocus = nil; ns.quests.step()
+  ok(ns.waypoint().title == 'Krusk', 'unfocus: back to the guide')
+  TomTom:RemoveWaypoint(g); ns.quests.step()
+  ok(ns.waypoint() and ns.waypoint().questId ~= nil, 'the guide step gone: the nearest job again')
+  -- a quest done: its hand-in
+  log[200] = nil; log[100].IsComplete = function() return 1 end; ns.quests.step()
+  ok(ns.waypoint().title == 'Apothecary Lydon' and ns.waypoint().icon:find('complete', 1, true), 'done: the hand-in, with the ? icon')
+  ok(ns.waypoint().line2 == 'Elixir of Pain · hand in', 'and says so')
+  log[100] = nil; ns.quests.step()
+  ok(ns.waypoint() == nil, 'an empty quest log: no arrow')
+end
 
 -- ---------- sizing: only the //// grip, 32 to 192 ----------
 ok(OmaWayDB.size == 64, 'starts at 64 px')

@@ -28,32 +28,47 @@ function ns.db()
 end
 
 -- ---------- the waypoint ----------
--- One waypoint at a time, like TomTom's crazy arrow: the newest one handed in is the one shown.
-local wp            -- { mapID, x, y, title, arrive, wx, wy, inst }
+-- Two sources (sheet 115): ext, what another add-on hands in (a Guidelime step, a Questie ctrl-click), and auto,
+-- OmaWay's own (Quests.lua: the quest you focused in Questie, or the nearest quest job). The order:
+--   a focused quest  >  ext  >  the nearest quest job
+local ext, auto     -- { mapID, x, y, title, line2, icon, arrive, from, focus, wx, wy, inst }
 local uidN = 0
-function ns.waypoint() return wp end
+function ns.waypoint()
+  if auto and auto.focus then return auto end
+  return ext or auto
+end
+function ns.external() return ext end
 
 local function hbd() return LibStub and LibStub('HereBeDragons-2.0', true) end
 ns.hbd = hbd
 
-function ns.setWaypoint(mapID, x, y, opts)
+local function make(mapID, x, y, opts)
   opts = type(opts) == 'table' and opts or {}
   if type(mapID) ~= 'number' or type(x) ~= 'number' or type(y) ~= 'number' then return nil end
   uidN = uidN + 1
-  local w = { uid = uidN, mapID = mapID, x = x, y = y, title = opts.title, arrive = tonumber(opts.arrivaldistance) or 0,
-    from = opts.from }
+  local w = { uid = uidN, mapID = mapID, x = x, y = y, title = opts.title, line2 = opts.line2, icon = opts.icon,
+    arrive = tonumber(opts.arrivaldistance) or 0, from = opts.from, focus = opts.focus }
   local H = hbd()
   if H then
     local ok, wx, wy, inst = pcall(H.GetWorldCoordinatesFromZone, H, x, y, mapID)
     if ok then w.wx, w.wy, w.inst = wx, wy, inst end
   end
-  wp = w
-  if ns.arrowChanged then ns.arrowChanged() end
   return w
 end
-function ns.clearWaypoint(uid)
-  if wp and (uid == nil or uid == wp or uid == wp.uid) then wp = nil; if ns.arrowChanged then ns.arrowChanged() end end
+local function changed() if ns.arrowChanged then ns.arrowChanged() end end
+
+-- another add-on's waypoint (the TomTom slot)
+function ns.setWaypoint(mapID, x, y, opts)
+  local w = make(mapID, x, y, opts); if not w then return nil end
+  ext = w; changed(); return w
 end
+function ns.clearWaypoint(uid)
+  if ext and (uid == nil or uid == ext or uid == ext.uid) then ext = nil; changed() end
+end
+-- OmaWay's own (Quests.lua)
+function ns.setAuto(mapID, x, y, opts) auto = make(mapID, x, y, opts); changed(); return auto end
+function ns.clearAuto() if auto then auto = nil; changed() end end
+function ns.autoTarget() return auto end
 
 -- ---------- the TomTom stand-in ----------
 -- Only when the real TomTom is absent (OptionalDeps loads it first when it's installed).
@@ -71,9 +86,9 @@ if not realTomTom() and _G.TomTom == nil then
   end
   function T.RemoveWaypoint(self, uid) ns.clearWaypoint(uid) end
   function T.ClearWaypoint(self, uid) ns.clearWaypoint(uid) end
-  function T.SetCrazyArrow(self, uid) if type(uid) == 'table' and uid.uid then wp = uid; if ns.arrowChanged then ns.arrowChanged() end end end
-  function T.IsValidWaypoint(self, uid) return wp ~= nil and (uid == wp or uid == wp.uid) end
-  function T.GetDistanceToWaypoint(self, uid) if ns.distance and wp and (uid == wp or uid == wp.uid) then return ns.distance() end end
+  function T.SetCrazyArrow(self, uid) if type(uid) == 'table' and uid.uid then ext = uid; changed() end end
+  function T.IsValidWaypoint(self, uid) return ext ~= nil and (uid == ext or uid == ext.uid) end
+  function T.GetDistanceToWaypoint(self, uid) if ns.distance and ext and (uid == ext or uid == ext.uid) then return ns.distance() end end
   _G.TomTom = T
   ns.standIn = true
 end
