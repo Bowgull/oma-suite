@@ -109,14 +109,29 @@ local function castChanged(on)
   T.place()
 end
 T.castChanged = castChanged
-local hooked
+-- 2026-11-17 (21:07 screenshot, sheet 107 #1): the target's Lightning Bolt bar lay over the rings; the slide never
+-- happened, so Forever doesn't pass the cast bar's OnShow to us. Ten times a second we also look whether it shows
+-- (IsVisible: plain, not secret, on Blizzard's own bar) and slide on a change. The hook stays for clients that fire it.
+local hooked, watch
+local function castBar() return _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar) end
+local function castLook()
+  local bar = castBar(); if type(bar) ~= 'table' then return end
+  local ok, shown = pcall(bar.IsVisible, bar)
+  if not ok or (ns.core and ns.core.Secret and ns.core.Secret.is(shown)) then return end
+  local on = shown == true
+  if on ~= (R.castShown == true) then castChanged(on) end
+end
+T.castLook = castLook
 function T.hookCastBar()
-  local bar = _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar)
+  local bar = castBar()
   if hooked or type(bar) ~= 'table' or type(bar.HookScript) ~= 'function' then return end
   hooked = true
-  bar:HookScript('OnShow', function() castChanged(true) end)
-  bar:HookScript('OnHide', function() castChanged(false) end)
-  local ok, shown = pcall(bar.IsShown, bar); if ok and shown == true then castChanged(true) end
+  pcall(bar.HookScript, bar, 'OnShow', function() castChanged(true) end)
+  pcall(bar.HookScript, bar, 'OnHide', function() castChanged(false) end)
+  watch = watch or CreateFrame('Frame')
+  local acc = 0
+  watch:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc >= .1 then acc = 0; castLook() end end)
+  castLook()
 end
 
 -- which classes get a full line: your group's classes first (fixed order), then the rest, up to MAXLINES; the others dots

@@ -79,6 +79,22 @@ return {
     T.eq(rawget(ns.team.holder, '_pts').TOPLEFT[1], fp.anchor, 'the team row hangs under the rings and follows them')
     noErrors(T)
   end,
+  ['team row: the slide works even when the client never passes the cast bar\'s OnShow (21:07 screenshot)'] = function(W, T)
+    local bar
+    local ns, F, UI = setup(W, { where = 'both' }, function()
+      bar = CreateFrame('StatusBar', 'TargetFrameSpellBar', UIParent); bar:Hide()
+      bar.HookScript = function(_, what) error("Button:HookScript(): Cannot assign script handler for '" .. tostring(what):lower() .. "' (blocked)", 2) end
+    end)
+    F.mob('nameplate1', A, 'Skum', 300); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
+    local fp = ns.rings.framePair; T.ok(fp, 'rings on the target frame')
+    local function y() local pts = rawget(fp.anchor, '_pts'); return pts and pts.BOTTOMLEFT and pts.BOTTOMLEFT[4] end
+    local tight = y()
+    W.combat = true; bar:Show(); W.advance(.15)
+    T.ok(y() < tight, 'the watch sees the cast bar and slides the rings down')
+    bar:Hide(); W.advance(.15)
+    T.eq(y(), tight, 'and back up when it goes')
+    noErrors(T)
+  end,
   ['team row: off in settings, nothing is built'] = function(W, T)
     local ns, F, UI = setup(W, { team = false })
     T.eq(ns.team.c, nil, 'no team row'); noErrors(T)
