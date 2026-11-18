@@ -168,6 +168,10 @@ local function step(_, el)
   textAcc = textAcc + el
   if textAcc > .2 then
     textAcc = 0
+    if w.from == 'Guidelime' and ns.quests and ns.quests.guideStep then
+      local t1, t2 = ns.quests.guideStep()
+      if t1 then w.title, w.line2 = t1, t2 end
+    end
     setPlate(((away > .5) and '|cffff8a6a' or '|cffffd100') .. ('%d yd'):format(dist + .5) .. '|r  ' .. (w.title or ''), w.line2, w.icon, away > .5)
   end
 end

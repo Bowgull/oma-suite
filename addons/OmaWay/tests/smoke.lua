@@ -81,7 +81,8 @@ SlashCmdList = {
   ACECONSOLE_QUESTIE = function(m) said[#said + 1] = 'SLASH questie ' .. m; ReloadUI() end,
   DETAILS = function(m) said[#said + 1] = 'details ' .. m end,
 }
-local QT = { Hide = function() said[#said + 1] = 'questie tracker hide' end, Show = function() said[#said + 1] = 'questie tracker show' end }
+local QT = { Show = function() end, Hide = function() said[#said + 1] = 'questie tracker GONE' end,
+  Collapse = function() said[#said + 1] = 'questie tracker fold' end, Expand = function() said[#said + 1] = 'questie tracker open' end }
 QuestieLoader = { ImportModule = function(_, n) if n == 'QuestieTracker' then return QT end end }
 
 -- ---------- load ----------
@@ -136,14 +137,14 @@ ok(ns.modes.current() == 'dungeon', 'inside a dungeon: dungeon mode by itself')
 ok(not arrow:IsShown(), 'dungeon mode: the arrow is put away')
 ok(GuidelimeDataChar.mainFrameShowing == false and glToggles == 1, 'the Guidelime guide is hidden')
 local s = table.concat(said, ',')
-ok(s:find('questie tracker hide', 1, true), 'the Questie tracker is hidden')
+ok(s:find('questie tracker fold', 1, true) and not s:find('GONE', 1, true), 'the Questie tracker folds to its header (never vanishes)')
 ok(s:find('details show', 1, true), 'the damage meter shows')
 said = {}
 inside = false; fire('ZONE_CHANGED_NEW_AREA')
 ok(ns.modes.current() == 'quest', 'out of the dungeon: quest mode again')
 ok(arrow:IsShown() and GuidelimeDataChar.mainFrameShowing == true, 'guide and arrow back')
 s = table.concat(said, ',')
-ok(s:find('questie tracker show', 1, true) and s:find('details hide', 1, true), 'tracker back, meter away')
+ok(s:find('questie tracker open', 1, true) and s:find('details hide', 1, true), 'tracker unfolds, meter away')
 -- no chip any more (2026-11-17, "these should all be one thing"): the minimap button is the one control
 ok(_G.OmaWayModeChip == nil, 'there is no QUEST / DUNGEON chip')
 local chip = _G.OmaWayMinimapButton
@@ -214,7 +215,7 @@ do
   local s1 = table.concat(said, ',')
   ok(not arrow:IsShown(), 'left-click: the arrow goes, even with a waypoint')
   ok(GuidelimeDataChar.mainFrameShowing == false, 'and the guide')
-  ok(s1:find('questie tracker hide', 1, true), 'and the Questie tracker')
+  ok(s1:find('questie tracker fold', 1, true), 'and the Questie tracker folds')
   ok(s1:find('details show', 1, true), 'and the damage meter comes on')
   TomTom:AddWaypoint(1426, .4, .1, { title = 'Another' })
   ok(not arrow:IsShown(), 'a new waypoint does not bring the arrow back while off')
@@ -224,7 +225,7 @@ do
   mb:GetScript('OnClick')(mb, 'LeftButton')
   local s2 = table.concat(said, ',')
   ok(arrow:IsShown() and GuidelimeDataChar.mainFrameShowing, 'left-click again: guide and arrow back')
-  ok(s2:find('questie tracker show', 1, true) and s2:find('details hide', 1, true), 'tracker back, meter away')
+  ok(s2:find('questie tracker open', 1, true) and s2:find('details hide', 1, true), 'tracker unfolds, meter away')
   -- a dungeon door still switches it by itself, and ends the click's hold
   inside = true; fire('ZONE_CHANGED_NEW_AREA')
   ok(not arrow:IsShown() and OmaWayDB.mode == 'auto', 'into a dungeon: all off by itself')
@@ -249,6 +250,26 @@ do
   OmaWayDB.plate = 'off'; ns.arrow.look()
   ok(not P.plate:IsShown(), 'Nothing: no plate at all')
   OmaWayDB.plate = nil; ns.arrow.look(); TomTom:RemoveWaypoint()
+end
+
+-- ---------- the guide's real step on the arrow, and the right-side dock (2026-11-18) ----------
+do
+  local stepFrame = { textBox = { GetText = function() return '|T icon:12|t|cffffffffFly to |cff00ff00Orgrimmar|r\nthen take the zeppelin' end } }
+  GuidelimeWindow = setmetatable({ steps = { [3] = stepFrame }, _shown = true }, Obj)
+  GuidelimeArrow = { element = { step = { index = 3 } } }
+  TomTom:AddWaypoint(1426, .5, .1, { title = 'Follow current step', from = 'Guidelime' })
+  player.x, player.y = 0, 0; facing = 0; textAccReset = true; tick(10)
+  ok(ns.waypoint().title == 'Fly to Orgrimmar', "the arrow says the guide's own step, not 'Follow current step': " .. tostring(ns.waypoint().title))
+  ok(ns.waypoint().line2 == 'then take the zeppelin', 'and its second line')
+  Questie_BaseFrame = setmetatable({ _shown = true }, Obj)
+  ns.modes.dock()
+  local gp = GuidelimeWindow._pts and GuidelimeWindow._pts.TOPRIGHT
+  ok(gp and gp[1] == Questie_BaseFrame and gp[2] == 'BOTTOMRIGHT', 'TUG docks right under the Questie tracker')
+  local tp = Questie_BaseFrame._pts and Questie_BaseFrame._pts.TOPRIGHT
+  ok(tp and tp[1] == Minimap, 'the tracker sits under the minimap on the right')
+  OmaWayDB.dock = false; GuidelimeWindow._pts = {}; ns.modes.dock()
+  ok(next(GuidelimeWindow._pts) == nil, 'dock off: your own spots are left alone')
+  OmaWayDB.dock = nil; TomTom:RemoveWaypoint(); GuidelimeWindow, GuidelimeArrow, Questie_BaseFrame = nil, nil, nil
 end
 
 -- ---------- sizing: only the //// grip, 32 to 192 ----------

@@ -44,6 +44,7 @@ local function menu(self)
     if db.mode ~= 'auto' then root:CreateButton('Let dungeons switch it again', function() SlashCmdList.OMAWAY('auto') end) end
     root:CreateButton(db.locked and 'Unlock the arrow to move' or 'Lock the arrow', function() SlashCmdList.OMAWAY(db.locked and 'unlock' or 'lock') end)
     root:CreateButton('Reset the arrow', function() SlashCmdList.OMAWAY('reset') end)
+    root:CreateCheckbox('Dock guide under tracker', function() return db.dock ~= false end, function() db.dock = not (db.dock ~= false); if db.dock ~= false and ns.modes then ns.modes.dock() end end)
     root:CreateCheckbox('Point to the nearest quest job', function() return db.nearest ~= false end, function() db.nearest = not (db.nearest ~= false) end)
   end)
 end

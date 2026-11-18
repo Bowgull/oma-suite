@@ -25,11 +25,41 @@ end
 -- 2026-11-17 (Joshua: "i didnt know it would reload my entire screen everytime"): never '/questie tracker show|hide'.
 -- Those switch the tracker off at the root and ReloadUI(), and 'hide' also wipes Questie's tracked-quest list. Only
 -- the tracker window's own Hide() / Show(), which reload nothing and keep every setting.
+-- 2026-11-18 (Joshua: "when i turn it off questie collapses and tugs hides"): off folds the tracker to its header line
+-- (its own Collapse / Expand, as clicking its header does), it never disappears.
 local function questie(show)
   local L = _G.QuestieLoader
   local ok, T = pcall(function() return L and L:ImportModule('QuestieTracker') end)
-  if not (ok and T and T.Hide and T.Show) then return end
-  if show then pcall(T.Show, T) else pcall(T.Hide, T) end
+  if not (ok and T) then return end
+  if T.Show then pcall(T.Show, T) end
+  if show then if T.Expand then pcall(T.Expand, T) end else if T.Collapse then pcall(T.Collapse, T) end end
+end
+
+-- the right-side column (2026-11-18, "get the guidelime tug thing under the questie tracker in the right side of the
+-- screen"): the Questie tracker under the minimap, TUG's window docked under it at the tracker's width, so it follows
+-- when the tracker folds or grows. A drag of either window still works; the dock comes back at the next login or
+-- switch (right-click the minimap button > Dock guide under tracker: off to keep your own spots).
+local DOCK_GAP = 6
+function Mo.dock()
+  local db = ns.db()
+  if db.dock == false or InCombatLockdown() then return end
+  local tracker, guide = _G.Questie_BaseFrame, _G.GuidelimeWindow
+  if tracker and Minimap and not db.trackerPlaced then
+    tracker:ClearAllPoints(); tracker:SetPoint('TOPRIGHT', Minimap, 'BOTTOMRIGHT', 12, -34)
+    local p = Questie and Questie.db and Questie.db.profile
+    if p then
+      local s = tracker:GetEffectiveScale() / UIParent:GetEffectiveScale()
+      local r, t = tracker:GetRight(), tracker:GetTop()
+      local cx, cy = UIParent:GetCenter()
+      if r and t and cx then p.TrackerLocation = { 'TOPRIGHT', 'UIParent', 'CENTER', r * s - cx, t * s - cy } end
+    end
+    db.trackerPlaced = true                             -- once: after that the tracker stays where you put it
+  end
+  if tracker and guide and guide:IsShown() then
+    guide:ClearAllPoints(); guide:SetPoint('TOPRIGHT', tracker, 'BOTTOMRIGHT', 0, -DOCK_GAP)
+    local w = tracker:GetWidth()
+    if w and w > 200 then guide:SetWidth(w) end
+  end
 end
 local function details(show)
   local f = SlashCmdList and SlashCmdList.DETAILS
@@ -44,9 +74,10 @@ function Mo.apply(m, quiet)
   pending = false
   local quest = m == 'quest'
   guidelime(quest); questie(quest); details(not quest)
+  if quest and C_Timer then C_Timer.After(.3, Mo.dock) end    -- after the guide window exists and the tracker has unfolded
   if ns.arrowChanged then ns.arrowChanged() end
   chipLook()
-  if not quiet then ns.say(quest and 'guide, tracker and arrow on.' or 'guide, tracker and arrow off; damage meter on.') end
+  if not quiet then ns.say(quest and 'guide, tracker and arrow on.' or 'guide and arrow off, tracker folded; damage meter on.') end
 end
 
 local function auto(force)

@@ -112,6 +112,26 @@ function Q.step()
   aim(j, false)
 end
 
+-- the guide's current step in plain words (2026-11-18, the arrow said "Follow current step": Guidelime's own fallback
+-- title). Read from TUG's window itself, the line you see ticked next: GuidelimeArrow.element.step is the step the
+-- arrow serves, GuidelimeWindow.steps[i].textBox its text. Icons, colours and links are stripped.
+local function plain(t)
+  t = t:gsub('|T.-|t', ''):gsub('|H.-|h(.-)|h', '%1'):gsub('|c%x%x%x%x%x%x%x%x', ''):gsub('|r', ''):gsub('|n', '\n')
+  t = t:gsub('^%s+', ''):gsub('%s+$', ''):gsub('  +', ' ')
+  return t
+end
+function Q.guideStep()
+  local a, win = _G.GuidelimeArrow, _G.GuidelimeWindow
+  local step = a and a.element and a.element.step
+  if not (step and win and win.steps) then return nil end
+  local sf = win.steps[step.index]
+  local ok, txt = pcall(function() return sf and sf.textBox and sf.textBox:GetText() end)
+  if not (ok and type(txt) == 'string' and txt ~= '') then return nil end
+  txt = plain(txt)
+  local first, rest = txt:match('^([^\n]+)\n?(.*)$')
+  return first, (rest and rest ~= '') and rest:match('^[^\n]+') or nil
+end
+
 local acc = 0
 local tick = CreateFrame('Frame')
 tick:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc >= 3 then acc = 0; pcall(Q.step) end end)
