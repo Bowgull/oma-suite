@@ -47,6 +47,21 @@ local function mob(W, F, k, name, o) local u = F.mob('nameplate' .. k, 'C-' .. k
 local function shownRows(ns) local t = {}; for k = 1, 16 do if ns.moblist.rows[k].shown then t[#t + 1] = k end end; return table.concat(t, ',') end
 
 return {
+  ['list: its seats take the mouse for their tooltips; the rings over enemies stay click-through'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    mob(W, F, 1, 'Raptor'); pump(); W.advance(.5)
+    local p = L.rows[1].pair
+    T.ok(p and p.smain, 'the row has its seat row')
+    local g = UI.group(p.smain, 'corruption')
+    T.ok(g and g.buttons[1]:IsMouseEnabled(), "a list seat takes the mouse: the game shows the DoT's tooltip")
+    local plate = UI.rowOn('nameplate1')
+    local pm = plate and UI.mainOf(plate)
+    local pg = pm and UI.group(pm, 'corruption')
+    T.ok(pg, 'the plate row has its Corruption seat')
+    T.ok(pg and not pg.buttons[1]:IsMouseEnabled(), 'over the enemy the seat stays click-through')
+    noErrors(T)
+  end,
   ['list: one row per nameplate, enemies only, packed to the top; display only (no click buttons)'] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist

@@ -30,9 +30,11 @@ local function text(parent, size, point, x, y)
   fs:SetTextColor(1, 1, 1, 1); fs:SetShadowColor(0, 0, 0, 1); fs:SetShadowOffset(1, -1)
   return fs
 end
+-- the squares take the mouse (2026-11-17, "tooltips on hover for other players spells"): no script of ours on them,
+-- so the game's own aura tooltip shows. The class dots stay click-through.
 function T.squareInit(key)
   return function(b)
-    b:SetSize(SQ, SQ); pcall(b.EnableMouse, b, false)
+    b:SetSize(SQ, SQ); pcall(b.EnableMouse, b, true)
     local icon = b:CreateTexture(nil, 'ARTWORK', nil, 0)
     icon:SetSize(ICON, ICON); icon:SetPoint('CENTER', b, 'CENTER'); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     local m = b:CreateMaskTexture(); m:SetTexture(MASK, 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(icon)

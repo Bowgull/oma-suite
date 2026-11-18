@@ -58,7 +58,8 @@ end
 -- others close up in their order, and it slots back into its place when it lands. Three rows flow identically: the
 -- ending glow (halo), the bands (ring) and the icons and numbers (main, a child of ring so it draws above).
 local function groupByKey(key) for _, g in ipairs(R.GROUPS) do if g.key == key then return g end end end
-local function seatRow(c, kind)
+-- list: the mob list's row (its seats' icons take the mouse, for their tooltips)
+local function seatRow(c, kind, list)
   pcall(c.SetEditModePreviewEnabled, c, false)
   c:SetFlowLayoutAnchorPoint('BOTTOMLEFT')
   c:SetFlowLayoutGrowthDirection(1, 1)
@@ -66,7 +67,7 @@ local function seatRow(c, kind)
   for _, key in ipairs(R.SEATS) do
     local g = groupByKey(key)
     if g then
-      local init = kind == 'halo' and R.haloFor(key) or g[kind]
+      local init = kind == 'halo' and R.haloFor(key) or (list and kind == 'main' and g.mainList) or g[kind]
       local ok, err = pcall(c.AddAuraGroup, c, key, g.filter, { initializeFrame = init, candidateFilters = R.filtersFor(key),
         sortMethod = SORT, maxFrameCount = 1, layout = { groupSpacing = R.SEAT_GAP } })
       if not ok then log(kind .. ' seat ' .. key .. ' failed: ' .. tostring(err)); if kind ~= 'halo' then error(err) end end
@@ -99,7 +100,7 @@ local function newPair(gap, spare, flow, list)
     if seats then
       halo = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate'); seatRow(halo, 'halo')
       sring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate'); seatRow(sring, 'ring')
-      smain = CreateFrame('AuraContainer', nil, sring, 'CustomAuraContainerTemplate'); seatRow(smain, 'main')
+      smain = CreateFrame('AuraContainer', nil, sring, 'CustomAuraContainerTemplate'); seatRow(smain, 'main', list)
     end
     local ring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
     setupContainer(ring, 'ring', gap, seats, anchor)

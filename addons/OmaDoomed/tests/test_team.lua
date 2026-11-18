@@ -13,6 +13,15 @@ end
 local function noErrors(T) T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1])) end
 local function shows(UI, c, key) return #(UI.showing(c)[key] or {}) end
 return {
+  ['team row: the squares take the mouse (the game shows their tooltip); the class dots do not'] = function(W, T)
+    local ns, F, UI = setup(W)
+    F.mob('nameplate1', A, 'Skum', 300); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
+    local c = ns.team.c
+    T.ok(UI.group(c, 'full_warrior').buttons[1]:IsMouseEnabled(), 'a class square takes the mouse')
+    T.ok(UI.group(c, 'other').buttons[1]:IsMouseEnabled(), 'the neutral line too')
+    T.ok(not UI.group(c, 'dot_warrior').buttons[1]:IsMouseEnabled(), 'a small class dot stays click-through')
+    noErrors(T)
+  end,
   ['team row: each class line shows its own spells, the rest go to the neutral line, yours never'] = function(W, T)
     local ns, F, UI = setup(W)
     local m = F.mob('nameplate1', A, 'Skum', 300); m.otherAuras = { SUNDER, MARK, FAERIE, UNKNOWN }; m.auras = { 172 }

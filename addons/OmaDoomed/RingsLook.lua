@@ -369,8 +369,10 @@ local function numberOn(cd, b, size, k)
   return num
 end
 
-local function mainOwn(b, k, key)
-  b:SetSize(S, S); pcall(b.EnableMouse, b, false)
+-- mouse: the mob list's seats only (2026-11-17, "tooltips on hover"): the game's own aura tooltip shows on a button that
+-- takes the mouse and has no script of ours (an add-on's OnEnter blocks it). Over enemies they stay click-through.
+local function mainOwn(b, k, key, mouse)
+  b:SetSize(S, S); pcall(b.EnableMouse, b, mouse == true)
   local icon = roundIcon(b, S)
   if not R.flat() then   -- Rich (sheet 41): a dark spot behind the number, the brass bezel
     icon:SetAlpha(.8)
@@ -392,7 +394,8 @@ end
 -- smaller number; frame: the target-frame row's own number size (sheet 51 B)
 local function mainsFor(key, long)
   local function k(frame) return long and R.NUM_K_LONG or R.numK(frame) end
-  return function(b) mainOwn(b, k(false), key) end, function(b) mainOwn(b, k(true), key) end
+  return function(b) mainOwn(b, k(false), key) end, function(b) mainOwn(b, k(true), key) end,
+    function(b) mainOwn(b, k(false), key, true) end   -- the mob list's seat, with its tooltip
 end
 
 local function mainOthers(b)
@@ -710,8 +713,8 @@ R.GROUPS = {}
 function R.buildGroups()
   local G = {}
   for _, sp in ipairs(SPELLS) do
-    local main, mainFrame = mainsFor(sp.key, sp.kind == 'curse')
-    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = main, mainFrame = mainFrame, seat = R.SEAT_OF[sp.key],
+    local main, mainFrame, mainList = mainsFor(sp.key, sp.kind == 'curse')
+    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = main, mainFrame = mainFrame, mainList = mainList, seat = R.SEAT_OF[sp.key],
       ring = ringOwn(sp.color, ringCurves[sp.key], sp.key, lightCurves[sp.key]) }
   end
   local mine, mineFrame = mainsFor('mine', false)
