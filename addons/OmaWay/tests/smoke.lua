@@ -252,6 +252,15 @@ do
   OmaWayDB.plate = nil; ns.arrow.look(); TomTom:RemoveWaypoint()
 end
 
+-- ---------- a guide open: never the nearest job from elsewhere (2026-11-18) ----------
+do
+  TomTom:RemoveWaypoint(); ns.clearAuto(); Questie.db.char.TrackerFocus = nil
+  GuidelimeWindow = setmetatable({ _shown = true }, Obj); GuidelimeDataChar.currentGuide = 'TUGs 22-24 Hillsbrad Foothills'
+  ns.quests.step()
+  ok(ns.waypoint() == nil, 'a guide open with a step that has no spot: no arrow to some other quest')
+  GuidelimeWindow = nil; GuidelimeDataChar.currentGuide = nil
+end
+
 -- ---------- the guide's real step on the arrow, and the right-side dock (2026-11-18) ----------
 do
   local stepFrame = { textBox = { GetText = function() return '|T icon:12|t|cffffffffFly to |cff00ff00Orgrimmar|r\nthen take the zeppelin' end } }

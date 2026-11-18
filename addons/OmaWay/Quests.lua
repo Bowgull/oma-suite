@@ -100,8 +100,9 @@ function Q.step()
   if f and inLog(f) then local j = Q.job(f); if j then aim(j, true); return end end
   -- 2. another add-on steers
   if ns.external() then ns.clearAuto(); return end
-  -- 3. the nearest job
-  if db.nearest == false then ns.clearAuto(); return end
+  -- 3. the nearest job, but never while a guide is open (2026-11-18: TUG's "Take the Zeppelin to Undercity" has no
+  -- spot, so the arrow fell back to a Wailing Caverns quest 2976 yd away; a guide's step without a spot waits)
+  if db.nearest == false or Q.guideOpen() then ns.clearAuto(); return end
   local j = Q.job()
   if not j then ns.clearAuto(); return end
   local a = ns.autoTarget()
@@ -119,6 +120,10 @@ local function plain(t)
   t = t:gsub('|T.-|t', ''):gsub('|H.-|h(.-)|h', '%1'):gsub('|c%x%x%x%x%x%x%x%x', ''):gsub('|r', ''):gsub('|n', '\n')
   t = t:gsub('^%s+', ''):gsub('%s+$', ''):gsub('  +', ' ')
   return t
+end
+function Q.guideOpen()
+  local w = _G.GuidelimeWindow
+  return w ~= nil and w.IsShown and w:IsShown() and GuidelimeDataChar ~= nil and GuidelimeDataChar.currentGuide ~= nil
 end
 function Q.guideStep()
   local a, win = _G.GuidelimeArrow, _G.GuidelimeWindow
