@@ -160,9 +160,15 @@ do
   -- distance from the player in world yards (the fake world: map x*1000, y*1000)
   function D.GetNearestObjective(sl) local dx, dy = sl.x * 1000 - player.x, sl.y * 1000 - player.y; return { sl.x * 100, sl.y * 100 }, 85, 'Thing', math.sqrt(dx * dx + dy * dy) end
   function D.GetNearestFinisherOrStarter(fin) local dx, dy = 400 - player.x, 100 - player.y; return { 40, 10 }, 85, 'Apothecary Lydon', math.sqrt(dx * dx + dy * dy) end
-  local P = { currentQuestlog = log }
+  -- today's Questie: the quests you have in QuestLogCache (ids, read only), each quest's data from QuestieDB.GetQuest
+  local ids = setmetatable({}, { __index = function(_, k) return log[k] and true or nil end, __pairs = nil })
+  local C = { questLog_DO_NOT_MODIFY = setmetatable({}, { __index = function(_, k) return log[k] and {} or nil end }) }
+  local function syncIds() local t = {}; for id in pairs(log) do t[id] = {} end; C.questLog_DO_NOT_MODIFY = t end
+  syncIds()
+  local DB = { GetQuest = function(id) return log[id] end }
   local Z = { GetUiMapIdByAreaId = function(_, z) return 1426 end }
-  QuestieLoader = { ImportModule = function(_, n) return ({ DistanceUtils = D, QuestiePlayer = P, ZoneDB = Z, QuestieTracker = QT })[n] end }
+  QuestieLoader = { ImportModule = function(_, n) return ({ DistanceUtils = D, QuestLogCache = C, QuestieDB = DB, ZoneDB = Z, QuestieTracker = QT })[n] end }
+  QUESTLOG_SYNC = syncIds
   Questie = { db = { char = {} } }
   player.x, player.y = 500, 100
   ns.quests.step()
@@ -187,10 +193,10 @@ do
   TomTom:RemoveWaypoint(g); ns.quests.step()
   ok(ns.waypoint() and ns.waypoint().questId ~= nil, 'the guide step gone: the nearest job again')
   -- a quest done: its hand-in
-  log[200] = nil; log[100].IsComplete = function() return 1 end; ns.quests.step()
+  log[200] = nil; QUESTLOG_SYNC(); log[100].IsComplete = function() return 1 end; ns.quests.step()
   ok(ns.waypoint().title == 'Apothecary Lydon' and ns.waypoint().icon:find('complete', 1, true), 'done: the hand-in, with the ? icon')
   ok(ns.waypoint().line2 == 'Elixir of Pain · hand in', 'and says so')
-  log[100] = nil; ns.quests.step()
+  log[100] = nil; QUESTLOG_SYNC(); ns.quests.step()
   ok(ns.waypoint() == nil, 'an empty quest log: no arrow')
 end
 
@@ -245,6 +251,11 @@ do
   TomTom = savedTT; C_AddOns.IsAddOnLoaded = function() return false end
 end
 
+-- /omaway test puts a point beside you (2026-11-18 BugSack: 'H and H:GetPlayerZonePosition()' lost y)
+SlashCmdList.OMAWAY('clear'); Questie.db.char.TrackerFocus = nil
+SlashCmdList.OMAWAY('test')
+ok(ns.external() and ns.external().title == 'OmaWay test', '/omaway test sets a point next to you')
+SlashCmdList.OMAWAY('clear')
 ok(reloads == 0, 'nothing ever reloads the UI (' .. reloads .. ' reloads)')
 print = print0
 print(('OmaWay smoke: %d checks, %d failed'):format(checks, fails))

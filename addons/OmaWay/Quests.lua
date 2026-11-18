@@ -11,14 +11,27 @@ local Q = {}; ns.quests = Q
 local ICONS = 'Interface\\Addons\\Questie\\Icons\\'
 local ICON_OF = { monster = 'slay', item = 'loot', object = 'object', event = 'event', killcredit = 'slay' }
 
+-- 2026-11-18 (/omaway why in game: "quests in its log: 0"): today's Questie keeps the quests you have in
+-- QuestLogCache (questLog_DO_NOT_MODIFY: questId -> snapshot, read only) and each quest's objectives and spawns in
+-- QuestieDB.GetQuest(questId), the same pair its own tracker hands to DistanceUtils. QuestiePlayer.currentQuestlog
+-- (what older Questie and BuckQuestPlates read) is gone.
 local function questie()
   local L = _G.QuestieLoader
   if not (L and L.ImportModule) then return nil end
-  local ok1, D = pcall(L.ImportModule, L, 'DistanceUtils')
-  local ok2, P = pcall(L.ImportModule, L, 'QuestiePlayer')
-  local ok3, Z = pcall(L.ImportModule, L, 'ZoneDB')
-  if ok1 and ok2 and ok3 and D and P and Z and D.GetNearestObjective and Z.GetUiMapIdByAreaId then return D, P, Z end
+  local function mod(n) local ok, m = pcall(L.ImportModule, L, n); return ok and m or nil end
+  local D, C, DB, Z = mod('DistanceUtils'), mod('QuestLogCache'), mod('QuestieDB'), mod('ZoneDB')
+  if D and C and DB and Z and D.GetNearestObjective and DB.GetQuest and Z.GetUiMapIdByAreaId then return D, C, Z, DB end
 end
+-- questId -> Questie's quest object, for every quest in your log
+local function questLog()
+  local D, C, Z, DB = questie(); if not D then return nil end
+  local ids = C.questLog_DO_NOT_MODIFY
+  if type(ids) ~= 'table' then return nil end
+  local log = {}
+  for id in pairs(ids) do local ok, q = pcall(DB.GetQuest, id); if ok and type(q) == 'table' then log[id] = q end end
+  return log, D, Z
+end
+Q.questLog = questLog
 
 local function isDone(quest)
   local ok, c = pcall(quest.IsComplete, quest)
@@ -56,9 +69,7 @@ end
 
 -- the job to go to: one quest's (focus) or the nearest of all
 function Q.job(onlyId)
-  local D, P, Z = questie(); if not D then return nil end
-  local log = P.currentQuestlog
-  if type(log) ~= 'table' then return nil end
+  local log, D, Z = questLog(); if not log then return nil end
   if onlyId then local q = log[onlyId]; return type(q) == 'table' and jobIn(onlyId, q, D, Z) or nil end
   local best
   for id, quest in pairs(log) do
@@ -70,7 +81,7 @@ function Q.focus()
   local f = Questie and Questie.db and Questie.db.char and Questie.db.char.TrackerFocus
   return type(f) == 'number' and f or nil
 end
-local function inLog(id) local _, P = questie(); return id and P and type(P.currentQuestlog) == 'table' and P.currentQuestlog[id] ~= nil end
+local function inLog(id) local _, C = questie(); return id and C and type(C.questLog_DO_NOT_MODIFY) == 'table' and C.questLog_DO_NOT_MODIFY[id] ~= nil end
 
 local function aim(j, focus)
   local a = ns.autoTarget()

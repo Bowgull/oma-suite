@@ -88,15 +88,17 @@ SlashCmdList.OMAWAY = function(msg)
   elseif cmd == 'unlock' then db.locked = false; ns.arrow.look(); ns.say('arrow unlocked: drag it, size it with the //// corner.')
   elseif cmd == 'reset' then ns.arrow.reset()
   elseif cmd == 'test' then
-    local H = ns.hbd(); local m = H and H:GetPlayerZone(); local x, y = H and H:GetPlayerZonePosition()
+    local H = ns.hbd(); local x, y, m
+    if H then x, y, m = H:GetPlayerZonePosition() end   -- ('H and H:f()' keeps only the first value: y came back nil)
+    m = m or (H and H:GetPlayerZone())
     if m and x then ns.setWaypoint(m, x + .03, y - .03, { title = 'OmaWay test', from = 'OmaWay' }); ns.say('a test waypoint a little north-east of you.')
     else ns.say("the game won't say where you are here (inside a dungeon?).") end
   elseif cmd == 'clear' then ns.clearWaypoint(); ns.say('waypoint cleared.')
   elseif cmd == 'why' then
     -- what OmaWay sees, in chat (2026-11-17: "i dont see the arrow or guide at all")
     local L = _G.QuestieLoader
-    local okP, P = pcall(function() return L and L:ImportModule('QuestiePlayer') end)
-    local n = 0; if okP and P and type(P.currentQuestlog) == 'table' then for _ in pairs(P.currentQuestlog) do n = n + 1 end end
+    local log = ns.quests and ns.quests.questLog and ns.quests.questLog()
+    local n = 0; if log then for _ in pairs(log) do n = n + 1 end end
     ns.say(('Questie: %s, quests in its log: %d. Guidelime: %s. Mode: %s.'):format(L and 'found' or 'NOT found', n,
       (Guidelime and GuidelimeDataChar) and (GuidelimeDataChar.mainFrameShowing and 'on, window open' or 'on, window closed') or 'off', mode))
     local okJ, j = pcall(function() return ns.quests and ns.quests.job() end)
