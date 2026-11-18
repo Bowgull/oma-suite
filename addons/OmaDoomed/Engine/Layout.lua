@@ -15,17 +15,20 @@ function Lt.snap(frame, v)
   return math.floor(v + .5)
 end
 
--- the list's grid (sheet 83): u = 2 px at scale 1
+-- the list's grid (sheet 83, resized by sheet 108 v2, 2026-11-17): u = 2 px at scale 1. The list is exactly as wide as
+-- his Details meter (348 px measured on the 21:07 screenshot), so the two stack edge to edge; nothing is reserved on
+-- the right any more (the shield badge sits on the portrait), and the rings end at the right edge.
 Lt.LIST = {
   u = 2,
-  row = 24,          -- 48 px a row
-  portrait = 19,     -- 38 px (sheet 86: 34 px read as a dark smudge)
-  gapPortrait = 5,   -- portrait -> name
-  bar = 92,          -- 184 px
-  barH = 8,          -- 16 px
-  name = 7,          -- 14 px text
-  gapRings = 6,      -- bar -> first ring
-  ring = 17,         -- 34 px
-  ringGap = 3,       -- 6 px between rings
-  padX = 10, padY = 6,
+  width = 174,       -- 348 px: the Details meter's width
+  row = 22,          -- 44 px a row (even, so 1 px lines land on whole pixels)
+  portrait = 20,     -- 40 px
+  gapPortrait = 3,   -- portrait -> name
+  bar = 70,          -- 140 px
+  barH = 7,          -- 14 px
+  name = 6,          -- 12 px text
+  gapRings = 3,      -- bar -> first ring (at least)
+  ring = 15,         -- 30 px
+  ringGap = 2,       -- 4 px between rings
+  padX = 3, padY = 6,
 }

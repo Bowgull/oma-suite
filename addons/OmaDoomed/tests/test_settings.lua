@@ -31,7 +31,7 @@ return {
     T.eq(cat.name, 'OmaDoomed'); T.eq(cat.parent.name, 'Oma')
     T.eq(UI.S.addOnCategories[1], cat.parent, 'the Oma parent registered at login')
     local kinds = {}; for _, i in ipairs(cat.layout.inits) do kinds[#kinds + 1] = i.kind == 'header' and ('header:' .. i.text) or i.kind end
-    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Over enemies,checkbox,checkbox,dropdown,dropdown,slider,checkbox,checkbox,checkbox,checkbox,header:Mob list,checkbox,slider,slider,dropdown,checkbox,checkbox,checkbox,checkbox,checkbox,slider,button,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Help,button,button,button",
+    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Over enemies,checkbox,checkbox,dropdown,dropdown,slider,checkbox,checkbox,checkbox,checkbox,header:Mob list,checkbox,slider,slider,dropdown,checkbox,checkbox,checkbox,checkbox,checkbox,slider,button,button,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Help,button,button,button",
       'grouped by place on screen (sheet 60): headers, controls, Pick, the preview button and the two report buttons')
   end,
   ['saved values are kept, not reset to defaults'] = function(W, T)

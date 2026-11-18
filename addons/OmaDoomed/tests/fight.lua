@@ -80,7 +80,7 @@ end
 function F.mob(token, guid, name, hp, o)
   o = o or {}
   local u = { guid = guid, name = name or guid, hp = hp or 200, maxhp = hp or 200, enemy = not o.friendly,
-    dead = o.dead, secretGuid = o.secretGuid }
+    dead = o.dead, secretGuid = o.secretGuid, level = o.level, class = o.class }
   W.units[token] = u
   return u
 end

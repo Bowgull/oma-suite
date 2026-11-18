@@ -32,6 +32,10 @@ K.castRed = { .9, .16, .1 }       -- a cast you can interrupt
 K.castGrey = { .55, .55, .55 }    -- one you can't (or the game won't say)
 K.empty = { .07, .03, .03, 1 }
 -- Blizzard's threat colours: 1 yellow (above the tank), 2 orange (about to pull), 3 red (it's on you)
+K.rim = { .62, .46, .22, 1 }        -- sheet 108: the portrait's bronze rim when nothing is on you
+K.nameGold = { 1, .82, 0 }            -- Blizzard's own name gold (GameFontNormal)
+K.elite = 'Interface\\Tooltips\\EliteNameplateIcon'          -- the game's gold dragon
+K.rareElite = 'Interface\\Tooltips\\RareEliteNameplateIcon'  -- its silver one
 K.threat = { [1] = { 1, .82, 0 }, [2] = { 1, .5, .02 }, [3] = { .95, .12, .12 } }
 -- how strong each threat level's breath is (its top; the bottom is a third of it)
 K.threatGlow = { [1] = .45, [2] = .65, [3] = .85 }

@@ -121,6 +121,7 @@ function UnitCanAttack(a, t) return U(t) ~= nil and U(t).enemy or false end
 function UnitIsUnit(a, b) return U(a) ~= nil and U(a) == U(b) end
 function UnitIsPlayer(t) return U(t) and U(t).player or false end
 function UnitLevel(t) return U(t) and U(t).level or 1 end
+function UnitClassification(t) return U(t) and U(t).class or 'normal' end
 function UnitHealth(t) local u = U(t); if not u then return 0 end; return W.combat and W.secret(u.hp) or u.hp end
 function UnitHealthMax(t) local u = U(t); if not u then return 0 end; return W.combat and W.secret(u.maxhp) or u.maxhp end
 function InCombatLockdown() return W.combat end

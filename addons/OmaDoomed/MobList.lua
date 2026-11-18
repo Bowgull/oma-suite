@@ -21,9 +21,10 @@ local TOKENS = 16
 local u = G and G.u or 2
 local ROW, PORT, GAPP, BAR, BARH, NAME = G.row * u, G.portrait * u, G.gapPortrait * u, G.bar * u, G.barH * u, G.name * u
 local GAPR, RING, RINGGAP, PADX, PADY = G.gapRings * u, G.ring * u, G.ringGap * u, G.padX * u, G.padY * u
-local BUFF = 22
+local BUFF = 18        -- sheet 108 v2: the shield/anti-magic badge sits on the portrait's top-right corner
 local FEATHER = 18     -- how far the backing reaches past the rows, above and below
 L.RH = ROW
+local function plainV(v) return v ~= nil and not (ns.core and ns.core.Secret and ns.core.Secret.is(v)) end
 
 local db
 local testOff    -- the test list (below)
@@ -37,7 +38,12 @@ local function seatWidth()
   local _, n = R.seatSpots()
   return n * RING + (n - 1) * RINGGAP
 end
-local function width() return PADX + PORT + GAPP + BAR + GAPR + seatWidth() + 6 + 2 * BUFF + PADX end
+-- sheet 108 v2: exactly the Details meter's width (Layout.LIST.width). The health bar takes what the seats leave, so
+-- a new seat (Siphon Life at 30) narrows the bar instead of widening the list; never below 110 px.
+local BAR_MIN = 110
+local function barW() return math.max(BAR_MIN, (G.width or 0) * u - (2 * PADX + PORT + GAPP + GAPR + seatWidth())) end
+local function width() return 2 * PADX + PORT + GAPP + barW() + GAPR + seatWidth() end
+L.barW = barW
 L.width = width
 
 -- ---------- a row ----------
@@ -63,14 +69,23 @@ local function newRow(k)
   -- sheet 86 ("portraits are great"): the game's own portrait, clean (the additive lift over it washed it out)
   r.lift = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.lift:SetAllPoints(r.face); r.lift:SetBlendMode('ADD'); r.lift:SetAlpha(.18); r.lift:AddMaskTexture(m)   -- a light touch (0.4 washed it out)
   r.ring = r:CreateTexture(nil, 'ARTWORK', nil, 3); r.ring:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR')
-  r.ring:SetSize(PORT + 6, PORT + 6); r.ring:SetPoint('CENTER', r.face, 'CENTER'); r.ring:SetVertexColor(0, 0, 0, .9)
-  -- your demon's mark (its own icon) and the mob's raid mark, on the portrait's lower corners
+  r.ring:SetSize(PORT + 6, PORT + 6); r.ring:SetPoint('CENTER', r.face, 'CENTER'); r.ring:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], K.rim[4])
+  -- sheet 108 v2: elite and rare get the game's own dragon behind the portrait's top-left (gold, silver)
+  r.drag = r:CreateTexture(nil, 'ARTWORK', nil, 0); r.drag:SetSize(PORT * .75, PORT * .75); r.drag:SetPoint('CENTER', r.face, 'TOPLEFT', 2, -2); r.drag:Hide()
+  -- and the mob's level in a small bronze-rimmed disc on the portrait's lower left, like the target frame's
+  r.lvlBg = r:CreateTexture(nil, 'OVERLAY', nil, 4); r.lvlBg:SetTexture(K.ART .. 'rings\\mask_disc', nil, nil, 'TRILINEAR')
+  r.lvlBg:SetVertexColor(.07, .05, .02, 1); r.lvlBg:SetSize(16, 16); r.lvlBg:SetPoint('CENTER', r.face, 'BOTTOMLEFT', 3, 3)
+  r.lvlRim = r:CreateTexture(nil, 'OVERLAY', nil, 5); r.lvlRim:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR')
+  r.lvlRim:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], 1); r.lvlRim:SetSize(19, 19); r.lvlRim:SetPoint('CENTER', r.lvlBg, 'CENTER')
+  r.lvl = r:CreateFontString(nil, 'OVERLAY'); r.lvl:SetFont(K.font, 9, 'OUTLINE'); r.lvl:SetPoint('CENTER', r.lvlBg, 'CENTER', 0, 0)
+  r.lvl:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3])
+  -- your demon's mark (its own icon) on the portrait's lower right; the mob's raid mark at the end of its name line
   r.pet = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.pet:SetSize(20, 20); r.pet:SetPoint('CENTER', r.face, 'BOTTOMRIGHT', -1, 1); r.pet:Hide()
   local pm = r:CreateMaskTexture(); pm:SetTexture(K.ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); pm:SetAllPoints(r.pet); r.pet:AddMaskTexture(pm)
   r.petRim = r:CreateTexture(nil, 'OVERLAY', nil, 3); r.petRim:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR'); r.petRim:SetSize(25, 25)
   r.petRim:SetPoint('CENTER', r.pet, 'CENTER'); r.petRim:SetVertexColor(.89, .82, 1); r.petRim:Hide()   -- a bright rim so it reads on the dark row
-  r.mark = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.mark:SetSize(13, 13); r.mark:SetPoint('CENTER', r.face, 'BOTTOMLEFT', 2, 2)
-  r.mark:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcons'); r.mark:Hide()
+  r.mark = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.mark:SetSize(13, 13)
+  r.mark:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcons'); r.mark:Hide()   -- placed with the bar (below)
   -- OmaDoomed's skull on the portrait's top edge (the target frame's trick: a long bar 0..health filled with your
   -- DoTs' damage; the skull rides its end and reaches the little window only when the damage covers the health)
   local SW, SH = PORT * .78, PORT * .78 * 54 / 78
@@ -103,9 +118,12 @@ local function newRow(k)
   local tx = PADX + PORT + GAPP
   local blk = NAME + 3 + BARH
   r.bar = CreateFrame('StatusBar', nil, r)
-  r.bar:SetSize(BAR - 4, BARH - 6); r.bar:SetPoint('TOPLEFT', r, 'TOPLEFT', tx + 2, -(ROW / 2 - blk / 2 + NAME + 3 + 3))
+  r.bar:SetSize(barW() - 4, BARH - 6); r.bar:SetPoint('TOPLEFT', r, 'TOPLEFT', tx + 2, -(ROW / 2 - blk / 2 + NAME + 3 + 3))
   r.bar:SetStatusBarTexture(K.statusbar); r.bar:SetStatusBarColor(K.healthRed[1], K.healthRed[2], K.healthRed[3])
   r.bar:SetMinMaxValues(0, 1); r.bar:SetValue(1)
+  -- sheet 108 v2 ("warm glow per each threat level ON THE BAR it belongs to"): the threat swell sits around the bar
+  r.glow:ClearAllPoints(); r.glow:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -26, 16); r.glow:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 26, -16)
+  r.mark:SetPoint('BOTTOMRIGHT', r.bar, 'TOPRIGHT', 1, 4)
   local empty = r.bar:CreateTexture(nil, 'BACKGROUND', nil, -1); empty:SetPoint('TOPLEFT', -1, 1); empty:SetPoint('BOTTOMRIGHT', 1, -1); empty:SetColorTexture(K.empty[1], K.empty[2], K.empty[3], 1)
   r.frameArt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 2); r.frameArt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.frameArt, K.plateFrame)
   r.frameArt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -2, 3); r.frameArt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 2, -3)
@@ -117,19 +135,19 @@ local function newRow(k)
   r.bite:SetVertexColor(1, .93, .8); r.bite:SetBlendMode('ADD'); r.bite:SetAlpha(0)
   r.dmg, r.nd = false, false
   -- the mob's cast: a thin line under its bar, red when you can interrupt it (Spell Lock), grey when you can't
-  r.cast = CreateFrame('StatusBar', nil, r); r.cast:SetSize(BAR - 4, 3); r.cast:SetPoint('TOPLEFT', r.bar, 'BOTTOMLEFT', 0, -3)
+  r.cast = CreateFrame('StatusBar', nil, r); r.cast:SetSize(barW() - 4, 3); r.cast:SetPoint('TOPLEFT', r.bar, 'BOTTOMLEFT', 0, -3)
   r.cast:SetStatusBarTexture(K.statusbar); r.cast:SetMinMaxValues(0, 1); r.cast:SetValue(0); r.cast:Hide()
   local cb = r.cast:CreateTexture(nil, 'BACKGROUND'); cb:SetAllPoints(); cb:SetColorTexture(0, 0, 0, .7)
   r.name = r:CreateFontString(nil, 'OVERLAY'); r.name:SetFont(K.font, NAME, 'OUTLINE')
-  r.name:SetTextColor(1, 1, 1); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
-  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 6); r.name:SetWidth(BAR); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
+  r.name:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3]); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
+  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 5); r.name:SetWidth(barW() - 16); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
   -- shields and anti-magic: only while the mob has one (HELPFUL|IMPORTANT, what the game itself flags)
   local ok, buffs = pcall(CreateFrame, 'AuraContainer', nil, r, 'CustomAuraContainerTemplate')
   if ok and buffs then
     pcall(buffs.SetEditModePreviewEnabled, buffs, false)
     buffs:SetFlowLayoutAnchorPoint('LEFT'); buffs:SetFlowLayoutGrowthDirection(1, 1); buffs:SetFlowLayoutMaximumLineSize(BUFF * 2.5)
     local okG = pcall(buffs.AddAuraGroup, buffs, 'buffs', 'HELPFUL|IMPORTANT|INCLUDE_NAME_PLATE_ONLY', { initializeFrame = R.buffButton(BUFF), maxFrameCount = 2, layout = { groupSpacing = 4 } })
-    if okG then r.buffs = buffs; buffs:SetPoint('LEFT', r, 'LEFT', tx + BAR + GAPR + seatWidth() + 6, 0); buffs:SetUnit(r.unit) end
+    if okG then r.buffs = buffs; buffs:SetPoint('LEFT', r.face, 'TOPRIGHT', -BUFF * .6, -2); buffs:SetFrameLevel(r:GetFrameLevel() + 7); buffs:SetUnit(r.unit) end
   end
   -- Display only (2026-11-16, measured: Forever refuses every add-on route to a mob through its nameplate token:
   -- click to target, cast at it, mouseover macro, hover-as-mouseover; DECISIONS.md). The row itself takes the mouse
@@ -227,8 +245,29 @@ local function threatLook(r, e)
   else
     M.stop('thr' .. r.k)
     M.tween('thr' .. r.k, r.glow:GetAlpha(), 0, .4, function(v) r.glow:SetAlpha(v) end)
-    r.ring:SetVertexColor(0, 0, 0, .9)
+    r.ring:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], K.rim[4])
   end
+end
+-- sheet 108 v2: elite gold dragon and gold bar trim, rare silver, rare elite silver with a gold trim; level on the disc
+local CLASS_LOOK = {
+  elite = { tex = 'elite', trim = { 1, .84, .38 }, name = { 1, .86, .3 } },
+  worldboss = { tex = 'elite', trim = { 1, .84, .38 }, name = { 1, .86, .3 } },
+  rareelite = { tex = 'rareElite', trim = { 1, .9, .55 }, name = { .92, .95, 1 } },
+  rare = { tex = 'rareElite', trim = { .82, .88, 1 }, name = { .92, .95, 1 } },
+}
+local function classLook(r)
+  local ok, c = pcall(UnitClassification, r.unit)
+  local look = ok and plainV(c) and CLASS_LOOK[c] or nil
+  if look then
+    if r.drag.tex ~= look.tex then r.drag.tex = look.tex; r.drag:SetTexture(K[look.tex]); r.drag:SetTexCoord(1, 0, 0, 1) end
+    r.drag:Show(); r.frameArt:SetVertexColor(look.trim[1], look.trim[2], look.trim[3]); r.name:SetTextColor(look.name[1], look.name[2], look.name[3])
+  else
+    r.drag:Hide(); r.frameArt:SetVertexColor(1, 1, 1); r.name:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3])
+  end
+end
+local function levelLook(r)
+  local ok, lv = pcall(UnitLevel, r.unit)
+  if ok and plainV(lv) and type(lv) == 'number' then r.lvl:SetText(lv < 0 and '??' or tostring(lv)) else r.lvl:SetText('') end
 end
 -- your demon's own spell icon (sheet 86, "demon mark is great"): crisp game art, not a 20 px face
 local DEMON_ICON = {
@@ -257,7 +296,7 @@ local function fill(r, e)
   pcall(SetPortraitTexture, r.face, r.unit); pcall(SetPortraitTexture, r.lift, r.unit)
   health(r); skull(r, e)   -- the kill bar paints on DOTS and when the row appears (not five times a second)
   r.tgt:SetShown(e.target == true)
-  threatLook(r, e); petLook(r, e); markLook(r, e)
+  threatLook(r, e); petLook(r, e); markLook(r, e); classLook(r); levelLook(r)
   local a = (db.range ~= false and e.far) and .5 or 1
   if r.wantA ~= a then r.wantA = a; M.tween('a' .. r.k, r:GetAlpha(), a, .25, function(v) r:SetAlpha(v) end) end
 end
@@ -409,6 +448,27 @@ local function resetPlace()
   header:ClearAllPoints(); header:SetScale(1); header:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -40, -330); placeClicks()
 end
 L.resetPlace = resetPlace
+-- /omadoomed list snap (sheet 108 v2, 2026-11-17: "pushing it right to the edge and its still not fully in line with
+-- my damage meter"): once, the list's top-right goes 3 px under the bottom-right of Details' first window and its
+-- size matches the meter's width. A saved place like any drag: no live link to Details (which hides when solo).
+function L.snap()
+  if InCombatLockdown() or not header then say('the list can be lined up after this fight.'); return false end
+  local d = _G.DetailsBaseFrame1
+  local okR, right = pcall(function() return d and d:GetRight() end)
+  local okB, bottom = pcall(function() return d and d:GetBottom() end)
+  local okW, dw = pcall(function() return d and d:GetWidth() end)
+  if not (okR and okB and okW and type(right) == 'number' and type(bottom) == 'number' and type(dw) == 'number') then
+    say("Details' window isn't up. Open it (/details show), then /omadoomed list snap again."); return false
+  end
+  local ds, ls = d:GetEffectiveScale(), header:GetEffectiveScale() / header:GetScale()
+  local s = (dw * ds) / (width() * ls)                       -- the list's scale that makes it the meter's width
+  db.scale = math.floor(s * 100 + .5); header:SetScale(db.scale / 100)
+  local e = header:GetEffectiveScale()
+  header:ClearAllPoints(); header:SetPoint('TOPRIGHT', UIParent, 'BOTTOMLEFT', right * ds / e, (bottom * ds - 3) / e)
+  savePos(); placeClicks()
+  say(('lined up under your damage meter (%d%% size). Drag it to move it again.'):format(db.scale))
+  return true
+end
 local function buildEditMode()
   sel = CreateFrame('Frame', nil, header)
   sel:SetPoint('TOPLEFT', header, 'TOPLEFT', -6, 2); sel:SetWidth(width() + 12); sel:SetHeight(PADY * 2 + ROW * 3)
@@ -476,6 +536,7 @@ function L.menu(owner)
     MenuUtil.CreateContextMenu(owner, function(_, root)
       root:CreateTitle('Mob list')
       if db.unlocked or (sel and sel:IsShown()) then root:CreateButton('Lock in place', lock) else root:CreateButton('Unlock to move', free) end
+      root:CreateButton('Line up under the damage meter', function() L.snap() end)
       root:CreateButton('Reset to default', reset)
     end)
   else lock() end   -- no menu in this client: right-click locks, as before
@@ -486,7 +547,8 @@ local function placeSeats(r)
   local p = r.pair; if not p then return end
   local sw = seatWidth(); local k = RING / R.S
   p.anchor:SetScale(k); p.anchor:ClearAllPoints(); p.anchor:SetSize(sw / k, 1)
-  p.anchor:SetPoint('BOTTOM', r, 'BOTTOMLEFT', (PADX + PORT + GAPP + BAR + GAPR + sw / 2) / k, ((ROW - RING) / 2) / k)
+  -- sheet 108 v2: the seats end at the list's right edge, so the rings line up with the meter above
+  p.anchor:SetPoint('BOTTOM', r, 'BOTTOMLEFT', (width() - PADX - sw / 2) / k, ((ROW - RING) / 2) / k)
 end
 local builder
 local function buildPairs()
@@ -508,7 +570,7 @@ local function relayout()
   if InCombatLockdown() or not header then return end
   header:SetSize(width(), PADY * 2 + ROW * (db.rows or 8))
   back:SetWidth(width() + 48)
-  for k = 1, TOKENS do local r = rows[k]; if r then r:SetWidth(width()); placeSeats(r) end end
+  for k = 1, TOKENS do local r = rows[k]; if r then r:SetWidth(width()); r.bar:SetWidth(barW() - 4); r.cast:SetWidth(barW() - 4); r.name:SetWidth(barW() - 16); placeSeats(r) end end
   if sel then sel:SetWidth(width() + 12) end
   pack(true)
 end
@@ -693,7 +755,7 @@ local function fakeParts(r)
   local spots = R.seatSpots()
   for key, i in pairs(spots) do
     local w = fakeRing(r, key)
-    w:SetPoint('CENTER', r, 'LEFT', PADX + PORT + GAPP + BAR + GAPR + (i - .5) * RING + (i - 1) * RINGGAP, 0)
+    w:SetPoint('CENTER', r, 'LEFT', PADX + PORT + GAPP + barW() + GAPR + (i - .5) * RING + (i - 1) * RINGGAP, 0)
     fk.rings[key] = w
   end
   for i = 1, 3 do local t = r.bar:CreateTexture(nil, 'ARTWORK', nil, 2); t:SetTexture(K.statusbar); fk.pieces[i] = t end
@@ -714,7 +776,7 @@ end
 -- the kill pieces: your DoTs' damage left, laid back from the health's end (the one ending first nearest the green)
 local ORDER = { 'corruption', 'agony', 'immolate' }
 local function fakePieces(r, d, dmg)
-  local bw = BAR - 4
+  local bw = barW() - 4
   local x = d.hp / d.max * bw
   for i, key in ipairs(ORDER) do
     local t, amt = r.fk.pieces[i], dmg[key] or 0
@@ -840,6 +902,7 @@ function L.slash(msg)
     end
   elseif cmd == 'unlock' or cmd == 'move' then unlock(true); say('drag the list anywhere; mouse wheel or the corner grip sizes it; right-click it when done.')
   elseif cmd == 'lock' then unlock(false); say('list locked: it shows in fights.')
+  elseif cmd == 'snap' then L.snap()
   elseif cmd == 'rows' then
     local n = tonumber(arg); if n then db.rows = math.max(4, math.min(TOKENS, n)); relayout(); say(('the list shows up to %d mobs.'):format(db.rows)) end
   elseif cmd == 'reset' then

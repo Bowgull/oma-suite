@@ -47,6 +47,55 @@ local function mob(W, F, k, name, o) local u = F.mob('nameplate' .. k, 'C-' .. k
 local function shownRows(ns) local t = {}; for k = 1, 16 do if ns.moblist.rows[k].shown then t[#t + 1] = k end end; return table.concat(t, ',') end
 
 return {
+  ['list: snap lines it up under the Details window, same width, 3 px below; no Details, it says so'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    _G.DetailsBaseFrame1 = nil
+    T.eq(L.snap(), false, 'no Details window: nothing moves')
+    local d = CreateFrame('Frame', 'DetailsBaseFrame1', UIParent)
+    d.GetRight = function() return 1913 end; d.GetBottom = function() return 574 end; d.GetWidth = function() return 348 end
+    T.eq(L.snap(), true, 'lined up')
+    T.eq(OmaDoomedDB.list.scale, 100, 'same width: full size')
+    local p = rawget(_G.OmaDoomedList, '_pts').TOPRIGHT
+    T.eq(p[3], 1913, 'right edges match'); T.eq(p[4], 571, '3 px under the meter')
+    _G.DetailsBaseFrame1 = nil
+    noErrors(T)
+  end,
+  ["list (sheet 108 v2): exactly the meter's 348 px, rings end at the right edge, nothing reserved past them"] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    T.eq(L.width(), 348, 'as wide as his Details meter')
+    mob(W, F, 1, 'Raptor'); pump(); W.advance(.5)
+    local r = L.rows[1]
+    T.eq(r:GetWidth(), 348, 'each row too')
+    local pts = rawget(r.pair.anchor, '_pts').BOTTOM
+    local k = r.pair.anchor:GetScale()
+    local sw = select(2, ns.rings.seatSpots()) * 30 + (select(2, ns.rings.seatSpots()) - 1) * 4
+    T.eq(math.floor(pts[3] * k + sw / 2 + .5), 348 - 6, 'the seats end 6 px from the right edge')
+    T.eq(r.bar:GetWidth(), 348 - (12 + 40 + 6 + 6 + sw) - 4, 'the bar takes what the seats leave')
+    noErrors(T)
+  end,
+  ['list (sheet 108 v2): bronze rim, gold name, level disc; elite gets the gold dragon and trim, rare the silver'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    mob(W, F, 1, 'Raptor', { level = 19 }); mob(W, F, 2, 'Druid of the Fang', { level = 20, class = 'elite' }); mob(W, F, 3, 'Gruff', { level = 21, class = 'rare' })
+    pump(); W.advance(.5)
+    local a, b, c = L.rows[1], L.rows[2], L.rows[3]
+    local rr, rg, rb = a.ring:GetVertexColor(); T.ok(rr > .5 and rb < .3, 'a calm mob: bronze rim, not black')
+    T.eq(a.lvl:GetText(), '19', 'its level on the disc')
+    T.ok(not a.drag:IsShown(), 'a normal mob: no dragon')
+    T.ok(b.drag:IsShown(), 'an elite: the dragon'); T.eq(b.drag.tex, 'elite', "the game's gold dragon")
+    local tr, tg, tb = b.frameArt:GetVertexColor(); T.ok(tr == 1 and tb < .5, 'its bar trimmed gold')
+    T.ok(c.drag:IsShown() and c.drag.tex == 'rareElite', 'a rare: the silver dragon')
+    noErrors(T)
+  end,
+  ['list (sheet 108 v2): the threat glow sits on the bar it belongs to'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local r = ns.moblist.rows[1]
+    local pts = rawget(r.glow, '_pts')
+    T.eq(pts.TOPLEFT[1], r.bar, 'anchored to the health bar'); T.eq(pts.BOTTOMRIGHT[1], r.bar)
+    noErrors(T)
+  end,
   ['list: its seats take the mouse for their tooltips; the rings over enemies stay click-through'] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist
