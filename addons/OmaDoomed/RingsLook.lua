@@ -659,8 +659,11 @@ R.textOpts = textOpts
 function R.numFmt() return NUM_FMT end
 R.CAST_SLOT = 30                   -- the target's cast bar, in its fixed spot right under the bars (Blizzard's squares hidden)
 R.ODEB_FILTER = 'HARMFUL|!PLAYER|!CROWD_CONTROL|INCLUDE_NAME_PLATE_ONLY'
--- other warlocks' DoTs keep their faint rings (the 'others' group): the squares leave them out
+-- As rings: other warlocks' DoTs keep their faint rings (the 'others' group), so the squares leave them out.
+-- Team row only (the default since 2026-11-17): no rings of theirs, so the squares take them in.
 function R.odebFilters()
+  local d = R.db or (ns.db and ns.db.rings)
+  if not (d and d.othersMode == 'rings') then return {} end
   local ex = {}
   for _, sp in ipairs(SPELLS) do idSet(sp, ex) end
   return { excludeSpellIDs = ex }

@@ -49,12 +49,15 @@ ns.settings = Core.NewSettings({
     -- 2026-11-13 (Joshua: "a toggle to show other enemies Dots like this or just track it regularly with the blizz default"):
     -- one toggle replaces 'Blizzard's squares'. As rings: theirs are faint rings, Blizzard's debuff squares on mobs go.
     -- Blizzard default: OmaDoomed draws only yours; Blizzard's squares stay as Blizzard draws them.
-    { key = 'othersMode', store = R, default = 'rings', control = 'dropdown', label = "Other players' DoTs",
-      choices = { { 'rings', 'As rings' }, { 'blizzard', 'Blizzard default' } },
-      tip = "Other players' DoTs on the enemies you fight:\n|cffffd100As rings:|r faint rings beside yours, and Blizzard's debuff squares on mobs are hidden.\n|cffffd100Blizzard default:|r OmaDoomed shows only your DoTs; Blizzard's own squares stay just as Blizzard draws them." },
+    -- 2026-11-17 (Joshua: "if theres a warlock slot then omadoomed other players dots smaller rings needs to be taken
+    -- out", then "Remove everywhere"): 'Team row only' is the default. The team row under the target frame has a line
+    -- per class, warlocks included; on other mobs their DoTs join the small squares beside the health bar.
+    { key = 'othersMode', store = R, default = 'team', control = 'dropdown', label = "Other players' DoTs",
+      choices = { { 'team', 'Team row only' }, { 'rings', 'As rings' }, { 'blizzard', 'Blizzard default' } },
+      tip = "Other players' DoTs on the enemies you fight:\n|cffffd100Team row only:|r no rings of theirs. On your target they're in the team row under its frame; on other enemies they're in the small squares beside the health bar.\n|cffffd100As rings:|r faint rings beside yours, and Blizzard's debuff squares on mobs are hidden.\n|cffffd100Blizzard default:|r OmaDoomed shows only your DoTs; Blizzard's own squares stay just as Blizzard draws them. Takes a /reload." },
     { key = 'othersAlpha', store = R, default = 55, control = 'slider', label = "Their rings' strength", min = 10, max = 100, step = 5, format = pct,
       tip = "How solid other players' rings are, when they show as rings. A new strength shows after a /reload." },
-    { key = 'others', store = R, default = true },    -- /omadoomed rings others on|off
+    { key = 'others', store = R, default = false },   -- /omadoomed rings others on|off (follows othersMode at login)
     { key = 'recast', default = true, control = 'check', label = 'Recast light',
       tip = "A ring lights up and breathes in its DoT's colour when it's time to start the recast: a DoT with a cast time at that cast time (plus a moment for lag), an instant in its last 1.5 seconds. Off: rings use 'Ending soon' instead." },
     -- sheet 83, part 2: the two sheet-78 parts get their own switches
@@ -163,6 +166,14 @@ ns.MIGRATIONS = {
     end
     r.squares = r.othersMode == 'blizzard' and 'all' or 'notmine'
     if r.othersAlpha == 0 then r.othersAlpha = 55 end
+  end,
+  -- 5: other players' rings go (2026-11-17, "Remove everywhere"): 'As rings' becomes 'Team row only' once; a later
+  -- choice of 'As rings' in options is kept
+  function(db)
+    local r = db.rings; if type(r) ~= 'table' then return end
+    if r.othersMode == nil or r.othersMode == 'rings' then r.othersMode = 'team' end
+    r.others = r.othersMode == 'rings'
+    r.squares = r.othersMode == 'blizzard' and 'all' or 'notmine'
   end,
 }
 

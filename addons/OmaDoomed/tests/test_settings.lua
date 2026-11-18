@@ -112,9 +112,17 @@ return {
     local ns = setup(W, { before = function() OmaDoomedDB = { v = 3, rings = { squares = 'all' } } end })
     T.eq(OmaDoomedDB.rings.othersMode, 'blizzard'); T.eq(OmaDoomedDB.rings.squares, 'all')
   end,
-  ['upgrade: default squares stay As rings (migration 4)'] = function(W, T)
+  ['upgrade: default squares become As rings (4), then Team row only (5)'] = function(W, T)
     local ns = setup(W, { before = function() OmaDoomedDB = { v = 3, rings = { squares = 'notmine', othersAlpha = 40 } } end })
-    T.eq(OmaDoomedDB.rings.othersMode, 'rings'); T.eq(OmaDoomedDB.rings.squares, 'notmine'); T.eq(OmaDoomedDB.rings.othersAlpha, 40)
+    T.eq(OmaDoomedDB.rings.othersMode, 'team'); T.eq(OmaDoomedDB.rings.others, false); T.eq(OmaDoomedDB.rings.squares, 'notmine'); T.eq(OmaDoomedDB.rings.othersAlpha, 40)
+  end,
+  ['upgrade 5: As rings becomes Team row only once; Blizzard default stays'] = function(W, T)
+    setup(W, { before = function() OmaDoomedDB = { v = 4, rings = { othersMode = 'rings', others = true, squares = 'notmine' } } end })
+    T.eq(OmaDoomedDB.v, 5); T.eq(OmaDoomedDB.rings.othersMode, 'team'); T.eq(OmaDoomedDB.rings.others, false)
+  end,
+  ['upgrade 5: Blizzard default is left alone'] = function(W, T)
+    setup(W, { before = function() OmaDoomedDB = { v = 4, rings = { othersMode = 'blizzard', others = false, squares = 'all' } } end })
+    T.eq(OmaDoomedDB.rings.othersMode, 'blizzard'); T.eq(OmaDoomedDB.rings.squares, 'all')
   end,
 
   ['upgrade: debug leftovers and Does It Die look settings are removed, learned ticks and settings kept'] = function(W, T)
@@ -126,7 +134,7 @@ return {
           plateFillOpacity = 40, skullIcon = 'cross', focusOutlineColor = 'gold', nameplateMode = 'markerIcon', waitFirstTick = 'off' } }
     end })
     local db = OmaDoomedDB
-    T.eq(db.v, 4, 'saved-data version 4')
+    T.eq(db.v, 5, 'saved-data version 5')
     T.eq(db.tfdump, nil, 'the target-frame debug dump is gone'); T.eq(db.plateGeo, nil)
     T.eq(#db.errs, 20, 'the error list keeps its newest 20'); T.eq(db.errs[20], 'old error 30'); T.eq(db.errs[1], 'old error 11')
     T.eq(db.track.ticks[172], 16.3, 'learned tick sizes kept'); T.eq(db.track.tickWeights[172], 29); T.eq(db.track.omaRatio.Corruption, 1.09)
