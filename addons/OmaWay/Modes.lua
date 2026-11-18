@@ -124,6 +124,30 @@ SlashCmdList.OMAWAY = function(msg)
     m = m or (H and H:GetPlayerZone())
     if m and x then ns.setWaypoint(m, x + .03, y - .03, { title = 'OmaWay test', from = 'OmaWay' }); ns.say('a test waypoint a little north-east of you.')
     else ns.say("the game won't say where you are here (inside a dungeon?).") end
+  elseif cmd == 'icons' then
+    -- every step type's icon, drawn by the game itself at 64 px on a black board, for the mockups (2026-11-18: "make
+    -- sure you're using the right icons for each step"). Run again to close.
+    if Mo.board then Mo.board:SetShown(not Mo.board:IsShown()); return end
+    local L = {
+      { 'Fly to', 'Interface\\GossipFrame\\TaxiGossipIcon' }, { 'Get flight point', 'Interface\\AddOns\\Guidelime\\Icons\\getflightpoint' },
+      { 'Accept', 'Interface\\GossipFrame\\AvailableQuestIcon' }, { 'Turn in', 'Interface\\GossipFrame\\ActiveQuestIcon' },
+      { 'Turn in (not done)', 'Interface\\GossipFrame\\IncompleteQuestIcon' }, { 'Complete', 'Interface\\GossipFrame\\WorkOrderGossipIcon' },
+      { 'Kill', 'Interface\\GossipFrame\\BattleMasterGossipIcon' }, { 'Talk to', 'Interface\\GossipFrame\\ChatBubbleGossipIcon' },
+      { 'Buy / collect', 'Interface\\GossipFrame\\VendorGossipIcon' }, { 'Use object', 'Interface\\GossipFrame\\BinderGossipIcon' },
+      { 'Train', 'Interface\\GossipFrame\\TrainerGossipIcon' }, { 'Set hearth', 'Interface\\AddOns\\Guidelime\\Icons\\set_hearth' },
+      { 'Hearth to', 'Interface\\AddOns\\Guidelime\\Icons\\hearth' }, { 'Repair', 'Interface\\AddOns\\Guidelime\\Icons\\repair' },
+      { 'Zeppelin', 'Interface\\Icons\\INV_Misc_Bomb_08' }, { 'Boat', 'Interface\\Icons\\Spell_Frost_SummonWaterElemental' },
+      { 'Go to', 'Interface\\Minimap\\Tracking\\None' }, { 'Note', 'Interface\\Icons\\INV_Misc_Note_01' },
+    }
+    local b = CreateFrame('Frame', 'OmaWayIconBoard', UIParent); Mo.board = b
+    b:SetSize(6 * 150, 3 * 110); b:SetPoint('CENTER'); b:SetFrameStrata('FULLSCREEN_DIALOG')
+    local bg = b:CreateTexture(nil, 'BACKGROUND'); bg:SetAllPoints(); bg:SetColorTexture(0, 0, 0, 1)
+    for i, e in ipairs(L) do
+      local c, r = (i - 1) % 6, math.floor((i - 1) / 6)
+      local t = b:CreateTexture(nil, 'ARTWORK'); t:SetSize(64, 64); t:SetPoint('TOPLEFT', b, 'TOPLEFT', c * 150 + 43, -(r * 110 + 10)); t:SetTexture(e[2])
+      local f = b:CreateFontString(nil, 'OVERLAY'); f:SetFont(STANDARD_TEXT_FONT, 12, ''); f:SetPoint('TOP', t, 'BOTTOM', 0, -4); f:SetText(e[1])
+    end
+    ns.say('icon board shown in the middle of the screen. /omaway icons again to close it.')
   elseif cmd == 'clear' then ns.clearWaypoint(); ns.say('waypoint cleared.')
   elseif cmd == 'why' then
     -- what OmaWay sees, in chat (2026-11-17: "i dont see the arrow or guide at all")
