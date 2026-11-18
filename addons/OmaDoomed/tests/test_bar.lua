@@ -248,4 +248,29 @@ return {
     T.ok(slot(M, 'Corruption') ~= nil, 'the piece still drew')
     noErrors(T)
   end,
+  -- 2026-11-17 12:43 in game: Tick light Essence, a tick landed, the bar's height came back hidden mid-fight; the
+  -- particles did maths on it and the whole kill bar switched off for the session (the target frame lost its pieces)
+  ['a tick with Essence or Cinders light and a hidden bar size keeps the kill bar on'] = function(W, T)
+    for _, light in ipairs({ 'essence', 'cinders' }) do
+      local ns, F, UI, M, DOTS = setup(W)
+      ns.db.tick = light
+      local hb = TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar
+      hb._w, hb._h = 124, 12
+      DOTS[A] = { dot(W, 'Corruption', 47, 12) }
+      W.advance(1, FRAME)
+      local P = ns.parts.doomed
+      local w0, h0 = P.barSize()
+      T.eq(w0, 124, light .. ': real width read before the fight'); T.eq(h0, 12, light .. ': real height read')
+      hb._w, hb._h = W.secret(124), W.secret(12)    -- the fight hides the bar's size
+      DOTS[A][1].damage = 35                          -- a tick: a bite, so the light and its particles run
+      W.advance(6 * FRAME, FRAME)
+      T.ok(M.biteOf('Corruption'), light .. ': the bite is drawing')
+      T.ok(not P.off, light .. ': the kill bar is still on')
+      T.ok(not P.noParticles, light .. ': the particles kept going on the last real size')
+      local w1, h1 = P.barSize()
+      T.eq(w1, 124, light .. ': hidden width -> last real one'); T.eq(h1, 12, light .. ': hidden height -> last real one')
+      T.ok(slot(M, 'Corruption').ghost:IsShown(), light .. ': the bitten part is drawn')
+      noErrors(T)
+    end
+  end,
 }
