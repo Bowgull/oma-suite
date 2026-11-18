@@ -13,7 +13,7 @@ param(
   [switch]$WhatIf
 )
 $ErrorActionPreference = 'Stop'
-$src = Join-Path $PSScriptRoot 'OmaDemon'
+$src = Join-Path $PSScriptRoot '../addons/OmaDemon'
 $dst = Join-Path $Game 'OmaDemon'
 
 if (Get-Process -Name 'Wow*' -ErrorAction SilentlyContinue) { throw 'WoW is running. Quit it fully first.' }

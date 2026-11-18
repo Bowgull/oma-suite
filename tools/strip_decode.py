@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Decode the Omashu chat strip from a screenshot (test for the pixel strip; see OmaChat.lua).
-   python3 -I wow-addon/strip_decode.py shot.png
+   python3 -I tools/strip_decode.py shot.png
 Reads the bottom-left of the screen: 4x2-pixel blocks, magenta then cyan, then 6 bits per block."""
 import sys
 from PIL import Image
