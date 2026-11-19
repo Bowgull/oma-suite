@@ -21,6 +21,9 @@ K.sizeGripDown = 'Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down'
 -- our own soft shapes (Art\list_*.tga, white, tinted in game)
 K.listBack = ART .. 'list_back'        -- the one soft dark backing behind the whole list (9-slice, margins 48)
 K.rowGlow = ART .. 'list_rowglow'      -- a soft horizontal swell of light, rounded both ends (threat, hover)
+K.tgtFrame = ART .. 'list_tgtframe'   -- sheet 119 A: your target's gold frame round the whole row (Art\make_target_art.py)
+K.tgtGlow = ART .. 'list_tgtglow'     -- its soft glow, breathing
+K.tgtArrow = ART .. 'list_tgtarrow'   -- sheet 119 B: the gold arrow left of the face
 K.portraitRing = ART .. 'list_ring'    -- a thin ring round the portrait (threat rim)
 K.mark = ART .. 'doomed-mark'
 

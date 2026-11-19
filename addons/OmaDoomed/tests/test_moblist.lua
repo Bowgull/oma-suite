@@ -381,4 +381,27 @@ return {
     ns.model.listInto = real
     noErrors(T)
   end,
+  ['list (sheet 119 A + B): your target gets the gold frame, a breathing glow and a nudging arrow; calm holds them still'] = function(W, T)
+    local ns, F, UI = setup(W)
+    mob(W, F, 1, 'Raptor'); mob(W, F, 2, 'Druid of the Fang'); W.advance(.3)
+    local L = ns.moblist
+    local a, b = L.rows[1], L.rows[2]
+    local function tg(n) W.units.target = n and W.units['nameplate' .. n] or nil; W.fire('PLAYER_TARGET_CHANGED'); W.advance(.3) end
+    tg(2)
+    T.ok(not a.tgtFrame:IsShown() and not a.tgtArrow:IsShown(), 'not your target: nothing')
+    T.ok(b.tgtFrame:IsShown() and b.tgtGlow:IsShown() and b.tgtArrow:IsShown(), 'your target: frame, glow and arrow')
+    local tl, br = rawget(b.tgtFrame, '_pts').TOPLEFT, rawget(b.tgtFrame, '_pts').BOTTOMRIGHT
+    T.ok(tl[3] == -11 and tl[4] == 10 and br[3] == 11 and br[4] == -10, 'frame art spans the row plus 11 / 10 px (sheet 119 numbers)')
+    T.eq(b.tgtArrow:GetWidth(), 32, 'arrow art 32 px')
+    local seenA, seenX = {}, {}
+    for _ = 1, 40 do W.advance(.05); seenA[#seenA + 1] = b.tgtGlow:GetAlpha(); seenX[#seenX + 1] = rawget(b.tgtArrow, '_pts').TOPLEFT[3] end
+    T.ok(math.min(unpack(seenA)) < .5 and math.max(unpack(seenA)) > .9, 'the glow breathes (.35 .. 1)')
+    T.ok(math.min(unpack(seenX)) < -27 and math.max(unpack(seenX)) > -24, 'the arrow nudges 6 px left and back')
+    tg(1)
+    T.ok(not b.tgtFrame:IsShown() and a.tgtFrame:IsShown(), 'the mark follows your target')
+    T.eq(rawget(b.tgtArrow, '_pts').TOPLEFT[3], -23, 'the old row is put back at rest')
+    ns.db.calm = true; tg(nil); tg(1)
+    W.advance(.4); T.eq(a.tgtGlow:GetAlpha(), 1, 'calm motion: glow steady'); T.eq(rawget(a.tgtArrow, '_pts').TOPLEFT[3], -23, 'calm motion: arrow still')
+    noErrors(T)
+  end,
 }

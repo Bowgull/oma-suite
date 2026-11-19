@@ -53,7 +53,7 @@ local function texCoord(t, c) t:SetTexCoord(c[1], c[2], c[3], c[4]) end
 local function newRow(k)
   local r = CreateFrame('Frame', nil, header)
   r.k, r.unit, r.shown, r.pair = k, tok(k), false, false
-  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet, r.veilWin, r.markOn = false, false, false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
+  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet, r.veilWin, r.markOn, r.isTgt = false, false, false, false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
   r:SetSize(width(), ROW); r:Hide(); r:SetAlpha(0)
   -- threat: a soft swell of light behind the row, in Blizzard's threat colour, breathing (Motion)
   r.glow = r:CreateTexture(nil, 'BACKGROUND', nil, 2); r.glow:SetTexture(K.rowGlow, nil, nil, 'TRILINEAR')
@@ -82,6 +82,22 @@ local function newRow(k)
   r.lvlRim:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], 1); r.lvlRim:SetSize(19, 19); r.lvlRim:SetPoint('CENTER', r.lvlBg, 'CENTER')
   r.lvl = r:CreateFontString(nil, 'OVERLAY'); r.lvl:SetFont(K.font, 9, 'OUTLINE'); r.lvl:SetPoint('CENTER', r.lvlBg, 'CENTER', 0, 0)
   r.lvl:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3])
+  -- sheet 119 A + B (Joshua 2026-11-19: "A + B"): your target's row gets a gold frame round the whole row with a
+  -- breathing glow, and a gold arrow left of its face nudging in and out. Art and numbers: Art\make_target_art.py.
+  -- Frame and glow textures cover row-local x -11 .. 359, y -10 .. 54 (370 x 64 of a 512 x 64 texture) for a 348 x 44
+  -- row, so they sit at TOPLEFT (-11, +10) / BOTTOMRIGHT (+11, -10) and are 1:1 at the meter's width (a wider list
+  -- stretches only the straight edges' share). Line: rounded 1,1 .. 347,43, radius 8, 2 px. Below the level disc and
+  -- the demon mark (OVERLAY 4/5 and 2/3), as on the sheet.
+  r.tgtGlow = r:CreateTexture(nil, 'OVERLAY', nil, 0); r.tgtGlow:SetTexture(K.tgtGlow, nil, nil, 'TRILINEAR')
+  r.tgtFrame = r:CreateTexture(nil, 'OVERLAY', nil, 1); r.tgtFrame:SetTexture(K.tgtFrame, nil, nil, 'TRILINEAR')
+  for _, t in ipairs({ r.tgtGlow, r.tgtFrame }) do
+    t:SetTexCoord(0, 370 / 512, 0, 1); t:SetPoint('TOPLEFT', r, 'TOPLEFT', -11, 10); t:SetPoint('BOTTOMRIGHT', r, 'BOTTOMRIGHT', 11, -10)
+    t:SetVertexColor(K.nameGold[1], K.nameGold[2], K.nameGold[3]); t:Hide()
+  end
+  -- the arrow: 32 x 32 covering x -23 .. 9, y 6 .. 38; its tip at (2, 22), the row's middle, 2.6 px short of the
+  -- portrait ring (26 - 21.4). It nudges 6 px left and back every 1.1 s (the sheet's 1.6% of 372 px).
+  r.tgtArrow = r:CreateTexture(nil, 'OVERLAY', nil, 6); r.tgtArrow:SetTexture(K.tgtArrow, nil, nil, 'TRILINEAR')
+  r.tgtArrow:SetSize(32, 32); r.tgtArrow:SetPoint('TOPLEFT', r, 'TOPLEFT', -23, -6); r.tgtArrow:Hide()
   -- your demon's mark (its own icon) on the portrait's lower right; the mob's raid mark at the end of its name line
   r.pet = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.pet:SetSize(20, 20); r.pet:SetPoint('CENTER', r.face, 'BOTTOMRIGHT', -1, 1); r.pet:Hide()
   local pm = r:CreateMaskTexture(); pm:SetTexture(K.ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); pm:SetAllPoints(r.pet); r.pet:AddMaskTexture(pm)
@@ -314,11 +330,27 @@ local function markLook(r, e)
   else r.mark:Hide() end
 end
 
+-- sheet 119 A + B: frame, glow and arrow on your target's row. Glow breathes 1 -> .35 -> 1 over 1.6 s; arrow nudges
+-- 0 -> -6 px -> 0 over 1.1 s. 'Calm motion' holds both still (glow full, arrow at rest), as the Motion engine does.
+local function targetLook(r, on)
+  on = on == true
+  if r.isTgt == on then return end
+  r.isTgt = on
+  r.tgtGlow:SetShown(on); r.tgtFrame:SetShown(on); r.tgtArrow:SetShown(on)
+  if on then
+    M.breathe('tgtG' .. r.k, 1.6, .35, 1, function(v) r.tgtGlow:SetAlpha(v) end)
+    M.breathe('tgtB' .. r.k, 1.1, -6, 0, function(v) r.tgtArrow:SetPoint('TOPLEFT', r, 'TOPLEFT', -23 + v, -6) end)
+  else
+    M.stop('tgtG' .. r.k); M.stop('tgtB' .. r.k)
+    r.tgtGlow:SetAlpha(1); r.tgtArrow:SetPoint('TOPLEFT', r, 'TOPLEFT', -23, -6)
+  end
+end
+L.targetLook = targetLook
 local function fill(r, e)
   pcall(r.name.SetText, r.name, UnitName(r.unit))
   pcall(SetPortraitTexture, r.face, r.unit); pcall(SetPortraitTexture, r.lift, r.unit)
   health(r); skull(r, e)   -- the kill bar paints on DOTS and when the row appears (not five times a second)
-  r.tgt:SetShown(e.target == true)
+  r.tgt:SetShown(e.target == true); targetLook(r, e.target)
   threatLook(r, e); petLook(r, e); markLook(r, e); classLook(r); levelLook(r)
   local a = (db.range ~= false and e.far) and .5 or 1
   if r.wantA ~= a then r.wantA = a; M.tween('a' .. r.k, r:GetAlpha(), a, .25, function(v) r:SetAlpha(v) end) end
@@ -424,7 +456,7 @@ local function setShown(r, on)
     r:Show(); r.wantA = false; r.dmg, r.nd = false, false; killbar(r); pcall(castLook, r)
     M.tween('in' .. r.k, 12, 0, .22, function(v) r:SetPoint('TOPLEFT', header, 'TOPLEFT', v, r.y or slotY(slotOf[r.k] or r.k)) end, M.ease.out)
   else
-    M.stop('thr' .. r.k); r.lv = false
+    M.stop('thr' .. r.k); r.lv = false; targetLook(r, false)
     M.tween('a' .. r.k, r:GetAlpha(), 0, .2, function(v) r:SetAlpha(v) end, nil, function() if not r.shown then r:Hide() end end)
     r.wantA = 0
     killbar(r); pcall(castLook, r)
@@ -843,7 +875,7 @@ local function clearFake(r)
   if r.fk then for _, w in pairs(r.fk.rings) do w:Hide() end; for _, p2 in ipairs(r.fk.pieces) do p2:Hide() end end
   if r.pair then r.pair.anchor:Show() end
   if r.buffs then r.buffs:Show() end
-  r.cast:Hide(); r.tgt:Hide(); r.pet:Hide(); r.petRim:Hide(); r.mark:Hide(); r.skullWin:Hide()
+  r.cast:Hide(); r.tgt:Hide(); targetLook(r, false); r.pet:Hide(); r.petRim:Hide(); r.mark:Hide(); r.skullWin:Hide()
   M.stop('thr' .. r.k); r.lv = false; r.glow:SetAlpha(0); r.ring:SetVertexColor(0, 0, 0, .9)
   r.shown = false; r:Hide(); r:SetAlpha(0); r.wantA = false
 end
@@ -865,7 +897,7 @@ local function testOn(on, quiet)
     if r.buffs then r.buffs:Hide() end
     r.name:SetText(d.name); r.face:SetTexture(d.icon); r.lift:SetTexture(d.icon)
     r.bar:SetMinMaxValues(0, d.max); r.bar:SetValue(d.hp); r.hp:SetText(db.hp ~= false and tostring(d.hp) or '')
-    r.tgt:SetShown(d.target == true)
+    r.tgt:SetShown(d.target == true); targetLook(r, d.target)
     r.lv = false; threatLook(r, { threat = d.threat })
     if d.pet then
       if not (UnitExists('pet') and pcall(SetPortraitTexture, r.pet, 'pet')) then r.pet:SetTexture('Interface\\Icons\\Spell_Shadow_SummonImp') end
