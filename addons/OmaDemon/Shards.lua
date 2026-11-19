@@ -136,6 +136,27 @@ local function applyScale()   -- true when the size really changed
   if math.abs(root:GetScale() - s) < .001 then return false end
   root:SetScale(s); return true
 end
+local function plainNum(v) return type(v) == 'number' and not (issecretvalue and issecretvalue(v)) end
+-- the middle of your own health and mana bars, in screen pixels (nil when no bar can be read). Every name the game or
+-- a frame add-on may use is tried; only the bars that show count, and their left and right edges are joined.
+local function barsCentre()
+  local found, l, r = {}, nil, nil
+  local function try(get) local ok, f = pcall(get); if ok and type(f) == 'table' and f.GetLeft then found[#found + 1] = f end end
+  try(function() return PlayerFrame_GetHealthBar and PlayerFrame_GetHealthBar() end)
+  try(function() return PlayerFrame_GetManaBar and PlayerFrame_GetManaBar() end)
+  try(function() return PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.HealthBarsContainer.HealthBar end)
+  try(function() return PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.ManaBarArea.ManaBar end)
+  try(function() return PlayerFrame.healthbar end); try(function() return PlayerFrame.manabar end)
+  try(function() return _G.PlayerFrameHealthBar end); try(function() return _G.PlayerFrameManaBar end)
+  for _, f in ipairs(found) do
+    local ok, fl, fr, s, vis = pcall(function() return f:GetLeft(), f:GetRight(), f:GetEffectiveScale(), f:IsVisible() end)
+    if ok and vis and plainNum(fl) and plainNum(fr) and plainNum(s) and fr > fl then
+      fl, fr = fl * s, fr * s
+      l = (l and math.min(l, fl)) or fl; r = (r and math.max(r, fr)) or fr
+    end
+  end
+  if l then return (l + r) / 2 end
+end
 local function place()
   -- our own plain frame: fine to move and size in combat too (a pet summoned mid-fight)
   applyScale()
@@ -167,7 +188,18 @@ local function place()
       root:SetPoint('TOPLEFT', pet, 'BOTTOMLEFT', -3, 0); if db then db.placed = 'under pet' end
     end
   elseif holder and holder == _G.PlayerBottomManagedFrameContainer then
-    root:SetPoint('TOPLEFT', holder, 'TOPLEFT', 59, 0); if db then db.placed = 'under you' end
+    -- 2026-11-19 (measured on Joshua's 1080p screenshot, no demon): the old fixed +59 put the row's centre at x 212
+    -- while the player bars' centre is x 183, 29 px right and 23 px past the frame's edge. Now the row's centre sits
+    -- on the centre of your health and mana bars, read from the bars themselves in screen pixels, so it holds at any
+    -- UI scale, frame size or gem size. Same height as before (the top of the frame that holds the pet frame).
+    local bx = barsCentre()
+    local hl = pcall(holder.GetLeft, holder) and holder:GetLeft()
+    local rs = root:GetEffectiveScale()
+    if bx and plainNum(hl) and rs > 0 then
+      root:SetPoint('TOP', holder, 'TOPLEFT', (bx - hl * holder:GetEffectiveScale()) / rs, 0); if db then db.placed = 'under you, centred on your bars' end
+    else
+      root:SetPoint('TOPLEFT', holder, 'TOPLEFT', 59, 0); if db then db.placed = 'under you' end
+    end
   else
     root:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 232, -157); if db then db.placed = 'fixed, under you' end
   end
