@@ -40,7 +40,7 @@ local function seatWidth()
 end
 -- sheet 108 v2: exactly the Details meter's width (Layout.LIST.width). The health bar takes what the seats leave, so
 -- a new seat (Siphon Life at 30) narrows the bar instead of widening the list. Floor 96 px (2026-11-18, was 110: the
--- elite dragon's room, +20 px, leaves 348 - (12 + 40 + 26 + 6 + 5 x 30 + 4 x 4) = 98 px with five seats).
+-- elite dragon's room, +16 px, leaves 348 - (12 + 40 + 22 + 6 + 5 x 30 + 4 x 4) = 102 px with five seats).
 local BAR_MIN = 96
 local function barW() return math.max(BAR_MIN, (G.width or 0) * u - (2 * PADX + PORT + GAPP + GAPR + seatWidth())) end
 local function width() return 2 * PADX + PORT + GAPP + barW() + GAPR + seatWidth() end
@@ -130,14 +130,14 @@ local function newRow(k)
   local empty = r.bar:CreateTexture(nil, 'BACKGROUND', nil, -1); empty:SetPoint('TOPLEFT', -1, 1); empty:SetPoint('BOTTOMRIGHT', 1, -1); empty:SetColorTexture(K.empty[1], K.empty[2], K.empty[3], 1)
   r.frameArt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 2); r.frameArt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.frameArt, K.plateFrame)
   r.frameArt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -2, 3); r.frameArt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 2, -3)
-  -- the elite dragon, by measurement (2026-11-18). Art: Interface\Tooltips\EliteNameplateIcon is 64x32, the dragon
-  -- fills texels 0..37 x 0..28 (alpha > 40). Height = the framed bar's height (BARH 14 px), as in sheet 118's picture,
-  -- so 0.5 px a texel: 18.5 x 14. Its right edge touches the bar frame (1.5 px over it, like the nameplate's), its
-  -- middle on the bar's middle (29.5 px below the row top). Clearance, scanned row by row against the art's alpha:
-  -- the portrait ring (centre 26,22, outer radius 0.93 x 23 = 21.4) needs the dragon's left at >= 46.4; your demon's
-  -- mark (rim centre 45,41, radius 0.93 x 12.5 = 11.6) needs >= 54.4. Frame left = PADX + PORT + GAPP = 6 + 40 + 26
-  -- = 72, so the dragon spans 55..73.5: 1 px clear of the demon mark, 8 px clear of the ring.
-  r.drag:SetSize(37 * .5, 28 * .5); r.drag:SetPoint('RIGHT', r.frameArt, 'LEFT', 1.5, 0)
+  -- the elite dragon, by measurement (2026-11-18). Art: the nameplate's own 'nameplates-icon-elite-gold' (and silver),
+  -- 40 x 35 in the nameplate sheet; on his 08:59 screenshot the nameplate draws it 18 x 15 beside a 7 px bar. Here it is
+  -- the framed bar's height (BARH, 14 px; sheet 118's picture) and 14 x 40/35 = 16 wide. Its right edge 1.5 px over the
+  -- bar frame (as on the nameplate), its middle on the bar's middle (29.5 px below the row top). Clearance, scanned
+  -- row by row against the art's alpha: the portrait ring (centre 26,22, outer radius 0.93 x 23 = 21.4) needs the
+  -- dragon's left at >= 47.3; your demon's mark (rim centre 45,41, radius 0.93 x 12.5 = 11.6) needs >= 52.3. Frame
+  -- left = PADX + PORT + GAPP = 6 + 40 + 22 = 68, so the dragon spans 53.5..69.5: 1.2 px clear of the demon mark.
+  r.drag:SetSize(16, 14); r.drag:SetPoint('RIGHT', r.frameArt, 'LEFT', 1.5, 0)
   r.tgt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 3); r.tgt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.tgt, K.plateTarget)
   r.tgt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -4, 4); r.tgt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 4, -4); r.tgt:Hide()
   r.hp = r.bar:CreateFontString(nil, 'OVERLAY', nil, 7); r.hp:SetFont(K.font, 12, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
@@ -270,7 +270,13 @@ local function classLook(r)
   local ok, c = pcall(UnitClassification, r.unit)
   local look = ok and plainV(c) and CLASS_LOOK[c] or nil
   if look then
-    if r.drag.tex ~= look.tex then r.drag.tex = look.tex; r.drag:SetTexture(K[look.tex]); r.drag:SetTexCoord(0, 37 / 64, 0, 28 / 32) end
+    if r.drag.tex ~= look.tex then
+      r.drag.tex = look.tex
+      local at = K[look.tex .. 'Atlas']
+      local ok = at and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(at) ~= nil
+      if ok then r.drag:SetTexCoord(0, 1, 0, 1); r.drag:SetAtlas(at, false)
+      else r.drag:SetTexture(K[look.tex]); r.drag:SetTexCoord(0, 37 / 64, 0, 28 / 32) end   -- the tooltip icon: 37 x 28 of 64 x 32
+    end
     r.drag:Show(); r.frameArt:SetVertexColor(look.trim[1], look.trim[2], look.trim[3]); r.name:SetTextColor(look.name[1], look.name[2], look.name[3])
   else
     r.drag:Hide(); r.frameArt:SetVertexColor(1, 1, 1); r.name:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3])
@@ -297,7 +303,7 @@ local function petLook(r, e)
 end
 -- the name runs to 3 px before the first ring (left at bar - 1 = 73, rings at 72 + barW + 6), so barW + 2; with a
 -- raid mark at the line's end (13 px, on the bar's top-right) it stops short of it, barW - 16 (2026-11-18: the elite
--- dragon's room took 20 px from the bar, and "Evolving Ectoplasm" is 121 px)
+-- dragon's room took 16 px from the bar, and "Evolving Ectoplasm" is 121 px)
 local function nameW(r) return (r.markOn and barW() - 16) or barW() + 2 end
 local function markLook(r, e)
   local on = e.mark and true or false

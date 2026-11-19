@@ -36,6 +36,10 @@ K.rim = { .62, .46, .22, 1 }        -- sheet 108: the portrait's bronze rim when
 K.nameGold = { 1, .82, 0 }            -- Blizzard's own name gold (GameFontNormal)
 K.elite = 'Interface\\Tooltips\\EliteNameplateIcon'          -- the game's gold dragon
 K.rareElite = 'Interface\\Tooltips\\RareEliteNameplateIcon'  -- its silver one
+-- what the nameplate itself draws (2026-11-18, measured on his 08:59 screenshot: bright gold, 40 x 35 in the
+-- nameplate sheet); the tooltip icons above are the fallback if the atlas is missing
+K.eliteAtlas = 'nameplates-icon-elite-gold'
+K.rareEliteAtlas = 'nameplates-icon-elite-silver'
 K.threat = { [1] = { 1, .82, 0 }, [2] = { 1, .5, .02 }, [3] = { .95, .12, .12 } }
 -- how strong each threat level's breath is (its top; the bottom is a third of it)
 K.threatGlow = { [1] = .45, [2] = .65, [3] = .85 }

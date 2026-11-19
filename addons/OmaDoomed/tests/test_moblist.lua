@@ -85,14 +85,14 @@ return {
     local k = r.pair.anchor:GetScale()
     local sw = select(2, ns.rings.seatSpots()) * 30 + (select(2, ns.rings.seatSpots()) - 1) * 4
     T.eq(math.floor(pts[3] * k + sw / 2 + .5), 348 - 6, 'the seats end 6 px from the right edge')
-    T.eq(r.bar:GetWidth(), 348 - (12 + 40 + 26 + 6 + sw) - 4, 'the bar takes what the seats leave')
+    T.eq(r.bar:GetWidth(), 348 - (12 + 40 + 22 + 6 + sw) - 4, 'the bar takes what the seats leave')
     -- sheet 118 v6: the game's nameplate dragon, at the bar's height, touching the bar's left end, clear of the face
     mob(W, F, 2, 'Druid of the Fang', { class = 'elite' }); pump(); W.advance(.5)
     local d = L.rows[2].drag
-    T.eq(d:GetWidth(), 18.5, 'dragon 37 texels at half a pixel'); T.eq(d:GetHeight(), 14, 'as tall as the framed bar')
+    T.eq(d:GetWidth(), 16, 'the nameplate dragon, 40 x 35 art at 14 px'); T.eq(d:GetHeight(), 14, 'as tall as the framed bar')
     local dp = rawget(d, '_pts').RIGHT
     T.ok(dp[1] == L.rows[2].frameArt and dp[2] == 'LEFT' and dp[3] == 1.5 and dp[4] == 0, 'its right edge on the bar frame, 1.5 px over')
-    local tc = rawget(d, '_tc'); T.ok(tc[1] == 0 and tc[2] == 37 / 64 and tc[4] == 28 / 32, 'not mirrored: the nameplate way round')
+    T.eq(rawget(d, '_atlas'), 'nameplates-icon-elite-gold', "the nameplate's own art")
     noErrors(T)
   end,
   ['list (sheet 108 v2): bronze rim, gold name, level disc; elite gets the gold dragon and trim, rare the silver'] = function(W, T)
