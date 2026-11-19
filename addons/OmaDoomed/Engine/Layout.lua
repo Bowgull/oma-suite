@@ -23,7 +23,8 @@ Lt.LIST = {
   width = 174,       -- 348 px: the Details meter's width
   row = 22,          -- 44 px a row (even, so 1 px lines land on whole pixels)
   portrait = 20,     -- 40 px
-  gapPortrait = 3,   -- portrait -> name
+  gapPortrait = 13,  -- portrait -> name (sheet 118 v6, 2026-11-18: room for the elite dragon, see MobList's r.drag:
+                     -- 3 units + 10 so the dragon clears the portrait ring and the demon mark; 26 px)
   bar = 70,          -- 140 px
   barH = 7,          -- 14 px
   name = 6,          -- 12 px text

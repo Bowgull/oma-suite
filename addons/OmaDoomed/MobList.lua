@@ -39,8 +39,9 @@ local function seatWidth()
   return n * RING + (n - 1) * RINGGAP
 end
 -- sheet 108 v2: exactly the Details meter's width (Layout.LIST.width). The health bar takes what the seats leave, so
--- a new seat (Siphon Life at 30) narrows the bar instead of widening the list; never below 110 px.
-local BAR_MIN = 110
+-- a new seat (Siphon Life at 30) narrows the bar instead of widening the list. Floor 96 px (2026-11-18, was 110: the
+-- elite dragon's room, +20 px, leaves 348 - (12 + 40 + 26 + 6 + 5 x 30 + 4 x 4) = 98 px with five seats).
+local BAR_MIN = 96
 local function barW() return math.max(BAR_MIN, (G.width or 0) * u - (2 * PADX + PORT + GAPP + GAPR + seatWidth())) end
 local function width() return 2 * PADX + PORT + GAPP + barW() + GAPR + seatWidth() end
 L.barW = barW
@@ -70,8 +71,10 @@ local function newRow(k)
   r.lift = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.lift:SetAllPoints(r.face); r.lift:SetBlendMode('ADD'); r.lift:SetAlpha(.18); r.lift:AddMaskTexture(m)   -- a light touch (0.4 washed it out)
   r.ring = r:CreateTexture(nil, 'ARTWORK', nil, 3); r.ring:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR')
   r.ring:SetSize(PORT + 6, PORT + 6); r.ring:SetPoint('CENTER', r.face, 'CENTER'); r.ring:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], K.rim[4])
-  -- sheet 108 v2: elite and rare get the game's own dragon behind the portrait's top-left (gold, silver)
-  r.drag = r:CreateTexture(nil, 'ARTWORK', nil, 0); r.drag:SetSize(PORT * .75, PORT * .75); r.drag:SetPoint('CENTER', r.face, 'TOPLEFT', 2, -2); r.drag:Hide()
+  -- sheet 118 v6 (Joshua 2026-11-18: "i like the elite frame"): elite and rare get the game's own small nameplate
+  -- dragon (gold, silver) at the left end of the health bar, unmirrored, exactly where the nameplate puts it. Placed
+  -- with the bar (below); the numbers are there.
+  r.drag = r:CreateTexture(nil, 'ARTWORK', nil, 0); r.drag:Hide()
   -- and the mob's level in a small bronze-rimmed disc on the portrait's lower left, like the target frame's
   r.lvlBg = r:CreateTexture(nil, 'OVERLAY', nil, 4); r.lvlBg:SetTexture(K.ART .. 'rings\\mask_disc', nil, nil, 'TRILINEAR')
   r.lvlBg:SetVertexColor(.07, .05, .02, 1); r.lvlBg:SetSize(16, 16); r.lvlBg:SetPoint('CENTER', r.face, 'BOTTOMLEFT', 3, 3)
@@ -127,6 +130,14 @@ local function newRow(k)
   local empty = r.bar:CreateTexture(nil, 'BACKGROUND', nil, -1); empty:SetPoint('TOPLEFT', -1, 1); empty:SetPoint('BOTTOMRIGHT', 1, -1); empty:SetColorTexture(K.empty[1], K.empty[2], K.empty[3], 1)
   r.frameArt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 2); r.frameArt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.frameArt, K.plateFrame)
   r.frameArt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -2, 3); r.frameArt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 2, -3)
+  -- the elite dragon, by measurement (2026-11-18). Art: Interface\Tooltips\EliteNameplateIcon is 64x32, the dragon
+  -- fills texels 0..37 x 0..28 (alpha > 40). Height = the framed bar's height (BARH 14 px), as in sheet 118's picture,
+  -- so 0.5 px a texel: 18.5 x 14. Its right edge touches the bar frame (1.5 px over it, like the nameplate's), its
+  -- middle on the bar's middle (29.5 px below the row top). Clearance, scanned row by row against the art's alpha:
+  -- the portrait ring (centre 26,22, outer radius 0.93 x 23 = 21.4) needs the dragon's left at >= 46.4; your demon's
+  -- mark (rim centre 45,41, radius 0.93 x 12.5 = 11.6) needs >= 54.4. Frame left = PADX + PORT + GAPP = 6 + 40 + 26
+  -- = 72, so the dragon spans 55..73.5: 1 px clear of the demon mark, 8 px clear of the ring.
+  r.drag:SetSize(37 * .5, 28 * .5); r.drag:SetPoint('RIGHT', r.frameArt, 'LEFT', 1.5, 0)
   r.tgt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 3); r.tgt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.tgt, K.plateTarget)
   r.tgt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -4, 4); r.tgt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 4, -4); r.tgt:Hide()
   r.hp = r.bar:CreateFontString(nil, 'OVERLAY', nil, 7); r.hp:SetFont(K.font, 12, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
@@ -248,7 +259,7 @@ local function threatLook(r, e)
     r.ring:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], K.rim[4])
   end
 end
--- sheet 108 v2: elite gold dragon and gold bar trim, rare silver, rare elite silver with a gold trim; level on the disc
+-- sheet 108 v2 (dragon moved by sheet 118 v6): elite gold dragon and gold bar trim, rare silver, rare elite silver with a gold trim; level on the disc
 local CLASS_LOOK = {
   elite = { tex = 'elite', trim = { 1, .84, .38 }, name = { 1, .86, .3 } },
   worldboss = { tex = 'elite', trim = { 1, .84, .38 }, name = { 1, .86, .3 } },
@@ -259,7 +270,7 @@ local function classLook(r)
   local ok, c = pcall(UnitClassification, r.unit)
   local look = ok and plainV(c) and CLASS_LOOK[c] or nil
   if look then
-    if r.drag.tex ~= look.tex then r.drag.tex = look.tex; r.drag:SetTexture(K[look.tex]); r.drag:SetTexCoord(1, 0, 0, 1) end
+    if r.drag.tex ~= look.tex then r.drag.tex = look.tex; r.drag:SetTexture(K[look.tex]); r.drag:SetTexCoord(0, 37 / 64, 0, 28 / 32) end
     r.drag:Show(); r.frameArt:SetVertexColor(look.trim[1], look.trim[2], look.trim[3]); r.name:SetTextColor(look.name[1], look.name[2], look.name[3])
   else
     r.drag:Hide(); r.frameArt:SetVertexColor(1, 1, 1); r.name:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3])
