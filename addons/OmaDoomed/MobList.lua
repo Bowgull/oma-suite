@@ -282,9 +282,10 @@ local CLASS_LOOK = {
   rareelite = { tex = 'rareElite', trim = { 1, .9, .55 }, name = { .92, .95, 1 } },
   rare = { tex = 'rareElite', trim = { .82, .88, 1 }, name = { .92, .95, 1 } },
 }
-local function classLook(r)
-  local ok, c = pcall(UnitClassification, r.unit)
-  local look = ok and plainV(c) and CLASS_LOOK[c] or nil
+local function classLook(r, cls)   -- cls: the test list's pretend classification
+  local c = cls
+  if not c then local ok, v = pcall(UnitClassification, r.unit); c = ok and plainV(v) and v or nil end
+  local look = c and CLASS_LOOK[c] or nil
   if look then
     if r.drag.tex ~= look.tex then
       r.drag.tex = look.tex
@@ -779,10 +780,10 @@ local SPB = ns.spells.byKey
 local BEAST, HAWK, RAPTOR = 'Interface\\Icons\\Ability_Mount_WhiteDireWolf', 'Interface\\Icons\\Ability_Hunter_Pet_WindSerpent', 'Interface\\Icons\\Ability_Hunter_Pet_Raptor'
 local FAKE = {
   { name = 'Zhevra Runner', hp = 244, max = 300, icon = BEAST, seats = { corruption = 7, agony = 19 }, threat = 1, tick = true },
-  { name = 'Sunscale Screecher', hp = 312, max = 400, icon = HAWK, seats = { corruption = 12, agony = 16, immolate = 9 }, cast = true },
+  { name = 'Sunscale Screecher', hp = 312, max = 400, icon = HAWK, seats = { corruption = 12, agony = 16, immolate = 9 }, cast = true, cls = 'elite' },
   { name = 'Zhevra Runner', hp = 96, max = 300, icon = BEAST, seats = { corruption = 2, agony = 12 }, threat = 3, skull = true, pet = true },
   { name = 'Zhevra Runner', hp = 186, max = 300, icon = BEAST, seats = { corruption = 10, agony = 16, curse = 240 }, target = true, mark = 8 },
-  { name = 'Sunscale Lashtail', hp = 330, max = 350, icon = RAPTOR, seats = {}, far = true },
+  { name = 'Sunscale Lashtail', hp = 330, max = 350, icon = RAPTOR, seats = {}, far = true, cls = 'rare' },
 }
 local function fakeRing(parent, key)
   local w = CreateFrame('Frame', nil, parent); w:SetSize(RING, RING); w:SetFrameLevel(parent:GetFrameLevel() + 5)
@@ -904,6 +905,7 @@ local function testOn(on, quiet)
       r.pet:Show(); r.petRim:Show()
     else r.pet:Hide(); r.petRim:Hide() end
     markLook(r, { mark = d.mark })
+    classLook(r, d.cls or 'normal')   -- row 2 shows the elite dragon, row 5 the rare's silver one
     r.skullWin:SetShown(d.skull == true and ns.db.skull ~= false); r.skullBar:SetMinMaxValues(0, 1); r.skullBar:SetValue(d.skull and 1 or 0)
     r.cast:Hide(); r.cast:SetScript('OnUpdate', nil)
     for _, w in pairs(fk.rings) do w:Show() end

@@ -278,6 +278,11 @@ return {
     T.eq(n, 5, 'five rows')
     W.advance(3.2)
     T.ok(L.rows[1].fk and next(L.rows[1].fk.rings), 'stand-in rings drawn')
+    local rw = L.rows
+    T.ok(rw[2].drag:IsShown() and rw[2].drag._atlas == 'nameplates-icon-elite-gold', 'row 2 shows the elite dragon')
+    T.ok(rw[5].drag:IsShown() and rw[5].drag._atlas == 'nameplates-icon-elite-silver', 'row 5 shows the rare silver dragon')
+    T.ok(not rw[1].drag:IsShown() and not rw[3].drag:IsShown(), 'plain rows: no dragon')
+    T.ok(rw[4].tgtFrame:IsShown() and rw[4].tgtArrow:IsShown() and not rw[2].tgtFrame:IsShown(), 'row 4 carries the target frame and arrow')
     L.slash('boxes'); T.eq(OmaDoomedDB.list.boxes, true, 'click areas on')
     L.slash('boxes')
     W.combat = true; W.fire('PLAYER_REGEN_DISABLED')
