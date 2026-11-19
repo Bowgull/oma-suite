@@ -224,5 +224,19 @@ bagShards = 9; W.combat = true; W.advance(1); ToggleBackpack(); W.advance(1); ch
 cursor = 1234; W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 9 and cursor == 1234, 'never while you hold something')
 cursor = nil; SD.trim = false; W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 9, 'switch off: kept')
 SD.trim = nil; ns.say = oldSay
+
+-- gem size follows the pet frame even when only the frame it sits in is resized (2026-11-19: "sometimes big, sometimes small")
+local row = _G.OmaDemonShards
+SD.gems, SD.hideOOC, SD.size, SD.pin, SD.pos = nil, false, nil, nil, nil; ns.shardsVis()
+local petScale = 1
+local oldPF = _G.PetFrame
+_G.PetFrame = { GetEffectiveScale = function() return petScale end }   -- a parent's SetScale: no hook on PetFrame fires
+W.advance(1); check(math.abs(row:GetScale() - .55) < 1e-6, 'gems at .55 with the pet frame at 1')
+petScale = 1.5; W.advance(1); check(math.abs(row:GetScale() - .825) < 1e-6, 'pet frame grown by its parent: gems follow within a second')
+_G.PetFrame.GetEffectiveScale = function() error('secret') end; W.advance(1)
+check(math.abs(row:GetScale() - .825) < 1e-6, 'an unreadable pet frame scale keeps the last good size')
+_G.PetFrame.GetEffectiveScale = function() return 0 end; W.advance(1)
+check(math.abs(row:GetScale() - .825) < 1e-6, 'a zero scale keeps the last good size')
+_G.PetFrame = oldPF; W.advance(1)
 io.write(('OmaDemon smoke: %d checks passed\n'):format(ok))
 
