@@ -114,23 +114,44 @@ T.castChanged = castChanged
 -- (IsVisible: plain, not secret, on Blizzard's own bar) and slide on a change. The hook stays for clients that fire it.
 local hooked, watch
 local function castBar() return _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar) end
+-- 2026-11-19 (Joshua: "when target is casting something the rings and other teammate stuff doesnt move down"): on
+-- Forever the bar's shown state can come back secret during a mob's cast, and then this never slid. Now the target's
+-- own cast is asked first (UnitCastingInfo / UnitChannelInfo, the same read the mob list's cast lines use): any answer
+-- at all means it casts, even a secret one (type() is safe on a secret). The bar still counts while its state is plain
+-- (it lingers on "Interrupted"), so the rows wait for it to go. The watch runs whether or not the bar can be hooked.
+local function targetCasts()
+  if not UnitExists('target') then return false end
+  for _, f in ipairs({ UnitCastingInfo, UnitChannelInfo }) do
+    if type(f) == 'function' then
+      local ok, name = pcall(f, 'target')
+      if ok and type(name) ~= 'nil' then return true end
+    end
+  end
+  return false
+end
+T.targetCasts = targetCasts
 local function castLook()
-  local bar = castBar(); if type(bar) ~= 'table' then return end
-  local ok, shown = pcall(bar.IsVisible, bar)
-  if not ok or (ns.core and ns.core.Secret and ns.core.Secret.is(shown)) then return end
-  local on = shown == true
+  local on = targetCasts()
+  local bar = castBar()
+  if not on and type(bar) == 'table' then
+    local ok, shown = pcall(bar.IsVisible, bar)
+    if ok and not (ns.core and ns.core.Secret and ns.core.Secret.is(shown)) then on = shown == true end
+  end
   if on ~= (R.castShown == true) then castChanged(on) end
 end
 T.castLook = castLook
 function T.hookCastBar()
+  if not watch then
+    watch = CreateFrame('Frame')
+    local acc = 0
+    watch:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc >= .1 then acc = 0; castLook() end end)
+  end
   local bar = castBar()
-  if hooked or type(bar) ~= 'table' or type(bar.HookScript) ~= 'function' then return end
-  hooked = true
-  pcall(bar.HookScript, bar, 'OnShow', function() castChanged(true) end)
-  pcall(bar.HookScript, bar, 'OnHide', function() castChanged(false) end)
-  watch = watch or CreateFrame('Frame')
-  local acc = 0
-  watch:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc >= .1 then acc = 0; castLook() end end)
+  if not hooked and type(bar) == 'table' and type(bar.HookScript) == 'function' then
+    hooked = true
+    pcall(bar.HookScript, bar, 'OnShow', function() castChanged(true) end)
+    pcall(bar.HookScript, bar, 'OnHide', function() castLook() end)   -- the target may still be casting (a new cast)
+  end
   castLook()
 end
 

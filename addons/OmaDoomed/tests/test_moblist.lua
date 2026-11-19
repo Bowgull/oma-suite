@@ -89,10 +89,20 @@ return {
     -- sheet 118 v6: the game's nameplate dragon, at the bar's height, touching the bar's left end, clear of the face
     mob(W, F, 2, 'Druid of the Fang', { class = 'elite' }); pump(); W.advance(.5)
     local d = L.rows[2].drag
-    T.eq(d:GetWidth(), 16, 'the nameplate dragon, 40 x 35 art at 14 px'); T.eq(d:GetHeight(), 14, 'as tall as the framed bar')
+    -- 2026-11-19, measured: the atlas's art fills ~10 of 14 px, so the box is 1.4x for art as tall as the frame
+    T.eq(d:GetWidth(), 22.4, 'the box: 16 x 1.4'); T.eq(d:GetHeight(), 19.6, 'the art inside it 14 px, the framed bar')
     local dp = rawget(d, '_pts').RIGHT
-    T.ok(dp[1] == L.rows[2].frameArt and dp[2] == 'LEFT' and dp[3] == 1.5 and dp[4] == 0, 'its right edge on the bar frame, 1.5 px over')
+    T.ok(dp[1] == L.rows[2].frameArt and dp[2] == 'LEFT' and dp[3] == 5 and dp[4] == 0, 'its tail just over the bar frame')
+    T.eq(d:GetParent(), L.rows[2].bar, 'drawn on the bar, above the target rim (not hidden under it)')
     T.eq(rawget(d, '_atlas'), 'nameplates-icon-elite-gold', "the nameplate's own art")
+    -- 2026-11-19: the block (name, framed bar, cast line) centred in the 44 px row; the cast line as wide as the frame
+    local b = L.rows[2]
+    local bp = rawget(b.bar, '_pts').TOPLEFT
+    T.eq(-bp[4], 23, 'inner bar from y 23: frame 20..34, centred with name above and cast line below')
+    local c1, c2 = rawget(b.cast, '_pts').TOPLEFT, rawget(b.cast, '_pts').TOPRIGHT
+    T.ok(c1[1] == b.frameArt and c1[2] == 'BOTTOMLEFT' and c1[4] == -2, 'the cast line starts at the frame\'s left, 2 px under it')
+    T.ok(c2[1] == b.frameArt and c2[2] == 'BOTTOMRIGHT' and c2[4] == -2, 'and ends at the frame\'s right')
+    T.eq(b.cast:GetHeight(), 3, '3 px'); T.ok(b.cast:GetFrameLevel() > b.bar:GetFrameLevel(), 'drawn above the bar')
     noErrors(T)
   end,
   ['list (sheet 108 v2): bronze rim, gold name, level disc; elite gets the gold dragon and trim, rare the silver'] = function(W, T)

@@ -21,6 +21,7 @@ local TOKENS = 16
 local u = G and G.u or 2
 local ROW, PORT, GAPP, BAR, BARH, NAME = G.row * u, G.portrait * u, G.gapPortrait * u, G.bar * u, G.barH * u, G.name * u
 local GAPR, RING, RINGGAP, PADX, PADY = G.gapRings * u, G.ring * u, G.ringGap * u, G.padX * u, G.padY * u
+local CASTH, CASTGAP = 3, 2   -- the mob's cast line under its bar: 3 px, 2 px under the bar's frame
 local BUFF = 18        -- sheet 108 v2: the shield/anti-magic badge sits on the portrait's top-right corner
 local FEATHER = 18     -- how far the backing reaches past the rows, above and below
 L.RH = ROW
@@ -74,7 +75,6 @@ local function newRow(k)
   -- sheet 118 v6 (Joshua 2026-11-18: "i like the elite frame"): elite and rare get the game's own small nameplate
   -- dragon (gold, silver) at the left end of the health bar, unmirrored, exactly where the nameplate puts it. Placed
   -- with the bar (below); the numbers are there.
-  r.drag = r:CreateTexture(nil, 'ARTWORK', nil, 0); r.drag:Hide()
   -- and the mob's level in a small bronze-rimmed disc on the portrait's lower left, like the target frame's
   r.lvlBg = r:CreateTexture(nil, 'OVERLAY', nil, 4); r.lvlBg:SetTexture(K.ART .. 'rings\\mask_disc', nil, nil, 'TRILINEAR')
   r.lvlBg:SetVertexColor(.07, .05, .02, 1); r.lvlBg:SetSize(16, 16); r.lvlBg:SetPoint('CENTER', r.face, 'BOTTOMLEFT', 3, 3)
@@ -135,7 +135,11 @@ local function newRow(k)
   r.veil:SetSize(VW + 20, ROW); r.veil:SetPoint('RIGHT', r.veilBar:GetStatusBarTexture(), 'RIGHT', 10, 0)
   -- name and health, built like the nameplate: Blizzard's bar frame, status bar art, white name
   local tx = PADX + PORT + GAPP
-  local blk = NAME + 3 + BARH
+  -- 2026-11-19: the block centred on the row (and on the portrait's middle) is name + 3 + framed bar + 2 + the 3 px cast
+  -- line, 34 px: name from y 5, frame 20..34, your target's rim 19..35, cast line 36..39, then 2 px to the gold target
+  -- frame's line (41..43). Before, the block left the cast line out (29 px): frame 22.5..36.5 and the line 36.5..39.5
+  -- lay on the frame's edge and 1 px under the target rim.
+  local blk = NAME + 3 + BARH + CASTGAP + CASTH
   r.bar = CreateFrame('StatusBar', nil, r)
   r.bar:SetSize(barW() - 4, BARH - 6); r.bar:SetPoint('TOPLEFT', r, 'TOPLEFT', tx + 2, -(ROW / 2 - blk / 2 + NAME + 3 + 3))
   r.bar:SetStatusBarTexture(K.statusbar); r.bar:SetStatusBarColor(K.healthRed[1], K.healthRed[2], K.healthRed[3])
@@ -146,23 +150,32 @@ local function newRow(k)
   local empty = r.bar:CreateTexture(nil, 'BACKGROUND', nil, -1); empty:SetPoint('TOPLEFT', -1, 1); empty:SetPoint('BOTTOMRIGHT', 1, -1); empty:SetColorTexture(K.empty[1], K.empty[2], K.empty[3], 1)
   r.frameArt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 2); r.frameArt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.frameArt, K.plateFrame)
   r.frameArt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -2, 3); r.frameArt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 2, -3)
-  -- the elite dragon, by measurement (2026-11-18). Art: the nameplate's own 'nameplates-icon-elite-gold' (and silver),
-  -- 40 x 35 in the nameplate sheet; on his 08:59 screenshot the nameplate draws it 18 x 15 beside a 7 px bar. Here it is
-  -- the framed bar's height (BARH, 14 px; sheet 118's picture) and 14 x 40/35 = 16 wide. Its right edge 1.5 px over the
-  -- bar frame (as on the nameplate), its middle on the bar's middle (29.5 px below the row top). Clearance, scanned
-  -- row by row against the art's alpha: the portrait ring (centre 26,22, outer radius 0.93 x 23 = 21.4) needs the
-  -- dragon's left at >= 47.3; your demon's mark (rim centre 45,41, radius 0.93 x 12.5 = 11.6) needs >= 52.3. Frame
-  -- left = PADX + PORT + GAPP = 6 + 40 + 22 = 68, so the dragon spans 53.5..69.5: 1.2 px clear of the demon mark.
-  r.drag:SetSize(16, 14); r.drag:SetPoint('RIGHT', r.frameArt, 'LEFT', 1.5, 0)
   r.tgt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 3); r.tgt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.tgt, K.plateTarget)
   r.tgt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -4, 4); r.tgt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 4, -4); r.tgt:Hide()
+  -- the elite dragon, by measurement (2026-11-19, his 10:5x screenshot of Blackfathom Myrmidon, 1:1). Art: the
+  -- nameplate's own 'nameplates-icon-elite-gold' (silver for rares). Drawn in a 16 x 14 box the atlas's art showed only
+  -- ~11 x 10 px (x 99.5..>110, y 72.5..82.5 of the box's 98..114 x 70.5..84.5): the atlas has clear margins, 1.5 of
+  -- 16 left, 2 of 14 top and bottom, so the dragon was 71% of the framed bar's 14 px, where sheet 118 v6 (and the
+  -- nameplate) has it as tall as the frame. And it lay on the row, under the bar's frame, so your target's 4 px rim
+  -- hid its tail. Now: box x 1.4 = 22.4 x 19.6, so the art is 14 px tall (the frame's height), its middle on the
+  -- bar's middle; drawn on the bar above the rim (OVERLAY 4). Its art is ~15.8 px wide (sheet 118's 1.125 : 1), its
+  -- tail ~1 px over the frame's left end: box right at frame left + 5. Art spans x ~53.7..69.5 local, y 20..34.
+  -- Clearance (ring and mark as before, now the block sits 2.5 px higher): portrait ring (26,22, r 21.4) reaches
+  -- x 47.4 at the dragon's top (y 20..24), 6 px clear; your demon's mark (45,41, r 11.6) reaches x 51 where the
+  -- dragon's lowest left claw is (y ~31, x ~55.9), 5 px clear.
+  r.drag = r.bar:CreateTexture(nil, 'OVERLAY', nil, 4); r.drag:Hide()
+  r.drag:SetSize(22.4, 19.6); r.drag:SetPoint('RIGHT', r.frameArt, 'LEFT', 5, 0)
   r.hp = r.bar:CreateFontString(nil, 'OVERLAY', nil, 7); r.hp:SetFont(K.font, 12, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
   -- a tick: the DoT pieces flash (a soft white light over the bar) as they shrink (sheet 83, row 1)
   r.bite = r.bar:CreateTexture(nil, 'OVERLAY', nil, 1); r.bite:SetTexture(K.statusbar); r.bite:SetAllPoints(r.bar)
   r.bite:SetVertexColor(1, .93, .8); r.bite:SetBlendMode('ADD'); r.bite:SetAlpha(0)
   r.dmg, r.nd = false, false
-  -- the mob's cast: a thin line under its bar, red when you can interrupt it (Spell Lock), grey when you can't
-  r.cast = CreateFrame('StatusBar', nil, r); r.cast:SetSize(barW() - 4, 3); r.cast:SetPoint('TOPLEFT', r.bar, 'BOTTOMLEFT', 0, -3)
+  -- the mob's cast: a thin line under its bar, red when you can interrupt it (Spell Lock), grey when you can't.
+  -- 2026-11-19: as wide as the bar's frame (x 68 .. 68 + barW, it was the inner bar's barW - 4 from x 70, so it
+  -- started 2 px in and stopped 2 px short), 2 px under the frame (1 px clear of your target's rim), drawn above the bar
+  r.cast = CreateFrame('StatusBar', nil, r); r.cast:SetHeight(CASTH)
+  r.cast:SetPoint('TOPLEFT', r.frameArt, 'BOTTOMLEFT', 0, -CASTGAP); r.cast:SetPoint('TOPRIGHT', r.frameArt, 'BOTTOMRIGHT', 0, -CASTGAP)
+  r.cast:SetFrameLevel(r.bar:GetFrameLevel() + 1)
   r.cast:SetStatusBarTexture(K.statusbar); r.cast:SetMinMaxValues(0, 1); r.cast:SetValue(0); r.cast:Hide()
   local cb = r.cast:CreateTexture(nil, 'BACKGROUND'); cb:SetAllPoints(); cb:SetColorTexture(0, 0, 0, .7)
   r.name = r:CreateFontString(nil, 'OVERLAY'); r.name:SetFont(K.font, NAME, 'OUTLINE')
@@ -624,7 +637,7 @@ local function relayout()
   if InCombatLockdown() or not header then return end
   header:SetSize(width(), PADY * 2 + ROW * (db.rows or 8))
   back:SetWidth(width() + 48)
-  for k = 1, TOKENS do local r = rows[k]; if r then r:SetWidth(width()); r.bar:SetWidth(barW() - 4); r.cast:SetWidth(barW() - 4); r.name:SetWidth(nameW(r)); placeSeats(r) end end
+  for k = 1, TOKENS do local r = rows[k]; if r then r:SetWidth(width()); r.bar:SetWidth(barW() - 4); r.name:SetWidth(nameW(r)); placeSeats(r) end end
   if sel then sel:SetWidth(width() + 12) end
   pack(true)
 end
