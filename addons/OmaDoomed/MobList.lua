@@ -53,7 +53,7 @@ local function texCoord(t, c) t:SetTexCoord(c[1], c[2], c[3], c[4]) end
 local function newRow(k)
   local r = CreateFrame('Frame', nil, header)
   r.k, r.unit, r.shown, r.pair = k, tok(k), false, false
-  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet, r.veilWin = false, false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
+  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet, r.veilWin, r.markOn = false, false, false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
   r:SetSize(width(), ROW); r:Hide(); r:SetAlpha(0)
   -- threat: a soft swell of light behind the row, in Blizzard's threat colour, breathing (Motion)
   r.glow = r:CreateTexture(nil, 'BACKGROUND', nil, 2); r.glow:SetTexture(K.rowGlow, nil, nil, 'TRILINEAR')
@@ -151,7 +151,7 @@ local function newRow(k)
   local cb = r.cast:CreateTexture(nil, 'BACKGROUND'); cb:SetAllPoints(); cb:SetColorTexture(0, 0, 0, .7)
   r.name = r:CreateFontString(nil, 'OVERLAY'); r.name:SetFont(K.font, NAME, 'OUTLINE')
   r.name:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3]); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
-  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 5); r.name:SetWidth(barW() - 16); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
+  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 5); r.name:SetWidth(barW() + 2); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
   -- shields and anti-magic: only while the mob has one (HELPFUL|IMPORTANT, what the game itself flags)
   local ok, buffs = pcall(CreateFrame, 'AuraContainer', nil, r, 'CustomAuraContainerTemplate')
   if ok and buffs then
@@ -295,7 +295,13 @@ local function petLook(r, e)
     r.pet:Show(); r.petRim:Show()
   else r.pet:Hide(); r.petRim:Hide() end
 end
+-- the name runs to 3 px before the first ring (left at bar - 1 = 73, rings at 72 + barW + 6), so barW + 2; with a
+-- raid mark at the line's end (13 px, on the bar's top-right) it stops short of it, barW - 16 (2026-11-18: the elite
+-- dragon's room took 20 px from the bar, and "Evolving Ectoplasm" is 121 px)
+local function nameW(r) return (r.markOn and barW() - 16) or barW() + 2 end
 local function markLook(r, e)
+  local on = e.mark and true or false
+  if on ~= r.markOn then r.markOn = on; r.name:SetWidth(nameW(r)) end
   if e.mark then
     local i = e.mark - 1
     r.mark:SetTexCoord((i % 4) / 4, (i % 4 + 1) / 4, math.floor(i / 4) / 4, (math.floor(i / 4) + 1) / 4); r.mark:Show()
@@ -579,7 +585,7 @@ local function relayout()
   if InCombatLockdown() or not header then return end
   header:SetSize(width(), PADY * 2 + ROW * (db.rows or 8))
   back:SetWidth(width() + 48)
-  for k = 1, TOKENS do local r = rows[k]; if r then r:SetWidth(width()); r.bar:SetWidth(barW() - 4); r.cast:SetWidth(barW() - 4); r.name:SetWidth(barW() - 16); placeSeats(r) end end
+  for k = 1, TOKENS do local r = rows[k]; if r then r:SetWidth(width()); r.bar:SetWidth(barW() - 4); r.cast:SetWidth(barW() - 4); r.name:SetWidth(nameW(r)); placeSeats(r) end end
   if sel then sel:SetWidth(width() + 12) end
   pack(true)
 end
