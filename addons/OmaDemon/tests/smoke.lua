@@ -224,5 +224,36 @@ bagShards = 9; W.combat = true; W.advance(1); ToggleBackpack(); W.advance(1); ch
 cursor = 1234; W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 9 and cursor == 1234, 'never while you hold something')
 cursor = nil; SD.trim = false; W.advance(1); ToggleBackpack(); W.advance(1); check(bagShards == 9, 'switch off: kept')
 SD.trim = nil; ns.say = oldSay
+
+-- gem size follows the pet frame even when only the frame it sits in is resized (2026-11-19: "sometimes big, sometimes small")
+local row = _G.OmaDemonShards
+SD.gems, SD.hideOOC, SD.size, SD.pin, SD.pos = nil, false, nil, nil, nil; ns.shardsVis()
+local petScale = 1
+local oldPF = _G.PetFrame
+_G.PetFrame = { GetEffectiveScale = function() return petScale end }   -- a parent's SetScale: no hook on PetFrame fires
+W.advance(1); check(math.abs(row:GetScale() - .55) < 1e-6, 'gems at .55 with the pet frame at 1')
+petScale = 1.5; W.advance(1); check(math.abs(row:GetScale() - .825) < 1e-6, 'pet frame grown by its parent: gems follow within a second')
+_G.PetFrame.GetEffectiveScale = function() error('secret') end; W.advance(1)
+check(math.abs(row:GetScale() - .825) < 1e-6, 'an unreadable pet frame scale keeps the last good size')
+_G.PetFrame.GetEffectiveScale = function() return 0 end; W.advance(1)
+check(math.abs(row:GetScale() - .825) < 1e-6, 'a zero scale keeps the last good size')
+_G.PetFrame = oldPF; W.advance(1)
+
+-- no pet: the row's centre sits on the centre of your bars (2026-11-19: it was 29 px right on Joshua's 1080p screen)
+local oldPP, oldHolder, oldPlayer = _G.PetPortrait, _G.PlayerBottomManagedFrameContainer, _G.PlayerFrame
+local function bar(l, r, s, vis) return { GetLeft = function() return l end, GetRight = function() return r end,
+  GetEffectiveScale = function() return s or 1 end, IsVisible = function() return vis ~= false end } end
+local holderStub = bar(50, 400); _G.PlayerBottomManagedFrameContainer = holderStub
+_G.PetPortrait = { IsVisible = function() return false end }
+local function topX() for _, fn in ipairs(ns.onSetting) do fn('size', 'shards') end
+  local p = rawget(row, '_pts') and rawget(row, '_pts').TOP; return p and p[1] == holderStub and p[2] == 'TOPLEFT' and p[3] end
+_G.PlayerFrame = { healthbar = bar(103, 263), manabar = bar(107, 261) }   -- the bars measured on the screenshot
+check(topX() == 183 - 50, 'no pet: row centred on the bars (x 183), not the old +59')
+_G.PlayerFrame = { healthbar = bar(103 / .8, 263 / .8, .8), manabar = bar(0, 900, 1, false) }   -- smaller frame scale, a hidden bar
+check(math.abs(topX() - 133) < 1e-6, 'no pet: same spot at another frame scale; hidden bars ignored')
+_G.PlayerFrame = {}
+check(rawget(row, '_pts') and (topX() == nil) and rawget(row, '_pts').TOPLEFT[3] == 59, 'no bars to read: the old spot')
+_G.PetPortrait, _G.PlayerBottomManagedFrameContainer, _G.PlayerFrame = oldPP, oldHolder, oldPlayer
+for _, fn in ipairs(ns.onSetting) do fn('size', 'shards') end
 io.write(('OmaDemon smoke: %d checks passed\n'):format(ok))
 

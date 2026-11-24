@@ -83,6 +83,9 @@ function M.SetParent(self, p) setParent(self, p) end
 function M.GetParent(self) return rawget(self, '_parent') end
 function M.GetChildren(self) local ks = rawget(self, '_kids'); if ks then return unpack(ks) end end
 function M.SetAlpha(self, a) rawset(self, '_alpha', a) end
+-- mouse: whether a frame takes the mouse (an aura button that does shows the game's own tooltip)
+function M.EnableMouse(self, v) rawset(self, '_mouse', v and true or false) end
+function M.IsMouseEnabled(self) return rawget(self, '_mouse') == true end
 function M.GetAlpha(self) return rawget(self, '_alpha') or 1 end
 function M.SetScale(self, s) rawset(self, '_scale', s) end
 function M.GetScale(self) return rawget(self, '_scale') or 1 end

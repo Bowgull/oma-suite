@@ -307,9 +307,20 @@ end
 -- nothing learned still picks up a size learned since; Reset, Forget and a relearn drop the snapshot
 -- (dropSnapshots).
 local function expectedTick(dot)
-    if dot.normalTicks > 0 then return dot.tickSum / dot.normalTicks end
+    -- OMA: tickSum and learned sizes are plain (boosts taken out, tickBoost); this cast's own buff goes back on
+    if dot.normalTicks > 0 then return dot.tickSum / dot.normalTicks * (dot.omaScale or 1) end
     return (dot.learnedAtApply or (dot.tickKey and db.ticks[dot.tickKey]) or dot.omaGuess or (dot.total / dot.totalTicks))
         * (dot.omaScale or 1) -- OMA: guess from other ranks; known buffs
+end
+
+-- OMA: how much harder than its plain size a tick of this DoT lands at `at`: this cast's own buff (Amplify Curse)
+-- times the timed boosts on its mob (ns.omaTickMult: Curse of the Elements, Shadow and Flame). Tick amounts are
+-- divided by it before they are summed, tallied or learned, so the stored sizes are plain damage and the estimate
+-- (expectedTick, remainingDamage) puts each boost on exactly once. Without it a size learned under Elements kept
+-- the 10% and the next cursed fight added it again.
+local function tickBoost(dot, at)
+    local mult = ns.omaTickMult
+    return (dot.omaScale or 1) * ((mult and dot.omaKey) and mult(dot, at, dot.omaKey) or 1)
 end
 
 -- Which tick of the DoT (1 = first) lands around `when`.
@@ -365,7 +376,11 @@ local function tallyCast(dot, direct)
     local t = tallyFor(dot)
     if not t then return end
     t.dots[#t.dots + 1] = dot
-    if direct == nil then t.unclear = true else t.direct = t.direct + direct end
+    if direct == nil then t.unclear = true
+    else
+        local mult = ns.omaTickMult -- OMA: the upfront hit counts at what it really dealt on this mob
+        t.direct = t.direct + direct * ((mult and dot.omaKey) and mult(dot, GetTime(), dot.omaKey) or 1)
+    end
 end
 
 local function tallyHiddenTick(dot, factor)
@@ -807,6 +822,7 @@ local function onPlayerCast(spellID, castGUID)
     local dot = newDot(spellID, tickKey, name, total, school, duration, statedInterval, now)
     if previous and previous.expiresAt and previous.expiresAt > now then dot.phaseUnknown = true end -- OMA: a refresh
     dotsByTarget[key][name] = dot
+    dot.omaKey = key -- OMA: the mob, for its boosts (tickBoost)
     lastDotCast = { key = key, name = name, dot = dot, previous = previous, at = now,
         comboRead = isFinisher and comboSource == "read" and comboPoints or nil }
     dot.name = dot.name or name
@@ -913,7 +929,7 @@ local function distanceToExpectedTick(dot, now)
     return math.abs(now - (anchor + k * dot.interval)), k
 end
 
-local function plausibleTickAmount(dot, amount, isCrit, number)
+local function plausibleTickAmount(dot, amount, isCrit, number, at)
     local known, tolerance
     if dot.normalTicks > 0 then
         known, tolerance = dot.tickSum / dot.normalTicks, TICK_AMOUNT_TOLERANCE
@@ -921,7 +937,7 @@ local function plausibleTickAmount(dot, amount, isCrit, number)
         known, tolerance = dot.tickKey and db.ticks[dot.tickKey], FIRST_TICK_AMOUNT_TOLERANCE
     end
     if not known then return true end
-    known = known * tickShape(dot, number)
+    known = known * tickShape(dot, number) * (at and tickBoost(dot, at) or 1) -- OMA: at, the boosts
     if isCrit then
         return amount >= known * CRIT_MIN_RATIO - 1 and amount <= known * CRIT_MAX_RATIO + 1
     end
@@ -1009,7 +1025,7 @@ local function tryRelearn(dot, name, amount, isCrit, index, distance, now)
     local freshSlot = not dot.firstTickAt or index > dot.lastTickIndex
     if isCrit or amount <= 0 or not freshSlot or distance > window then return false end
     local previous = dot.offBeatCandidate
-    local factor = tickShape(dot, tickNumberAt(dot, now))
+    local factor = tickShape(dot, tickNumberAt(dot, now)) * tickBoost(dot, now) -- OMA: boosts
     local average = amount / factor
     dot.offBeatCandidate = { index = index, amount = amount, average = average, at = now }
     if not previous or index ~= previous.index + 1
@@ -1034,7 +1050,7 @@ end
 
 -- Counts a hit as the DoT's tick in slot `index`. Returns the tick's number (1 = first) and shape factor.
 local function recordTick(dot, amount, isCrit, index, now)
-    local factor = tickShape(dot, tickNumberAt(dot, now))
+    local factor = tickShape(dot, tickNumberAt(dot, now)) * tickBoost(dot, now) -- OMA: boosts
     dot.ticksSeen = dot.ticksSeen + 1
     dot.lastTickAmount, dot.lastTickShape, dot.lastTickCrit = amount, factor, isCrit
     dot.offBeatCandidate = nil
@@ -1069,6 +1085,7 @@ local function springTrap(key, unit, amount, school, isCrit, now)
     armedTrap = nil
     dotsByTarget[key] = dotsByTarget[key] or {}
     dotsByTarget[key][trap.name] = dot
+    dot.omaKey = key -- OMA
     local tickIndex = recordTick(dot, amount, isCrit, 1, now)
     trace(string.format("TRAP %s sprung on %s: first tick %d%s %.1fs after placing (tick %d/%d)", trap.name, unit,
         amount, isCrit and " CRIT" or "", now - trap.placedAt, tickIndex, dot.totalTicks))
@@ -1145,7 +1162,8 @@ local function onHiddenAmountHit(key, unit, school)
     end
     local wasWaiting = isWaiting(best)
     best.ticksSeen = best.ticksSeen + 1
-    best.lastTickAmount, best.lastTickShape, best.lastTickCrit = 0, tickShape(best, tickNumberAt(best, now)), false
+    best.lastTickAmount, best.lastTickShape, best.lastTickCrit = 0,
+        tickShape(best, tickNumberAt(best, now)) * tickBoost(best, now), false -- OMA: boosts, so the meter learns plain
     best.offBeatCandidate = nil
     local tickIndex
     if school == 1 and not best.firstTickAt then
@@ -1156,7 +1174,7 @@ local function onHiddenAmountHit(key, unit, school)
     hit.fed[bestName] = true
     tallyHiddenTick(best, best.lastTickShape)
     trace(string.format("TICK %s (amount hidden) on %s (tick %d/%d, expecting %.1f for this tick)%s", bestName,
-        unit, tickIndex, best.totalTicks, expectedTick(best) * best.lastTickShape,
+        unit, tickIndex, best.totalTicks, expectedTick(best) / (best.omaScale or 1) * best.lastTickShape,
         wasWaiting and ", now shown" or ""))
     if wasWaiting then return key end
 end
@@ -1266,7 +1284,7 @@ local function onUnitCombat(unit, action, flag, amount, school)
     local candidates = 0
     for name, dot in pairs(dots) do
         if not lastCombatFed[name] and dot.school == school
-            and (zeroAbsorb or plausibleTickAmount(dot, amount, isCrit, tickNumberAt(dot, now))) then
+            and (zeroAbsorb or plausibleTickAmount(dot, amount, isCrit, tickNumberAt(dot, now), now)) then
             local distance, index = distanceToExpectedTick(dot, now)
             local window = dot.firstTickAt and TICK_MATCH_WINDOW_ANCHORED or TICK_MATCH_WINDOW
             -- Each tick slot takes one hit: a second hit near an already-matched tick is someone else's.

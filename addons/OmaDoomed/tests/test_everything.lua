@@ -25,21 +25,30 @@ return {
     T.ok(p.bar._anchor ~= nil, "and that frame sits on the plate's health bar")
     noErrors(T)
   end,
-  ["other players' debuffs: a side container, three at most, other warlocks' DoTs left to their rings"] = function(W, T)
+  ["other players' debuffs: a side container, three at most; with no rings of theirs, other warlocks' DoTs are squares too"] = function(W, T)
     local ns, F, UI = setup(W)
     local ring = UI.ringContainers()[1]
     local side = sideOf(UI, ring)
     T.ok(side, 'each plate row has its side container')
     local g = UI.group(side, 'odeb')
     T.eq(g.filter, 'HARMFUL|!PLAYER|!CROWD_CONTROL|INCLUDE_NAME_PLATE_ONLY', 'everything not yours that is not crowd control')
-    T.eq(g.max, 3, 'three at most'); T.ok(g.filters.excludeSpellIDs[172], "Corruption from another warlock stays a faint ring, not a square")
+    T.eq(g.max, 3, 'three at most'); T.ok(not (g.filters.excludeSpellIDs or {})[172], "Team row only: another warlock's Corruption is a square")
     F.mob('nameplate1', A, 'Kobold', 300).otherAuras = { 7386, 172 }   -- a warrior's Sunder, another lock's Corruption
     W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); W.advance(.2)
     local row = UI.rowOn('nameplate1')
     local s2 = sideOf(UI, row)
     T.eq(s2.unit, 'nameplate1', 'the side follows the plate')
     local seen = UI.showing(s2)
-    T.eq(#seen.odeb, 1, 'the Sunder shows; the Corruption does not')
+    T.eq(#seen.odeb, 2, 'the Sunder and the Corruption both show')
+    noErrors(T)
+  end,
+  ["other players' debuffs, As rings: other warlocks' DoTs are left to their faint rings"] = function(W, T)
+    local ns, F, UI = require('load').addon({ rings = true, before = function() OmaDoomedDB = { v = 5, rings = { othersMode = 'rings' } } end })
+    W.advance(3)
+    local side = sideOf(UI, UI.ringContainers()[1])
+    local g = UI.group(side, 'odeb')
+    T.ok(g.filters.excludeSpellIDs[172], "Corruption from another warlock stays a faint ring, not a square")
+    T.eq(OmaDoomedDB.rings.others, true, 'their rings are on')
     noErrors(T)
   end,
   ["Blizzard's own crowd-control icon goes off with its debuff row; settings can keep either part off"] = function(W, T)

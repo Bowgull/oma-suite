@@ -27,6 +27,10 @@ R.ART = ART
 -- units, square, no gaps; Blizzard puts 6 per row and grows rows upward.
 local S = 25 * 1.6
 R.S = S
+-- 2026-11-24 (approved on the Classic mockup, "lets try the way you have now"): your channel ring is a bit bigger than a
+-- DoT ring, over the mob and on the target frame, so it reads as the one you're doing right now. Per group key.
+R.SIZE_OF = { channel = 1.25 }
+function R.sizeOf(key) return S * (key and R.SIZE_OF[key] or 1) end
 R.PER_ROW = 6
 R.FRAME_ROW = 5                     -- target frame row (Haunt / Target frame): 5 rings fit under the bars, before the level badge
 -- sheet 51 B (approved 2026-11-13, "B"): the target-frame row at 28 px with a smaller number, so the icon shows
@@ -369,9 +373,12 @@ local function numberOn(cd, b, size, k)
   return num
 end
 
-local function mainOwn(b, k, key)
-  b:SetSize(S, S); pcall(b.EnableMouse, b, false)
-  local icon = roundIcon(b, S)
+-- mouse: the mob list's seats only (2026-11-17, "tooltips on hover"): the game's own aura tooltip shows on a button that
+-- takes the mouse and has no script of ours (an add-on's OnEnter blocks it). Over enemies they stay click-through.
+local function mainOwn(b, k, key, mouse)
+  local size = R.sizeOf(key)
+  b:SetSize(size, size); pcall(b.EnableMouse, b, mouse == true)
+  local icon = roundIcon(b, size)
   if not R.flat() then   -- Rich (sheet 41): a dark spot behind the number, the brass bezel
     icon:SetAlpha(.8)
     local spot = b:CreateTexture(nil, 'ARTWORK', nil, 1); spot:SetTexture(ART .. 'numspot', nil, nil, 'TRILINEAR'); spot:SetAllPoints(b)
@@ -383,7 +390,7 @@ local function mainOwn(b, k, key)
   -- Classic: the icon stays full strength all the way down; the ring alone drains (in game the 50% dark sweep over
   -- the icon made Classic duller than its sheet, Joshua 2026-11-13: "not as rich as youre showing it here")
   if R.flat() then pcall(cd.SetDrawSwipe, cd, false) end
-  local num = numberOn(cd, b, S, k)
+  local num = numberOn(cd, b, size, k)
   b:SetIcon(icon)
   b:SetDurationCooldown(cd)
   b:SetDurationText(num, textOpts(NUM_FMT, (key and numCurves[key]) or numCurve))   -- ending: the number in its DoT's own colour, lit
@@ -392,7 +399,8 @@ end
 -- smaller number; frame: the target-frame row's own number size (sheet 51 B)
 local function mainsFor(key, long)
   local function k(frame) return long and R.NUM_K_LONG or R.numK(frame) end
-  return function(b) mainOwn(b, k(false), key) end, function(b) mainOwn(b, k(true), key) end
+  return function(b) mainOwn(b, k(false), key) end, function(b) mainOwn(b, k(true), key) end,
+    function(b) mainOwn(b, k(false), key, true) end   -- the mob list's seat, with its tooltip
 end
 
 local function mainOthers(b)
@@ -479,8 +487,9 @@ function R.ringFont(fs, size)
 end
 
 local function ringOwn(color, curve, key, light)
+  local size = R.sizeOf(key)
   return function(b)
-    b:SetSize(S, S); pcall(b.EnableMouse, b, false)
+    b:SetSize(size, size); pcall(b.EnableMouse, b, false)
     local flat = R.flat()
     if not flat then local shadow = b:CreateTexture(nil, 'BACKGROUND', nil, -8); shadow:SetTexture(ART .. 'ring_shadow', nil, nil, 'TRILINEAR'); shadow:SetAllPoints(b) end   -- sheet 41: sits in the world
     local back = b:CreateTexture(nil, 'BACKGROUND'); back:SetTexture(ART .. (flat and 'backing_flat' or 'backing'), nil, nil, 'TRILINEAR'); back:SetAllPoints(b)
@@ -513,7 +522,7 @@ local function ringOwn(color, curve, key, light)
     if R.GLYPH_LIGHT and glyphOn() and light then
       top = top or CreateFrame('Frame', nil, cd); top:SetAllPoints(b)
       local fl = top:CreateFontString(nil, 'ARTWORK')
-      placeGlyph(fl, b, S)
+      placeGlyph(fl, b, size)
       fl:SetTextColor(color[1], color[2], color[3], 0)
       b:SetDurationText(fl, textOpts(RING_FMT, light))
     end
@@ -659,8 +668,11 @@ R.textOpts = textOpts
 function R.numFmt() return NUM_FMT end
 R.CAST_SLOT = 30                   -- the target's cast bar, in its fixed spot right under the bars (Blizzard's squares hidden)
 R.ODEB_FILTER = 'HARMFUL|!PLAYER|!CROWD_CONTROL|INCLUDE_NAME_PLATE_ONLY'
--- other warlocks' DoTs keep their faint rings (the 'others' group): the squares leave them out
+-- As rings: other warlocks' DoTs keep their faint rings (the 'others' group), so the squares leave them out.
+-- Team row only (the default since 2026-11-17): no rings of theirs, so the squares take them in.
 function R.odebFilters()
+  local d = R.db or (ns.db and ns.db.rings)
+  if not (d and d.othersMode == 'rings') then return {} end
   local ex = {}
   for _, sp in ipairs(SPELLS) do idSet(sp, ex) end
   return { excludeSpellIDs = ex }
@@ -707,8 +719,8 @@ R.GROUPS = {}
 function R.buildGroups()
   local G = {}
   for _, sp in ipairs(SPELLS) do
-    local main, mainFrame = mainsFor(sp.key, sp.kind == 'curse')
-    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = main, mainFrame = mainFrame, seat = R.SEAT_OF[sp.key],
+    local main, mainFrame, mainList = mainsFor(sp.key, sp.kind == 'curse')
+    G[#G + 1] = { key = sp.key, filter = OWN, max = 2, main = main, mainFrame = mainFrame, mainList = mainList, seat = R.SEAT_OF[sp.key],
       ring = ringOwn(sp.color, ringCurves[sp.key], sp.key, lightCurves[sp.key]) }
   end
   local mine, mineFrame = mainsFor('mine', false)

@@ -47,6 +47,100 @@ local function mob(W, F, k, name, o) local u = F.mob('nameplate' .. k, 'C-' .. k
 local function shownRows(ns) local t = {}; for k = 1, 16 do if ns.moblist.rows[k].shown then t[#t + 1] = k end end; return table.concat(t, ',') end
 
 return {
+  ['list: only the //// corner grip sizes it; the mouse wheel does nothing (2026-11-17)'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    L.slash('move')
+    local tab = _G.OmaDoomedListTab
+    T.ok(tab == nil or tab:GetScript('OnMouseWheel') == nil, 'the tab does not size on the wheel')
+    local found = false
+    for _, k in ipairs(UI.kids(_G.OmaDoomedList)) do if k:GetScript('OnMouseWheel') then found = true end end
+    T.ok(not found, 'neither does the outline')
+    L.slash('lock')
+    noErrors(T)
+  end,
+  ['list: snap lines it up under the Details window, same width, 3 px below; no Details, it says so'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    _G.DetailsBaseFrame1 = nil
+    T.eq(L.snap(), false, 'no Details window: nothing moves')
+    local d = CreateFrame('Frame', 'DetailsBaseFrame1', UIParent)
+    d.GetRight = function() return 1913 end; d.GetBottom = function() return 574 end; d.GetWidth = function() return 348 end
+    OmaDoomedDB.list.scale = 120
+    T.eq(L.snap(), true, 'lined up')
+    T.eq(OmaDoomedDB.list.scale, 120, 'your size is left alone: only the corner grip sizes it')
+    local p = rawget(_G.OmaDoomedList, '_pts').TOPRIGHT
+    T.eq(p[3], 1913, 'right edges match'); T.eq(p[4], 571, '3 px under the meter')
+    _G.DetailsBaseFrame1 = nil
+    noErrors(T)
+  end,
+  ["list (sheet 108 v2): exactly the meter's 348 px, rings end at the right edge, nothing reserved past them"] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    T.eq(L.width(), 348, 'as wide as his Details meter')
+    mob(W, F, 1, 'Raptor'); pump(); W.advance(.5)
+    local r = L.rows[1]
+    T.eq(r:GetWidth(), 348, 'each row too')
+    local pts = rawget(r.pair.anchor, '_pts').BOTTOM
+    local k = r.pair.anchor:GetScale()
+    local sw = select(2, ns.rings.seatSpots()) * 30 + (select(2, ns.rings.seatSpots()) - 1) * 4
+    T.eq(math.floor(pts[3] * k + sw / 2 + .5), 348 - 6, 'the seats end 6 px from the right edge')
+    T.eq(r.bar:GetWidth(), 348 - (12 + 40 + 22 + 6 + sw) - 4, 'the bar takes what the seats leave')
+    -- sheet 118 v6: the game's nameplate dragon, at the bar's height, touching the bar's left end, clear of the face
+    mob(W, F, 2, 'Druid of the Fang', { class = 'elite' }); pump(); W.advance(.5)
+    local d = L.rows[2].drag
+    -- 2026-11-19, measured: the atlas's art fills ~10 of 14 px, so the box is 1.4x for art as tall as the frame
+    T.eq(d:GetWidth(), 22.4, 'the box: 16 x 1.4'); T.eq(d:GetHeight(), 19.6, 'the art inside it 14 px, the framed bar')
+    local dp = rawget(d, '_pts').RIGHT
+    T.ok(dp[1] == L.rows[2].frameArt and dp[2] == 'LEFT' and dp[3] == 5 and dp[4] == 0, 'its tail just over the bar frame')
+    T.eq(d:GetParent(), L.rows[2].bar, 'drawn on the bar, above the target rim (not hidden under it)')
+    T.eq(rawget(d, '_atlas'), 'nameplates-icon-elite-gold', "the nameplate's own art")
+    -- 2026-11-19: the block (name, framed bar, cast line) centred in the 44 px row; the cast line as wide as the frame
+    local b = L.rows[2]
+    local bp = rawget(b.bar, '_pts').TOPLEFT
+    T.eq(-bp[4], 23, 'inner bar from y 23: frame 20..34, centred with name above and cast line below')
+    local c1, c2 = rawget(b.cast, '_pts').TOPLEFT, rawget(b.cast, '_pts').TOPRIGHT
+    T.ok(c1[1] == b.frameArt and c1[2] == 'BOTTOMLEFT' and c1[4] == -2, 'the cast line starts at the frame\'s left, 2 px under it')
+    T.ok(c2[1] == b.frameArt and c2[2] == 'BOTTOMRIGHT' and c2[4] == -2, 'and ends at the frame\'s right')
+    T.eq(b.cast:GetHeight(), 3, '3 px'); T.ok(b.cast:GetFrameLevel() > b.bar:GetFrameLevel(), 'drawn above the bar')
+    noErrors(T)
+  end,
+  ['list (sheet 108 v2): bronze rim, gold name, level disc; elite gets the gold dragon and trim, rare the silver'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    mob(W, F, 1, 'Raptor', { level = 19 }); mob(W, F, 2, 'Druid of the Fang', { level = 20, class = 'elite' }); mob(W, F, 3, 'Gruff', { level = 21, class = 'rare' })
+    pump(); W.advance(.5)
+    local a, b, c = L.rows[1], L.rows[2], L.rows[3]
+    local rr, rg, rb = a.ring:GetVertexColor(); T.ok(rr > .5 and rb < .3, 'a calm mob: bronze rim, not black')
+    T.eq(a.lvl:GetText(), '19', 'its level on the disc')
+    T.ok(not a.drag:IsShown(), 'a normal mob: no dragon')
+    T.ok(b.drag:IsShown(), 'an elite: the dragon'); T.eq(b.drag.tex, 'elite', "the game's gold dragon")
+    local tr, tg, tb = b.frameArt:GetVertexColor(); T.ok(tr == 1 and tb < .5, 'its bar trimmed gold')
+    T.ok(c.drag:IsShown() and c.drag.tex == 'rareElite', 'a rare: the silver dragon')
+    noErrors(T)
+  end,
+  ['list (sheet 108 v2): the threat glow sits on the bar it belongs to'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local r = ns.moblist.rows[1]
+    local pts = rawget(r.glow, '_pts')
+    T.eq(pts.TOPLEFT[1], r.bar, 'anchored to the health bar'); T.eq(pts.BOTTOMRIGHT[1], r.bar)
+    noErrors(T)
+  end,
+  ['list: its seats take the mouse for their tooltips; the rings over enemies stay click-through'] = function(W, T)
+    local ns, F, UI = setup(W)
+    local L = ns.moblist
+    mob(W, F, 1, 'Raptor'); pump(); W.advance(.5)
+    local p = L.rows[1].pair
+    T.ok(p and p.smain, 'the row has its seat row')
+    local g = UI.group(p.smain, 'corruption')
+    T.ok(g and g.buttons[1]:IsMouseEnabled(), "a list seat takes the mouse: the game shows the DoT's tooltip")
+    local plate = UI.rowOn('nameplate1')
+    local pm = plate and UI.mainOf(plate)
+    local pg = pm and UI.group(pm, 'corruption')
+    T.ok(pg, 'the plate row has its Corruption seat')
+    T.ok(pg and not pg.buttons[1]:IsMouseEnabled(), 'over the enemy the seat stays click-through')
+    noErrors(T)
+  end,
   ['list: one row per nameplate, enemies only, packed to the top; display only (no click buttons)'] = function(W, T)
     local ns, F, UI = setup(W)
     local L = ns.moblist
@@ -194,6 +288,11 @@ return {
     T.eq(n, 5, 'five rows')
     W.advance(3.2)
     T.ok(L.rows[1].fk and next(L.rows[1].fk.rings), 'stand-in rings drawn')
+    local rw = L.rows
+    T.ok(rw[2].drag:IsShown() and rw[2].drag._atlas == 'nameplates-icon-elite-gold', 'row 2 shows the elite dragon')
+    T.ok(rw[5].drag:IsShown() and rw[5].drag._atlas == 'nameplates-icon-elite-silver', 'row 5 shows the rare silver dragon')
+    T.ok(not rw[1].drag:IsShown() and not rw[3].drag:IsShown(), 'plain rows: no dragon')
+    T.ok(rw[4].tgtFrame:IsShown() and rw[4].tgtArrow:IsShown() and not rw[2].tgtFrame:IsShown(), 'row 4 carries the target frame and arrow')
     L.slash('boxes'); T.eq(OmaDoomedDB.list.boxes, true, 'click areas on')
     L.slash('boxes')
     W.combat = true; W.fire('PLAYER_REGEN_DISABLED')
@@ -295,6 +394,29 @@ return {
     e.target = true; ns.moblist.update(); T.ok(not r.veilWin:IsShown(), 'never on your target')
     e.target = false; OmaDoomedDB.list.fadeDone = false; ns.moblist.update(); T.ok(not r.veilWin:IsShown(), 'off with the setting')
     ns.model.listInto = real
+    noErrors(T)
+  end,
+  ['list (sheet 119 A + B): your target gets the gold frame, a breathing glow and a nudging arrow; calm holds them still'] = function(W, T)
+    local ns, F, UI = setup(W)
+    mob(W, F, 1, 'Raptor'); mob(W, F, 2, 'Druid of the Fang'); W.advance(.3)
+    local L = ns.moblist
+    local a, b = L.rows[1], L.rows[2]
+    local function tg(n) W.units.target = n and W.units['nameplate' .. n] or nil; W.fire('PLAYER_TARGET_CHANGED'); W.advance(.3) end
+    tg(2)
+    T.ok(not a.tgtFrame:IsShown() and not a.tgtArrow:IsShown(), 'not your target: nothing')
+    T.ok(b.tgtFrame:IsShown() and b.tgtGlow:IsShown() and b.tgtArrow:IsShown(), 'your target: frame, glow and arrow')
+    local tl, br = rawget(b.tgtFrame, '_pts').TOPLEFT, rawget(b.tgtFrame, '_pts').BOTTOMRIGHT
+    T.ok(tl[3] == -11 and tl[4] == 10 and br[3] == 11 and br[4] == -10, 'frame art spans the row plus 11 / 10 px (sheet 119 numbers)')
+    T.eq(b.tgtArrow:GetWidth(), 32, 'arrow art 32 px')
+    local seenA, seenX = {}, {}
+    for _ = 1, 40 do W.advance(.05); seenA[#seenA + 1] = b.tgtGlow:GetAlpha(); seenX[#seenX + 1] = rawget(b.tgtArrow, '_pts').TOPLEFT[3] end
+    T.ok(math.min(unpack(seenA)) < .5 and math.max(unpack(seenA)) > .9, 'the glow breathes (.35 .. 1)')
+    T.ok(math.min(unpack(seenX)) < -27 and math.max(unpack(seenX)) > -24, 'the arrow nudges 6 px left and back')
+    tg(1)
+    T.ok(not b.tgtFrame:IsShown() and a.tgtFrame:IsShown(), 'the mark follows your target')
+    T.eq(rawget(b.tgtArrow, '_pts').TOPLEFT[3], -23, 'the old row is put back at rest')
+    ns.db.calm = true; tg(nil); tg(1)
+    W.advance(.4); T.eq(a.tgtGlow:GetAlpha(), 1, 'calm motion: glow steady'); T.eq(rawget(a.tgtArrow, '_pts').TOPLEFT[3], -23, 'calm motion: arrow still')
     noErrors(T)
   end,
 }

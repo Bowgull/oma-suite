@@ -4,11 +4,11 @@
 -- and a shield or anti-magic buff while it has one. One soft dark backing behind the whole list, no boxes.
 -- Built on the engines: Roster (who and what), Scheduler (when), Motion (how things move), Layout (sizes), Skin (art).
 --
--- Clicking (research, 2026-11-16): the game refuses targeting a nameplate token from an add-on button, but hovering a
--- secure UNIT button for nameplateN makes that mob your mouseover. So each row has an invisible button that runs
--- '/target [@mouseover]', and mouseover DoT keys / Mouseover Cast work from the list. Those buttons are locked in
--- place in a fight, so in a fight each mob keeps its row (no re-sorting under your mouse); between fights and at the
--- pull the list sorts: missing a DoT first, then the soonest ending.
+-- Clicking (measured 2026-11-16, rechecked on 1.60.1.70959 on 2026-11-17): Forever's engine refuses every add-on route
+-- that names a nameplateN token (target, spell, '/target [@mouseover]', and hovering such a button sets no mouseover).
+-- So the rows are display only. Hover-cast happens on the real nameplate (Mouseover Cast). Full write-up:
+-- reports/OmaDoomed click and hover casting, deep dive 2026-11-17.md. Rows sort: missing a DoT first, then the
+-- soonest ending.
 --
 -- Shown in fights. Moving and sizing: /omadoomed list unlock (Blizzard's Edit Mode look; drag it, size it with the
 -- corner grip), /omadoomed list lock.
@@ -21,9 +21,11 @@ local TOKENS = 16
 local u = G and G.u or 2
 local ROW, PORT, GAPP, BAR, BARH, NAME = G.row * u, G.portrait * u, G.gapPortrait * u, G.bar * u, G.barH * u, G.name * u
 local GAPR, RING, RINGGAP, PADX, PADY = G.gapRings * u, G.ring * u, G.ringGap * u, G.padX * u, G.padY * u
-local BUFF = 22
+local CASTH, CASTGAP = 3, 2   -- the mob's cast line under its bar: 3 px, 2 px under the bar's frame
+local BUFF = 18        -- sheet 108 v2: the shield/anti-magic badge sits on the portrait's top-right corner
 local FEATHER = 18     -- how far the backing reaches past the rows, above and below
 L.RH = ROW
+local function plainV(v) return v ~= nil and not (ns.core and ns.core.Secret and ns.core.Secret.is(v)) end
 
 local db
 local testOff    -- the test list (below)
@@ -37,7 +39,13 @@ local function seatWidth()
   local _, n = R.seatSpots()
   return n * RING + (n - 1) * RINGGAP
 end
-local function width() return PADX + PORT + GAPP + BAR + GAPR + seatWidth() + 6 + 2 * BUFF + PADX end
+-- sheet 108 v2: exactly the Details meter's width (Layout.LIST.width). The health bar takes what the seats leave, so
+-- a new seat (Siphon Life at 30) narrows the bar instead of widening the list. Floor 96 px (2026-11-18, was 110: the
+-- elite dragon's room, +16 px, leaves 348 - (12 + 40 + 22 + 6 + 5 x 30 + 4 x 4) = 102 px with five seats).
+local BAR_MIN = 96
+local function barW() return math.max(BAR_MIN, (G.width or 0) * u - (2 * PADX + PORT + GAPP + GAPR + seatWidth())) end
+local function width() return 2 * PADX + PORT + GAPP + barW() + GAPR + seatWidth() end
+L.barW = barW
 L.width = width
 
 -- ---------- a row ----------
@@ -46,7 +54,7 @@ local function texCoord(t, c) t:SetTexCoord(c[1], c[2], c[3], c[4]) end
 local function newRow(k)
   local r = CreateFrame('Frame', nil, header)
   r.k, r.unit, r.shown, r.pair = k, tok(k), false, false
-  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet, r.veilWin = false, false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
+  r.y, r.lv, r.wantA, r.fk, r.lastBite, r.quiet, r.veilWin, r.markOn, r.isTgt = false, false, false, false, false, false, false, false, false   -- set, never nil (a frame answers unknown keys)
   r:SetSize(width(), ROW); r:Hide(); r:SetAlpha(0)
   -- threat: a soft swell of light behind the row, in Blizzard's threat colour, breathing (Motion)
   r.glow = r:CreateTexture(nil, 'BACKGROUND', nil, 2); r.glow:SetTexture(K.rowGlow, nil, nil, 'TRILINEAR')
@@ -63,14 +71,40 @@ local function newRow(k)
   -- sheet 86 ("portraits are great"): the game's own portrait, clean (the additive lift over it washed it out)
   r.lift = r:CreateTexture(nil, 'ARTWORK', nil, 1); r.lift:SetAllPoints(r.face); r.lift:SetBlendMode('ADD'); r.lift:SetAlpha(.18); r.lift:AddMaskTexture(m)   -- a light touch (0.4 washed it out)
   r.ring = r:CreateTexture(nil, 'ARTWORK', nil, 3); r.ring:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR')
-  r.ring:SetSize(PORT + 6, PORT + 6); r.ring:SetPoint('CENTER', r.face, 'CENTER'); r.ring:SetVertexColor(0, 0, 0, .9)
-  -- your demon's mark (its own icon) and the mob's raid mark, on the portrait's lower corners
+  r.ring:SetSize(PORT + 6, PORT + 6); r.ring:SetPoint('CENTER', r.face, 'CENTER'); r.ring:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], K.rim[4])
+  -- sheet 118 v6 (Joshua 2026-11-18: "i like the elite frame"): elite and rare get the game's own small nameplate
+  -- dragon (gold, silver) at the left end of the health bar, unmirrored, exactly where the nameplate puts it. Placed
+  -- with the bar (below); the numbers are there.
+  -- and the mob's level in a small bronze-rimmed disc on the portrait's lower left, like the target frame's
+  r.lvlBg = r:CreateTexture(nil, 'OVERLAY', nil, 4); r.lvlBg:SetTexture(K.ART .. 'rings\\mask_disc', nil, nil, 'TRILINEAR')
+  r.lvlBg:SetVertexColor(.07, .05, .02, 1); r.lvlBg:SetSize(16, 16); r.lvlBg:SetPoint('CENTER', r.face, 'BOTTOMLEFT', 3, 3)
+  r.lvlRim = r:CreateTexture(nil, 'OVERLAY', nil, 5); r.lvlRim:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR')
+  r.lvlRim:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], 1); r.lvlRim:SetSize(19, 19); r.lvlRim:SetPoint('CENTER', r.lvlBg, 'CENTER')
+  r.lvl = r:CreateFontString(nil, 'OVERLAY'); r.lvl:SetFont(K.font, 9, 'OUTLINE'); r.lvl:SetPoint('CENTER', r.lvlBg, 'CENTER', 0, 0)
+  r.lvl:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3])
+  -- sheet 119 A + B (Joshua 2026-11-19: "A + B"): your target's row gets a gold frame round the whole row with a
+  -- breathing glow, and a gold arrow left of its face nudging in and out. Art and numbers: Art\make_target_art.py.
+  -- Frame and glow textures cover row-local x -11 .. 359, y -10 .. 54 (370 x 64 of a 512 x 64 texture) for a 348 x 44
+  -- row, so they sit at TOPLEFT (-11, +10) / BOTTOMRIGHT (+11, -10) and are 1:1 at the meter's width (a wider list
+  -- stretches only the straight edges' share). Line: rounded 1,1 .. 347,43, radius 8, 2 px. Below the level disc and
+  -- the demon mark (OVERLAY 4/5 and 2/3), as on the sheet.
+  r.tgtGlow = r:CreateTexture(nil, 'OVERLAY', nil, 0); r.tgtGlow:SetTexture(K.tgtGlow, nil, nil, 'TRILINEAR')
+  r.tgtFrame = r:CreateTexture(nil, 'OVERLAY', nil, 1); r.tgtFrame:SetTexture(K.tgtFrame, nil, nil, 'TRILINEAR')
+  for _, t in ipairs({ r.tgtGlow, r.tgtFrame }) do
+    t:SetTexCoord(0, 370 / 512, 0, 1); t:SetPoint('TOPLEFT', r, 'TOPLEFT', -11, 10); t:SetPoint('BOTTOMRIGHT', r, 'BOTTOMRIGHT', 11, -10)
+    t:SetVertexColor(K.nameGold[1], K.nameGold[2], K.nameGold[3]); t:Hide()
+  end
+  -- the arrow: 32 x 32 covering x -23 .. 9, y 6 .. 38; its tip at (2, 22), the row's middle, 2.6 px short of the
+  -- portrait ring (26 - 21.4). It nudges 6 px left and back every 1.1 s (the sheet's 1.6% of 372 px).
+  r.tgtArrow = r:CreateTexture(nil, 'OVERLAY', nil, 6); r.tgtArrow:SetTexture(K.tgtArrow, nil, nil, 'TRILINEAR')
+  r.tgtArrow:SetSize(32, 32); r.tgtArrow:SetPoint('TOPLEFT', r, 'TOPLEFT', -23, -6); r.tgtArrow:Hide()
+  -- your demon's mark (its own icon) on the portrait's lower right; the mob's raid mark at the end of its name line
   r.pet = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.pet:SetSize(20, 20); r.pet:SetPoint('CENTER', r.face, 'BOTTOMRIGHT', -1, 1); r.pet:Hide()
   local pm = r:CreateMaskTexture(); pm:SetTexture(K.ART .. 'rings\\mask', 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); pm:SetAllPoints(r.pet); r.pet:AddMaskTexture(pm)
   r.petRim = r:CreateTexture(nil, 'OVERLAY', nil, 3); r.petRim:SetTexture(K.portraitRing, nil, nil, 'TRILINEAR'); r.petRim:SetSize(25, 25)
   r.petRim:SetPoint('CENTER', r.pet, 'CENTER'); r.petRim:SetVertexColor(.89, .82, 1); r.petRim:Hide()   -- a bright rim so it reads on the dark row
-  r.mark = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.mark:SetSize(13, 13); r.mark:SetPoint('CENTER', r.face, 'BOTTOMLEFT', 2, 2)
-  r.mark:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcons'); r.mark:Hide()
+  r.mark = r:CreateTexture(nil, 'OVERLAY', nil, 2); r.mark:SetSize(13, 13)
+  r.mark:SetTexture('Interface\\TargetingFrame\\UI-RaidTargetingIcons'); r.mark:Hide()   -- placed with the bar (below)
   -- OmaDoomed's skull on the portrait's top edge (the target frame's trick: a long bar 0..health filled with your
   -- DoTs' damage; the skull rides its end and reaches the little window only when the damage covers the health)
   local SW, SH = PORT * .78, PORT * .78 * 54 / 78
@@ -101,35 +135,59 @@ local function newRow(k)
   r.veil:SetSize(VW + 20, ROW); r.veil:SetPoint('RIGHT', r.veilBar:GetStatusBarTexture(), 'RIGHT', 10, 0)
   -- name and health, built like the nameplate: Blizzard's bar frame, status bar art, white name
   local tx = PADX + PORT + GAPP
-  local blk = NAME + 3 + BARH
+  -- 2026-11-19: the block centred on the row (and on the portrait's middle) is name + 3 + framed bar + 2 + the 3 px cast
+  -- line, 34 px: name from y 5, frame 20..34, your target's rim 19..35, cast line 36..39, then 2 px to the gold target
+  -- frame's line (41..43). Before, the block left the cast line out (29 px): frame 22.5..36.5 and the line 36.5..39.5
+  -- lay on the frame's edge and 1 px under the target rim.
+  local blk = NAME + 3 + BARH + CASTGAP + CASTH
   r.bar = CreateFrame('StatusBar', nil, r)
-  r.bar:SetSize(BAR - 4, BARH - 6); r.bar:SetPoint('TOPLEFT', r, 'TOPLEFT', tx + 2, -(ROW / 2 - blk / 2 + NAME + 3 + 3))
+  r.bar:SetSize(barW() - 4, BARH - 6); r.bar:SetPoint('TOPLEFT', r, 'TOPLEFT', tx + 2, -(ROW / 2 - blk / 2 + NAME + 3 + 3))
   r.bar:SetStatusBarTexture(K.statusbar); r.bar:SetStatusBarColor(K.healthRed[1], K.healthRed[2], K.healthRed[3])
   r.bar:SetMinMaxValues(0, 1); r.bar:SetValue(1)
+  -- sheet 108 v2 ("warm glow per each threat level ON THE BAR it belongs to"): the threat swell sits around the bar
+  r.glow:ClearAllPoints(); r.glow:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -26, 16); r.glow:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 26, -16)
+  r.mark:SetPoint('BOTTOMRIGHT', r.bar, 'TOPRIGHT', 1, 4)
   local empty = r.bar:CreateTexture(nil, 'BACKGROUND', nil, -1); empty:SetPoint('TOPLEFT', -1, 1); empty:SetPoint('BOTTOMRIGHT', 1, -1); empty:SetColorTexture(K.empty[1], K.empty[2], K.empty[3], 1)
   r.frameArt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 2); r.frameArt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.frameArt, K.plateFrame)
   r.frameArt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -2, 3); r.frameArt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 2, -3)
   r.tgt = r.bar:CreateTexture(nil, 'OVERLAY', nil, 3); r.tgt:SetTexture(K.plateTex, nil, nil, 'TRILINEAR'); texCoord(r.tgt, K.plateTarget)
   r.tgt:SetPoint('TOPLEFT', r.bar, 'TOPLEFT', -4, 4); r.tgt:SetPoint('BOTTOMRIGHT', r.bar, 'BOTTOMRIGHT', 4, -4); r.tgt:Hide()
+  -- the elite dragon, by measurement (2026-11-19, his 10:5x screenshot of Blackfathom Myrmidon, 1:1). Art: the
+  -- nameplate's own 'nameplates-icon-elite-gold' (silver for rares). Drawn in a 16 x 14 box the atlas's art showed only
+  -- ~11 x 10 px (x 99.5..>110, y 72.5..82.5 of the box's 98..114 x 70.5..84.5): the atlas has clear margins, 1.5 of
+  -- 16 left, 2 of 14 top and bottom, so the dragon was 71% of the framed bar's 14 px, where sheet 118 v6 (and the
+  -- nameplate) has it as tall as the frame. And it lay on the row, under the bar's frame, so your target's 4 px rim
+  -- hid its tail. Now: box x 1.4 = 22.4 x 19.6, so the art is 14 px tall (the frame's height), its middle on the
+  -- bar's middle; drawn on the bar above the rim (OVERLAY 4). Its art is ~15.8 px wide (sheet 118's 1.125 : 1), its
+  -- tail ~1 px over the frame's left end: box right at frame left + 5. Art spans x ~53.7..69.5 local, y 20..34.
+  -- Clearance (ring and mark as before, now the block sits 2.5 px higher): portrait ring (26,22, r 21.4) reaches
+  -- x 47.4 at the dragon's top (y 20..24), 6 px clear; your demon's mark (45,41, r 11.6) reaches x 51 where the
+  -- dragon's lowest left claw is (y ~31, x ~55.9), 5 px clear.
+  r.drag = r.bar:CreateTexture(nil, 'OVERLAY', nil, 4); r.drag:Hide()
+  r.drag:SetSize(22.4, 19.6); r.drag:SetPoint('RIGHT', r.frameArt, 'LEFT', 5, 0)
   r.hp = r.bar:CreateFontString(nil, 'OVERLAY', nil, 7); r.hp:SetFont(K.font, 12, 'OUTLINE'); r.hp:SetPoint('CENTER', r.bar, 'CENTER', 0, 0)
   -- a tick: the DoT pieces flash (a soft white light over the bar) as they shrink (sheet 83, row 1)
   r.bite = r.bar:CreateTexture(nil, 'OVERLAY', nil, 1); r.bite:SetTexture(K.statusbar); r.bite:SetAllPoints(r.bar)
   r.bite:SetVertexColor(1, .93, .8); r.bite:SetBlendMode('ADD'); r.bite:SetAlpha(0)
   r.dmg, r.nd = false, false
-  -- the mob's cast: a thin line under its bar, red when you can interrupt it (Spell Lock), grey when you can't
-  r.cast = CreateFrame('StatusBar', nil, r); r.cast:SetSize(BAR - 4, 3); r.cast:SetPoint('TOPLEFT', r.bar, 'BOTTOMLEFT', 0, -3)
+  -- the mob's cast: a thin line under its bar, red when you can interrupt it (Spell Lock), grey when you can't.
+  -- 2026-11-19: as wide as the bar's frame (x 68 .. 68 + barW, it was the inner bar's barW - 4 from x 70, so it
+  -- started 2 px in and stopped 2 px short), 2 px under the frame (1 px clear of your target's rim), drawn above the bar
+  r.cast = CreateFrame('StatusBar', nil, r); r.cast:SetHeight(CASTH)
+  r.cast:SetPoint('TOPLEFT', r.frameArt, 'BOTTOMLEFT', 0, -CASTGAP); r.cast:SetPoint('TOPRIGHT', r.frameArt, 'BOTTOMRIGHT', 0, -CASTGAP)
+  r.cast:SetFrameLevel(r.bar:GetFrameLevel() + 1)
   r.cast:SetStatusBarTexture(K.statusbar); r.cast:SetMinMaxValues(0, 1); r.cast:SetValue(0); r.cast:Hide()
   local cb = r.cast:CreateTexture(nil, 'BACKGROUND'); cb:SetAllPoints(); cb:SetColorTexture(0, 0, 0, .7)
   r.name = r:CreateFontString(nil, 'OVERLAY'); r.name:SetFont(K.font, NAME, 'OUTLINE')
-  r.name:SetTextColor(1, 1, 1); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
-  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 6); r.name:SetWidth(BAR); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
+  r.name:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3]); r.name:SetShadowColor(0, 0, 0, 1); r.name:SetShadowOffset(1, -1)
+  r.name:SetPoint('BOTTOMLEFT', r.bar, 'TOPLEFT', -1, 5); r.name:SetWidth(barW() + 2); r.name:SetJustifyH('LEFT'); pcall(r.name.SetWordWrap, r.name, false)
   -- shields and anti-magic: only while the mob has one (HELPFUL|IMPORTANT, what the game itself flags)
   local ok, buffs = pcall(CreateFrame, 'AuraContainer', nil, r, 'CustomAuraContainerTemplate')
   if ok and buffs then
     pcall(buffs.SetEditModePreviewEnabled, buffs, false)
     buffs:SetFlowLayoutAnchorPoint('LEFT'); buffs:SetFlowLayoutGrowthDirection(1, 1); buffs:SetFlowLayoutMaximumLineSize(BUFF * 2.5)
     local okG = pcall(buffs.AddAuraGroup, buffs, 'buffs', 'HELPFUL|IMPORTANT|INCLUDE_NAME_PLATE_ONLY', { initializeFrame = R.buffButton(BUFF), maxFrameCount = 2, layout = { groupSpacing = 4 } })
-    if okG then r.buffs = buffs; buffs:SetPoint('LEFT', r, 'LEFT', tx + BAR + GAPR + seatWidth() + 6, 0); buffs:SetUnit(r.unit) end
+    if okG then r.buffs = buffs; buffs:SetPoint('LEFT', r.face, 'TOPRIGHT', -BUFF * .6, -2); buffs:SetFrameLevel(r:GetFrameLevel() + 7); buffs:SetUnit(r.unit) end
   end
   -- Display only (2026-11-16, measured: Forever refuses every add-on route to a mob through its nameplate token:
   -- click to target, cast at it, mouseover macro, hover-as-mouseover; DECISIONS.md). The row itself takes the mouse
@@ -227,8 +285,36 @@ local function threatLook(r, e)
   else
     M.stop('thr' .. r.k)
     M.tween('thr' .. r.k, r.glow:GetAlpha(), 0, .4, function(v) r.glow:SetAlpha(v) end)
-    r.ring:SetVertexColor(0, 0, 0, .9)
+    r.ring:SetVertexColor(K.rim[1], K.rim[2], K.rim[3], K.rim[4])
   end
+end
+-- sheet 108 v2 (dragon moved by sheet 118 v6): elite gold dragon and gold bar trim, rare silver, rare elite silver with a gold trim; level on the disc
+local CLASS_LOOK = {
+  elite = { tex = 'elite', trim = { 1, .84, .38 }, name = { 1, .86, .3 } },
+  worldboss = { tex = 'elite', trim = { 1, .84, .38 }, name = { 1, .86, .3 } },
+  rareelite = { tex = 'rareElite', trim = { 1, .9, .55 }, name = { .92, .95, 1 } },
+  rare = { tex = 'rareElite', trim = { .82, .88, 1 }, name = { .92, .95, 1 } },
+}
+local function classLook(r, cls)   -- cls: the test list's pretend classification
+  local c = cls
+  if not c then local ok, v = pcall(UnitClassification, r.unit); c = ok and plainV(v) and v or nil end
+  local look = c and CLASS_LOOK[c] or nil
+  if look then
+    if r.drag.tex ~= look.tex then
+      r.drag.tex = look.tex
+      local at = K[look.tex .. 'Atlas']
+      local ok = at and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(at) ~= nil
+      if ok then r.drag:SetTexCoord(0, 1, 0, 1); r.drag:SetAtlas(at, false)
+      else r.drag:SetTexture(K[look.tex]); r.drag:SetTexCoord(0, 37 / 64, 0, 28 / 32) end   -- the tooltip icon: 37 x 28 of 64 x 32
+    end
+    r.drag:Show(); r.frameArt:SetVertexColor(look.trim[1], look.trim[2], look.trim[3]); r.name:SetTextColor(look.name[1], look.name[2], look.name[3])
+  else
+    r.drag:Hide(); r.frameArt:SetVertexColor(1, 1, 1); r.name:SetTextColor(K.nameGold[1], K.nameGold[2], K.nameGold[3])
+  end
+end
+local function levelLook(r)
+  local ok, lv = pcall(UnitLevel, r.unit)
+  if ok and plainV(lv) and type(lv) == 'number' then r.lvl:SetText(lv < 0 and '??' or tostring(lv)) else r.lvl:SetText('') end
 end
 -- your demon's own spell icon (sheet 86, "demon mark is great"): crisp game art, not a 20 px face
 local DEMON_ICON = {
@@ -245,19 +331,41 @@ local function petLook(r, e)
     r.pet:Show(); r.petRim:Show()
   else r.pet:Hide(); r.petRim:Hide() end
 end
+-- the name runs to 3 px before the first ring (left at bar - 1 = 73, rings at 72 + barW + 6), so barW + 2; with a
+-- raid mark at the line's end (13 px, on the bar's top-right) it stops short of it, barW - 16 (2026-11-18: the elite
+-- dragon's room took 16 px from the bar, and "Evolving Ectoplasm" is 121 px)
+local function nameW(r) return (r.markOn and barW() - 16) or barW() + 2 end
 local function markLook(r, e)
+  local on = e.mark and true or false
+  if on ~= r.markOn then r.markOn = on; r.name:SetWidth(nameW(r)) end
   if e.mark then
     local i = e.mark - 1
     r.mark:SetTexCoord((i % 4) / 4, (i % 4 + 1) / 4, math.floor(i / 4) / 4, (math.floor(i / 4) + 1) / 4); r.mark:Show()
   else r.mark:Hide() end
 end
 
+-- sheet 119 A + B: frame, glow and arrow on your target's row. Glow breathes 1 -> .35 -> 1 over 1.6 s; arrow nudges
+-- 0 -> -6 px -> 0 over 1.1 s. 'Calm motion' holds both still (glow full, arrow at rest), as the Motion engine does.
+local function targetLook(r, on)
+  on = on == true
+  if r.isTgt == on then return end
+  r.isTgt = on
+  r.tgtGlow:SetShown(on); r.tgtFrame:SetShown(on); r.tgtArrow:SetShown(on)
+  if on then
+    M.breathe('tgtG' .. r.k, 1.6, .35, 1, function(v) r.tgtGlow:SetAlpha(v) end)
+    M.breathe('tgtB' .. r.k, 1.1, -6, 0, function(v) r.tgtArrow:SetPoint('TOPLEFT', r, 'TOPLEFT', -23 + v, -6) end)
+  else
+    M.stop('tgtG' .. r.k); M.stop('tgtB' .. r.k)
+    r.tgtGlow:SetAlpha(1); r.tgtArrow:SetPoint('TOPLEFT', r, 'TOPLEFT', -23, -6)
+  end
+end
+L.targetLook = targetLook
 local function fill(r, e)
   pcall(r.name.SetText, r.name, UnitName(r.unit))
   pcall(SetPortraitTexture, r.face, r.unit); pcall(SetPortraitTexture, r.lift, r.unit)
   health(r); skull(r, e)   -- the kill bar paints on DOTS and when the row appears (not five times a second)
-  r.tgt:SetShown(e.target == true)
-  threatLook(r, e); petLook(r, e); markLook(r, e)
+  r.tgt:SetShown(e.target == true); targetLook(r, e.target)
+  threatLook(r, e); petLook(r, e); markLook(r, e); classLook(r); levelLook(r)
   local a = (db.range ~= false and e.far) and .5 or 1
   if r.wantA ~= a then r.wantA = a; M.tween('a' .. r.k, r:GetAlpha(), a, .25, function(v) r:SetAlpha(v) end) end
 end
@@ -362,7 +470,7 @@ local function setShown(r, on)
     r:Show(); r.wantA = false; r.dmg, r.nd = false, false; killbar(r); pcall(castLook, r)
     M.tween('in' .. r.k, 12, 0, .22, function(v) r:SetPoint('TOPLEFT', header, 'TOPLEFT', v, r.y or slotY(slotOf[r.k] or r.k)) end, M.ease.out)
   else
-    M.stop('thr' .. r.k); r.lv = false
+    M.stop('thr' .. r.k); r.lv = false; targetLook(r, false)
     M.tween('a' .. r.k, r:GetAlpha(), 0, .2, function(v) r:SetAlpha(v) end, nil, function() if not r.shown then r:Hide() end end)
     r.wantA = 0
     killbar(r); pcall(castLook, r)
@@ -409,6 +517,26 @@ local function resetPlace()
   header:ClearAllPoints(); header:SetScale(1); header:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -40, -330); placeClicks()
 end
 L.resetPlace = resetPlace
+-- /omadoomed list snap (sheet 108 v2, 2026-11-17: "pushing it right to the edge and its still not fully in line with
+-- my damage meter"): once, the list's top-right goes 3 px under the bottom-right of Details' first window. Its size is
+-- left alone. A saved place like any drag: no live link to Details (which hides when solo).
+function L.snap()
+  if InCombatLockdown() or not header then say('the list can be lined up after this fight.'); return false end
+  local d = _G.DetailsBaseFrame1
+  local okR, right = pcall(function() return d and d:GetRight() end)
+  local okB, bottom = pcall(function() return d and d:GetBottom() end)
+  local okW, dw = pcall(function() return d and d:GetWidth() end)
+  if not (okR and okB and okW and type(right) == 'number' and type(bottom) == 'number' and type(dw) == 'number') then
+    say("Details' window isn't up. Open it (/details show), then /omadoomed list snap again."); return false
+  end
+  -- position only (2026-11-17: sizing is the corner grip's job alone); at its full size the list is the meter's width
+  local ds, e = d:GetEffectiveScale(), header:GetEffectiveScale()
+  header:ClearAllPoints(); header:SetPoint('TOPRIGHT', UIParent, 'BOTTOMLEFT', right * ds / e, (bottom * ds - 3) / e)
+  savePos(); placeClicks()
+  local same = math.abs(width() * e - dw * ds) < 2
+  say(same and 'lined up under your damage meter, edge to edge.' or "lined up under your damage meter's right edge. Its width matches at full size: the //// grip sizes it.")
+  return true
+end
 local function buildEditMode()
   sel = CreateFrame('Frame', nil, header)
   sel:SetPoint('TOPLEFT', header, 'TOPLEFT', -6, 2); sel:SetWidth(width() + 12); sel:SetHeight(PADY * 2 + ROW * 3)
@@ -425,9 +553,8 @@ local function buildEditMode()
     header:StopMovingOrSizing(); savePos(); placeClicks()
     if b == 'RightButton' and L.menu then L.menu(sel) end   -- right-click: lock or reset
   end)
-  -- the mouse wheel sizes it (5% a notch), as easy as the corner
-  sel:EnableMouseWheel(true)
-  sel:SetScript('OnMouseWheel', function(_, d) wheel(d) end)
+  -- 2026-11-17 (Joshua: "it should only ever resize with a //// bottom right"): the corner grip is the only way to size
+  -- it; the mouse wheel no longer does (the old wheel() stays for /omadoomed list size)
   grip = CreateFrame('Button', nil, sel); grip:SetSize(24, 24); grip:SetPoint('BOTTOMRIGHT', sel, 'BOTTOMRIGHT', -2, 2)
   grip:SetNormalTexture(K.sizeGrip); grip:SetHighlightTexture(K.sizeGripHi); grip:SetPushedTexture(K.sizeGripDown)
   -- the drag is measured once, at the press (the list's width on screen then), so the grip moving with the list
@@ -476,6 +603,7 @@ function L.menu(owner)
     MenuUtil.CreateContextMenu(owner, function(_, root)
       root:CreateTitle('Mob list')
       if db.unlocked or (sel and sel:IsShown()) then root:CreateButton('Lock in place', lock) else root:CreateButton('Unlock to move', free) end
+      root:CreateButton('Line up under the damage meter', function() L.snap() end)
       root:CreateButton('Reset to default', reset)
     end)
   else lock() end   -- no menu in this client: right-click locks, as before
@@ -486,7 +614,8 @@ local function placeSeats(r)
   local p = r.pair; if not p then return end
   local sw = seatWidth(); local k = RING / R.S
   p.anchor:SetScale(k); p.anchor:ClearAllPoints(); p.anchor:SetSize(sw / k, 1)
-  p.anchor:SetPoint('BOTTOM', r, 'BOTTOMLEFT', (PADX + PORT + GAPP + BAR + GAPR + sw / 2) / k, ((ROW - RING) / 2) / k)
+  -- sheet 108 v2: the seats end at the list's right edge, so the rings line up with the meter above
+  p.anchor:SetPoint('BOTTOM', r, 'BOTTOMLEFT', (width() - PADX - sw / 2) / k, ((ROW - RING) / 2) / k)
 end
 local builder
 local function buildPairs()
@@ -508,7 +637,7 @@ local function relayout()
   if InCombatLockdown() or not header then return end
   header:SetSize(width(), PADY * 2 + ROW * (db.rows or 8))
   back:SetWidth(width() + 48)
-  for k = 1, TOKENS do local r = rows[k]; if r then r:SetWidth(width()); placeSeats(r) end end
+  for k = 1, TOKENS do local r = rows[k]; if r then r:SetWidth(width()); r.bar:SetWidth(barW() - 4); r.name:SetWidth(nameW(r)); placeSeats(r) end end
   if sel then sel:SetWidth(width() + 12) end
   pack(true)
 end
@@ -516,7 +645,7 @@ end
 -- ---------- the anchor tab (sheet 84 A, approved 2026-11-16 "A, hover tab") ----------
 -- Between fights a small tab sits faintly at the list's top-left corner (the list itself hides out of combat, so
 -- unlike Details and Threat there's nothing else to grab). Point at it: it lights gold, the list's outline and its
--- corner grip show. Drag the tab to move, the corner or the mouse wheel to size; click the padlock and the tab goes
+-- corner grip show. Drag the tab to move, the //// corner grip to size; click the padlock and the tab goes
 -- away until you unlock again (options' Move button, the key binding, /omadoomed list move). In a fight it's gone.
 local tab
 local TAB_W, TAB_H = 52, 22
@@ -559,11 +688,10 @@ local function buildTab()
     say('mob list locked in place. To move it again: Move the list in options, or the key binding.')
   end)
   lock:SetScript('OnEnter', function() peek(true) end)
-  tab:RegisterForDrag('LeftButton'); tab:EnableMouseWheel(true)
+  tab:RegisterForDrag('LeftButton')
   tab:SetScript('OnEnter', function() peek(true) end)
   tab:SetScript('OnDragStart', function(self) if InCombatLockdown() then return end; self.dragging = true; peek(true); header:StartMoving() end)
   tab:SetScript('OnDragStop', function(self) self.dragging = false; header:StopMovingOrSizing(); savePos(); placeClicks() end)
-  tab:SetScript('OnMouseWheel', function(_, d) wheel(d) end)
   tab:RegisterForClicks('RightButtonUp')
   tab:SetScript('OnClick', function(self, b) if b == 'RightButton' then L.menu(self) end end)
   -- leaving: the outline goes once the mouse is off both the tab and the outline (and nothing is being dragged)
@@ -665,10 +793,10 @@ local SPB = ns.spells.byKey
 local BEAST, HAWK, RAPTOR = 'Interface\\Icons\\Ability_Mount_WhiteDireWolf', 'Interface\\Icons\\Ability_Hunter_Pet_WindSerpent', 'Interface\\Icons\\Ability_Hunter_Pet_Raptor'
 local FAKE = {
   { name = 'Zhevra Runner', hp = 244, max = 300, icon = BEAST, seats = { corruption = 7, agony = 19 }, threat = 1, tick = true },
-  { name = 'Sunscale Screecher', hp = 312, max = 400, icon = HAWK, seats = { corruption = 12, agony = 16, immolate = 9 }, cast = true },
+  { name = 'Sunscale Screecher', hp = 312, max = 400, icon = HAWK, seats = { corruption = 12, agony = 16, immolate = 9 }, cast = true, cls = 'elite' },
   { name = 'Zhevra Runner', hp = 96, max = 300, icon = BEAST, seats = { corruption = 2, agony = 12 }, threat = 3, skull = true, pet = true },
   { name = 'Zhevra Runner', hp = 186, max = 300, icon = BEAST, seats = { corruption = 10, agony = 16, curse = 240 }, target = true, mark = 8 },
-  { name = 'Sunscale Lashtail', hp = 330, max = 350, icon = RAPTOR, seats = {}, far = true },
+  { name = 'Sunscale Lashtail', hp = 330, max = 350, icon = RAPTOR, seats = {}, far = true, cls = 'rare' },
 }
 local function fakeRing(parent, key)
   local w = CreateFrame('Frame', nil, parent); w:SetSize(RING, RING); w:SetFrameLevel(parent:GetFrameLevel() + 5)
@@ -693,7 +821,7 @@ local function fakeParts(r)
   local spots = R.seatSpots()
   for key, i in pairs(spots) do
     local w = fakeRing(r, key)
-    w:SetPoint('CENTER', r, 'LEFT', PADX + PORT + GAPP + BAR + GAPR + (i - .5) * RING + (i - 1) * RINGGAP, 0)
+    w:SetPoint('CENTER', r, 'LEFT', PADX + PORT + GAPP + barW() + GAPR + (i - .5) * RING + (i - 1) * RINGGAP, 0)
     fk.rings[key] = w
   end
   for i = 1, 3 do local t = r.bar:CreateTexture(nil, 'ARTWORK', nil, 2); t:SetTexture(K.statusbar); fk.pieces[i] = t end
@@ -714,7 +842,7 @@ end
 -- the kill pieces: your DoTs' damage left, laid back from the health's end (the one ending first nearest the green)
 local ORDER = { 'corruption', 'agony', 'immolate' }
 local function fakePieces(r, d, dmg)
-  local bw = BAR - 4
+  local bw = barW() - 4
   local x = d.hp / d.max * bw
   for i, key in ipairs(ORDER) do
     local t, amt = r.fk.pieces[i], dmg[key] or 0
@@ -761,7 +889,7 @@ local function clearFake(r)
   if r.fk then for _, w in pairs(r.fk.rings) do w:Hide() end; for _, p2 in ipairs(r.fk.pieces) do p2:Hide() end end
   if r.pair then r.pair.anchor:Show() end
   if r.buffs then r.buffs:Show() end
-  r.cast:Hide(); r.tgt:Hide(); r.pet:Hide(); r.petRim:Hide(); r.mark:Hide(); r.skullWin:Hide()
+  r.cast:Hide(); r.tgt:Hide(); targetLook(r, false); r.pet:Hide(); r.petRim:Hide(); r.mark:Hide(); r.skullWin:Hide()
   M.stop('thr' .. r.k); r.lv = false; r.glow:SetAlpha(0); r.ring:SetVertexColor(0, 0, 0, .9)
   r.shown = false; r:Hide(); r:SetAlpha(0); r.wantA = false
 end
@@ -783,13 +911,14 @@ local function testOn(on, quiet)
     if r.buffs then r.buffs:Hide() end
     r.name:SetText(d.name); r.face:SetTexture(d.icon); r.lift:SetTexture(d.icon)
     r.bar:SetMinMaxValues(0, d.max); r.bar:SetValue(d.hp); r.hp:SetText(db.hp ~= false and tostring(d.hp) or '')
-    r.tgt:SetShown(d.target == true)
+    r.tgt:SetShown(d.target == true); targetLook(r, d.target)
     r.lv = false; threatLook(r, { threat = d.threat })
     if d.pet then
       if not (UnitExists('pet') and pcall(SetPortraitTexture, r.pet, 'pet')) then r.pet:SetTexture('Interface\\Icons\\Spell_Shadow_SummonImp') end
       r.pet:Show(); r.petRim:Show()
     else r.pet:Hide(); r.petRim:Hide() end
     markLook(r, { mark = d.mark })
+    classLook(r, d.cls or 'normal')   -- row 2 shows the elite dragon, row 5 the rare's silver one
     r.skullWin:SetShown(d.skull == true and ns.db.skull ~= false); r.skullBar:SetMinMaxValues(0, 1); r.skullBar:SetValue(d.skull and 1 or 0)
     r.cast:Hide(); r.cast:SetScript('OnUpdate', nil)
     for _, w in pairs(fk.rings) do w:Show() end
@@ -838,8 +967,9 @@ function L.slash(msg)
           ct and ('%.0f'):format(ct * r.click:GetEffectiveScale()) or '?', rt and ('%.0f'):format(rt * r:GetEffectiveScale()) or '?'))
       end
     end
-  elseif cmd == 'unlock' or cmd == 'move' then unlock(true); say('drag the list anywhere; mouse wheel or the corner grip sizes it; right-click it when done.')
+  elseif cmd == 'unlock' or cmd == 'move' then unlock(true); say('drag the list anywhere; the //// corner grip sizes it; right-click it when done.')
   elseif cmd == 'lock' then unlock(false); say('list locked: it shows in fights.')
+  elseif cmd == 'snap' then L.snap()
   elseif cmd == 'rows' then
     local n = tonumber(arg); if n then db.rows = math.max(4, math.min(TOKENS, n)); relayout(); say(('the list shows up to %d mobs.'):format(db.rows)) end
   elseif cmd == 'reset' then

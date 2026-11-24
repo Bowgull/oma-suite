@@ -5,6 +5,20 @@ local function setup(W, readable)
   F.mob('nameplate1', A, 'Kobold'); F.target(A); W.combat = not readable
   return F
 end
+-- A fight in combat (tick amounts hidden): boost (a spell ID cast first, or nil), then the DoT; every tick seen, then
+-- the damage meter's total for it is read. A fresh add-on each run, the learned sizes kept.
+local function learnRun(W, boost, id, meter)
+  local keep = OmaDoomedDB and OmaDoomedDB.track and OmaDoomedDB.track.ticks
+  local F = setup(W)
+  if keep then OmaDoomedDB.track.ticks = keep end
+  if boost then F.cast(boost) end
+  F.cast(id)
+  local every, n = (id == 980) and 2 or 3, (id == 980) and 12 or 4
+  for _ = 1, n do F.wait(every); F.hit('nameplate1', 32) end
+  W.combat = false
+  F.oma.track.learnFromMeter({ { spellID = id, totalAmount = meter } })
+  return F
+end
 return {
   ['Bane of Doom replaces your Bane of Agony on that mob'] = function(W, T)
     local F = setup(W); F.cast(980); F.cast(172); F.wait(1); T.ok(F.dots()['Bane of Agony'])
@@ -83,5 +97,25 @@ return {
   ['Curse of the Elements on one mob leaves another alone'] = function(W, T)
     local F = setup(W); F.mob('nameplate2', 'Creature-B', 'Gnoll')
     F.cast(1490); F.target('Creature-B'); F.cast(172); F.wait(0.1); T.eq(F.dots().Corruption.damage, 47)
+  end,
+
+  -- Learned tick sizes are your plain damage: a boost that was up while they were learned (Elements, Amplify Curse)
+  -- comes back out, or the next fight adds it a second time (the skull shows early).
+  ['damage meter: Corruption learned under Elements is the plain size'] = function(W, T)
+    local F = learnRun(W, 1490, 172, 88)   -- 4 ticks of 20, +10% = 22 each
+    T.near(OmaDoomedDB.track.ticks[172], 20, 0.05, 'learned without the 10%')
+    F.mob('nameplate2', 'Creature-B', 'Gnoll'); F.target('Creature-B'); F.cast(1490); F.cast(172); F.wait(0.1)
+    T.near(F.dots().Corruption.damage, 88, 0.6, 'the next cursed Corruption: 4 x 20 x 1.1, not 4 x 22 x 1.1')
+  end,
+  ['damage meter: Agony learned under Amplify Curse is the plain size'] = function(W, T)
+    learnRun(W, nil, 980, 100.8); local plain = OmaDoomedDB.track.ticks[980]
+    learnRun(W, 18288, 980, 151.2)          -- the same Agony, +50%
+    T.near(OmaDoomedDB.track.ticks[980], plain, 0.05, 'same size as without Amplify')
+  end,
+  ['readable ticks under Elements teach the plain size, and count it once'] = function(W, T)
+    local F = setup(W, true); F.cast(1490); F.cast(172)
+    F.wait(3); F.hit('nameplate1', 32, 22); F.wait(0.1)
+    T.eq(OmaDoomedDB.track.ticks[172], 20, 'learned without the 10%')
+    T.near(F.dots().Corruption.damage, 66, 0.6, '3 ticks left: 3 x 20 x 1.1')
   end,
 }

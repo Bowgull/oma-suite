@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: OmaWay
+## Notes: A painted guide arrow (Soul well) that Guidelime and Questie steer, and a quest / dungeon mode that puts the guide, tracker and meter away in dungeons. /omaway
+## Author: Omashu
+## Version: @project-version@
+## Category: Quests & Leveling
+## IconTexture: Interface\AddOns\OmaWay\Art\arrow_on_s
+## X-License: MIT
+## OptionalDeps: TomTom, Guidelime, Questie, Details
+## SavedVariablesPerCharacter: OmaWayDB
+Core.lua
+Arrow.lua
+Quests.lua
+Modes.lua
+MinimapButton.lua

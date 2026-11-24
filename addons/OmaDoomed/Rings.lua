@@ -58,7 +58,8 @@ end
 -- others close up in their order, and it slots back into its place when it lands. Three rows flow identically: the
 -- ending glow (halo), the bands (ring) and the icons and numbers (main, a child of ring so it draws above).
 local function groupByKey(key) for _, g in ipairs(R.GROUPS) do if g.key == key then return g end end end
-local function seatRow(c, kind)
+-- list: the mob list's row (its seats' icons take the mouse, for their tooltips)
+local function seatRow(c, kind, list)
   pcall(c.SetEditModePreviewEnabled, c, false)
   c:SetFlowLayoutAnchorPoint('BOTTOMLEFT')
   c:SetFlowLayoutGrowthDirection(1, 1)
@@ -66,7 +67,7 @@ local function seatRow(c, kind)
   for _, key in ipairs(R.SEATS) do
     local g = groupByKey(key)
     if g then
-      local init = kind == 'halo' and R.haloFor(key) or g[kind]
+      local init = kind == 'halo' and R.haloFor(key) or (list and kind == 'main' and g.mainList) or g[kind]
       local ok, err = pcall(c.AddAuraGroup, c, key, g.filter, { initializeFrame = init, candidateFilters = R.filtersFor(key),
         sortMethod = SORT, maxFrameCount = 1, layout = { groupSpacing = R.SEAT_GAP } })
       if not ok then log(kind .. ' seat ' .. key .. ' failed: ' .. tostring(err)); if kind ~= 'halo' then error(err) end end
@@ -99,7 +100,7 @@ local function newPair(gap, spare, flow, list)
     if seats then
       halo = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate'); seatRow(halo, 'halo')
       sring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate'); seatRow(sring, 'ring')
-      smain = CreateFrame('AuraContainer', nil, sring, 'CustomAuraContainerTemplate'); seatRow(smain, 'main')
+      smain = CreateFrame('AuraContainer', nil, sring, 'CustomAuraContainerTemplate'); seatRow(smain, 'main', list)
     end
     local ring = CreateFrame('AuraContainer', nil, anchor, 'CustomAuraContainerTemplate')
     setupContainer(ring, 'ring', gap, seats, anchor)
@@ -331,11 +332,53 @@ end
 -- 2026-11-17 (09:58 screenshot, Joshua: "the rings are hanging with nothing there ... they should sit tight"): the
 -- rings sit right under the bars; only while the target is casting do they (and the team row under them) slide down to
 -- make room for its cast bar. Blizzard's own cast bar showing and hiding is the signal (R.castShown, TeamRow.lua).
-function R.castDrop() return (R.castShown and ns.team and ns.team.on()) and R.CAST_SLOT or 0 end
+-- 2026-11-24 (07:42 screenshots): BetterBlizzFrames (and add-ons like it) already move the cast bar down out of the
+-- way, so sliding the rings as well put them right under it. So the rings slide only when the bar really is where
+-- they sit: its top (or its icon's) reaches into the row. Positions are read, never assumed; if the game won't give
+-- them (hidden in a fight, or no such method), the old slide stands.
+local function lowBar()
+  local main = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
+  return main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
+end
+local function plainNum(v) return type(v) == 'number' and not (issecretvalue and issecretvalue(v)) and v == v end
+local function screen(f, edge)   -- an edge of f in screen pixels, or nil
+  if type(f) ~= 'table' or type(f[edge]) ~= 'function' or type(f.GetEffectiveScale) ~= 'function' then return end
+  local ok, v = pcall(f[edge], f); local ok2, k = pcall(f.GetEffectiveScale, f)
+  if ok and ok2 and plainNum(v) and plainNum(k) then return v * k end
+end
+-- 2026-11-24 08:42 screenshot: in a fight Forever hides those positions too, so the old slide still ran. So a reading
+-- taken while they were plain (out of combat, or earlier in the fight) is kept and used while they're hidden; and
+-- with nothing read yet, BetterBlizzFrames loaded means its own placement, which keeps the bar clear of the row.
+local lastClear
+local function bbfLoaded()
+  local f = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
+  local ok, on = pcall(f, 'BetterBlizzFrames')
+  return ok and on == true
+end
+local function readClear()
+  local bar = _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar)
+  local low, p = lowBar(), framePair
+  local bottom = screen(low, 'GetBottom')
+  local top = screen(bar, 'GetTop')
+  if not (bottom and top and p) then return nil end
+  local iconTop = screen(bar.Icon, 'GetTop'); if iconTop and iconTop > top then top = iconTop end
+  local ok, k = pcall(p.anchor.GetEffectiveScale, p.anchor); if not (ok and plainNum(k)) then return nil end
+  return top <= bottom - (S + R.FRAME_GAP) * k + 0.5      -- the row's bottom edge, in screen pixels
+end
+function R.castBarClear()
+  local now = readClear()
+  if now ~= nil then lastClear = now; return now end
+  if lastClear ~= nil then return lastClear end
+  if bbfLoaded() then return true end
+end
+R.readCastClear = function() local v = readClear(); if v ~= nil then lastClear = v end end   -- a reading while it's plain
+function R.castDrop()
+  if not (R.castShown and ns.team and ns.team.on()) then return 0 end
+  return R.castBarClear() == true and 0 or R.CAST_SLOT
+end
 function R.placeFrameRow()
   local p = framePair; if not p or not TargetFrame then return end
-  local main = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
-  local low = main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
+  local low = lowBar()
   p.anchor:ClearAllPoints()
   if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', R.FRAME_LEFT, -(S + R.FRAME_GAP) - R.castDrop() / R.FRAME_SCALE)
   else p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14) end
@@ -352,7 +395,7 @@ local function makeFramePair()
   p.frameScale = R.FRAME_SCALE
   p.pt = 'BOTTOMLEFT'
   for _, c in ipairs({ p.ring, p.main }) do
-    c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, (S + R.FRAME_SPACE) * R.FRAME_ROW + 0.01)
+    c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, (S + R.FRAME_SPACE) * R.FRAME_ROW + (R.sizeOf('channel') - S) + 0.01)   -- room for the bigger channel ring
   end
   channelGroup(p, db.where ~= 'split')   -- in Haunt your channel and curses stay over the mob (chanPair), not on the frame
   p.ring:SetUnit('target'); p.main:SetUnit('target')
@@ -472,7 +515,9 @@ local function start()
   R.db = db
   BC = ns.blizzard
   if db.othersAlpha then R.OTHERS_ALPHA = db.othersAlpha / 100; if db.othersAlpha == 0 then db.others = false end end
-  if db.othersMode == 'blizzard' then db.others = false; db.squares = 'all' elseif db.othersMode == 'rings' then db.others = true; db.squares = 'notmine' end
+  if db.othersMode == 'blizzard' then db.others = false; db.squares = 'all'
+  elseif db.othersMode == 'rings' then db.others = true; db.squares = 'notmine'
+  else db.others = false; db.squares = 'notmine' end   -- 'team' (default since 2026-11-17): team row and squares only
   db.saved = db.saved or {}; db.learned = db.learned or {}
   if not (C_UnitAuras and C_NamePlate and C_CurveUtil and C_StringUtil) then say('this client is missing the aura container APIs; the OmaDoomed rings are off.'); db = nil; R.db = nil; return end
   holder = CreateFrame('Frame', nil, UIParent); holder:Hide()
@@ -538,7 +583,7 @@ function ns.ringsApply(key)
   elseif key == 'size' or key == 'alpha' then for _, p in ipairs(pairsAll) do look(p) end; visible()
   elseif key == 'othersAlpha' then
     R.OTHERS_ALPHA = (db.othersAlpha or 55) / 100
-    setOthers(db.othersMode ~= 'blizzard' and (db.othersAlpha or 55) > 0)
+    setOthers(db.othersMode == 'rings' and (db.othersAlpha or 55) > 0)
     -- a slider sends every step: say it once
     if not toldReload then toldReload = true; say("other players' rings: a new strength shows after a /reload (0 hides them at once).") end
   elseif key == 'where' then
@@ -550,7 +595,7 @@ function ns.ringsApply(key)
   elseif key == 'squares' then BC.squaresApply()
   elseif key == 'othersMode' then
     db.squares = db.othersMode == 'blizzard' and 'all' or 'notmine'; BC.squaresApply()
-    setOthers(db.othersMode ~= 'blizzard')
+    setOthers(db.othersMode == 'rings')
   end
 end
 

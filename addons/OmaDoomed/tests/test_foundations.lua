@@ -65,7 +65,7 @@ return {
     local ns = require('load').addon()
     T.eq(OmaDoomedDB.v, #ns.MIGRATIONS)
     T.eq(OmaDoomedDB.doomed, true); T.eq(OmaDoomedDB.platebar, true); T.eq(OmaDoomedDB.cast, 'charging')
-    T.eq(OmaDoomedDB.rings.enabled, true); T.eq(OmaDoomedDB.rings.others, true); T.eq(OmaDoomedDB.rings.size, 40)
+    T.eq(OmaDoomedDB.rings.enabled, true); T.eq(OmaDoomedDB.rings.others, false); T.eq(OmaDoomedDB.rings.othersMode, 'team'); T.eq(OmaDoomedDB.rings.size, 40)
   end,
   ['saved data: an old save (no version) keeps its values; OmaPlatesDB is no longer read or cleared'] = function(W, T)
     local old = { size = 99 }

@@ -2,9 +2,10 @@
 -- Your Fear, Banish, Howl of Terror and your Sayaad's Seduction, so you always see the timer:
 --   * on the held mob's plate, and on your target's frame while it's your target: the teal 'cc' ring group
 --     (Spells.lua, RingsLook.lua). Blizzard's AuraContainer reads the aura, so that one is exact.
---   * when the held mob isn't your target, or its plate is off screen: one teal ring standing apart beside the target
---     frame, no text. It stays in that spot with no target. That's this file.
--- Forever forbids the combat log and enemy aura reads in combat, so the ring beside the frame counts from your own
+--   * when the held mob isn't your target, or its plate is off screen: a big teal ring with the spell's name, centred
+--     under your character just above the action bars (2026-11-24, approved on the mockup: it stood beside the target
+--     frame, where the held mob's own plate often sat on it). One ring per hold, side by side. That's this file.
+-- Forever forbids the combat log and enemy aura reads in combat, so the ring under you counts from your own
 -- cast (spell ID -> length by rank). It corrects itself from the plate: while the held mob's plate is on screen this
 -- ring hides (the plate's exact ring shows), and if the plate's ring goes away there, the hold is over.
 local ADDON, ns = ...
@@ -27,9 +28,11 @@ CC.KIND, CC.LENGTH = KIND, LENGTH
 local ART = R.ART
 local GOLD, WHITE = R.GOLD, R.WHITE
 local TEAL = Spells.byKey.cc.color
-local SIZE = R.S * R.FRAME_SCALE * 1.5    -- sheet 48: one and a half times the target frame's DoT rings
-local GAP = 10                            -- standing apart from the frame (sheet 48: 'not this mob')
-local SPACE = 4                           -- two holds at once sit side by side
+-- 2026-11-24 mockup: 64 px on his 1080p screen, where a target-frame DoT ring is 26 px (so about 2.45 of them)
+local SIZE = R.S * R.FRAME_SCALE * 2.45
+local SPACE = SIZE * 0.35                 -- two holds at once sit side by side, room for each name under its ring
+local RISE = 0.205                        -- the row's centre, as a share of the screen's height up from the bottom
+local NAME_K = 0.25                       -- the name under a ring, as a share of the ring
 local FADE = 0.3                          -- ends like a DoT ends
 CC.SIZE = SIZE
 
@@ -77,7 +80,7 @@ local function isTarget(h)
   return t ~= nil and tp ~= nil and t == tp
 end
 
--- ---------- the ring beside the target frame (our own frames: no aura reads, so it works in combat) ----------
+-- ---------- the rings under your character (our own frames: no aura reads, so it works in combat) ----------
 local function newRing()
   local f = CreateFrame('Frame', nil, holder); f:SetSize(SIZE, SIZE); f:Hide()
   local flat = R.flat()   -- the 'Ring look' setting: Rich (shadow, lit ring, bezel, number spot) or Flat (sheet 52 F)
@@ -113,7 +116,12 @@ local function newRing()
   num:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', math.floor(SIZE * R.numK() + 0.5), flat and 'OUTLINE' or 'THICKOUTLINE')
   num:SetPoint('CENTER', f, 'CENTER', 0, -SIZE * 0.02)
   if flat then num:SetShadowColor(0, 0, 0, 0); num:SetShadowOffset(0, 0) else num:SetShadowColor(0, 0, 0, 1); num:SetShadowOffset(1, -1) end
-  f.ring, f.icon, f.num, f.track, f.inner = ring, icon, num, track, inner
+  -- the spell's name under the ring (2026-11-24 mockup), in its teal
+  local name = nf:CreateFontString(nil, 'OVERLAY')
+  name:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF', math.floor(SIZE * NAME_K + 0.5), 'OUTLINE')
+  name:SetPoint('TOP', f, 'BOTTOM', 0, -SIZE * 0.04)
+  name:SetTextColor(TEAL[1], TEAL[2], TEAL[3], 1)
+  f.ring, f.icon, f.num, f.track, f.inner, f.name = ring, icon, num, track, inner, name
   return f
 end
 
@@ -127,38 +135,47 @@ local function iconFor(h)
   return tex or ICON[h.kind]
 end
 
+local NAME = { fear = 'Fear', banish = 'Banish', howl = 'Howl of Terror', seduce = 'Seduction' }
+local function nameFor(h)
+  local ok, n = pcall(function() return (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(h.id)) or (GetSpellInfo and GetSpellInfo(h.id)) end)
+  if ok and type(n) == 'string' and not secret(n) and n ~= '' then return n end
+  return NAME[h.kind]
+end
+CC.nameFor = nameFor
+
 local function ringFor(h)
   local f = rings[h.kind]
   if not f then f = newRing(); rings[h.kind] = f end
   if shownHold[h.kind] ~= h then
     shownHold[h.kind] = h; endingAt[h.kind] = nil; f:SetAlpha(1)
-    f.icon:SetTexture(iconFor(h))
+    f.icon:SetTexture(iconFor(h)); f.name:SetText(nameFor(h))
     pcall(f.track.SetCooldown, f.track, h.start, h.dur); pcall(f.inner.SetCooldown, f.inner, h.start, h.dur)
   end
   return f
 end
 
--- where the rings go: standing apart, left of the target frame's bars, level with them. Out of combat only for scale.
+-- where the rings go: centred under your character, just above the action bars. Out of combat only for scale.
 local function anchorHolder()
   if not holder then return end
   holder:ClearAllPoints()
-  -- moved by you (sheet 83 "everything can be moved"): your saved place and size win
-  local pos = db and db.ccPos
-  if pos and pos.x then
-    holder:SetPoint('RIGHT', UIParent, 'BOTTOMLEFT', pos.x, pos.y)
-    if not InCombatLockdown() then holder:SetScale(pos.scale or 1) end
-    return
-  end
-  local main = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
-  local bars = main and main.HealthBarsContainer
-  if bars then holder:SetPoint('RIGHT', bars, 'LEFT', -GAP, 0)
-  elseif TargetFrame then holder:SetPoint('RIGHT', TargetFrame, 'LEFT', -GAP, 0)
-  else holder:SetPoint('CENTER', UIParent, 'CENTER', 0, 200) end
+  -- the size follows the target frame's scale and the 'Ring size' setting, as before
   if not InCombatLockdown() and TargetFrame and TargetFrame.GetEffectiveScale and UIParent.GetEffectiveScale then
     local ok, s = pcall(function() return TargetFrame:GetEffectiveScale() / UIParent:GetEffectiveScale() end)
     local size = (R.db and R.db.size or 40) / 40
     if ok and type(s) == 'number' and s > 0 then holder:SetScale(s * size) end
   end
+  -- moved by you (sheet 83 "everything can be moved"): your saved place and size win. A place saved for the old spot
+  -- beside the target frame (ccPos) is not used: it was measured from that spot.
+  local pos = db and db.ccSpot
+  if pos and pos.x then
+    if not InCombatLockdown() then holder:SetScale(pos.scale or 1) end
+    local k = holder:GetScale() or 1; if k <= 0 then k = 1 end
+    holder:SetPoint('CENTER', UIParent, 'BOTTOMLEFT', pos.x / k, pos.y / k)
+    return
+  end
+  local k = holder:GetScale() or 1; if k <= 0 then k = 1 end
+  local h = (UIParent.GetHeight and UIParent:GetHeight()) or 768
+  holder:SetPoint('CENTER', UIParent, 'BOTTOM', 0, h * RISE / k)   -- offsets are in the holder's own (scaled) units
 end
 CC.anchorHolder = anchorHolder
 
@@ -166,12 +183,12 @@ CC.anchorHolder = anchorHolder
 local function now() return GetTime() end
 local function ended(h) return now() >= h.start + h.dur end
 
--- shown beside the frame: a live hold whose plate is off screen, and which isn't the target showing on its frame
+-- shown under you: a live hold whose plate is off screen, and which isn't the target showing on its frame
 function CC.wantsRing(h)
   if not h or ended(h) or h.over then return false end
   if liveToken(h) then return false end                       -- the plate's exact ring shows instead
   -- Target frame: it's in the frame's own row. Haunt keeps it over the mob instead (Rings.lua OVERHEAD), so with the
-  -- mob off screen there the ring beside the frame is the only one
+  -- mob off screen there the ring under you is the only one
   if isTarget(h) and R.db and R.db.where == 'frame' and R.db.enabled ~= false then
     return false
   end
@@ -179,15 +196,16 @@ function CC.wantsRing(h)
 end
 
 local order = { 'fear', 'banish', 'seduce', 'howl' }
+-- the shown rings, side by side and centred on the spot, in a fixed order (Fear, Banish, Seduction, Howl)
 local function layout()
-  local x = 0
-  for _, k in ipairs(order) do
-    local f = rings[k]
-    if f and f:IsShown() then
-      f:ClearAllPoints(); f:SetPoint('RIGHT', holder, 'RIGHT', -x, 0); x = x + SIZE + SPACE
-    end
+  local shown = {}
+  for _, k in ipairs(order) do local f = rings[k]; if f and f:IsShown() then shown[#shown + 1] = f end end
+  local n = #shown
+  for i, f in ipairs(shown) do
+    f:ClearAllPoints(); f:SetPoint('CENTER', holder, 'CENTER', (i - (n + 1) / 2) * (SIZE + SPACE), 0)
   end
 end
+CC.layout = layout
 
 local LOW_ALPHA, BREATH = 0.3, 1.5
 local function lowSecs() return (ns.db and ns.db.low) or 5 end   -- crowd control isn't recast: 'Ending soon' seconds
@@ -299,7 +317,7 @@ function CC.clear()
   update()
 end
 
--- /omadoomed cc test: a pretend 15 s Fear on no mob, so you can see the ring beside your target frame
+-- /omadoomed cc test: a pretend 15 s Fear on no mob, so you can see the ring under your character
 function CC.test()
   if not holder then return end
   local h = { id = 5782, kind = 'fear', start = now(), dur = 15 }
@@ -311,15 +329,15 @@ end
 -- ---------- moving it (2026-11-16, plan phase 6): unlocked with the mob list (Move button, key, hover tab) ----------
 local mover
 local function savePlace()
-  local r, b = holder:GetRight(), holder:GetBottom()
+  local x, y = holder:GetCenter()
   local s = holder:GetEffectiveScale() / UIParent:GetEffectiveScale()
-  if r and b then db.ccPos = { x = r * s, y = (b + SIZE / 2) * s, scale = holder:GetScale() } end
+  if x and y then db.ccSpot = { x = x * s, y = y * s, scale = holder:GetScale() } end
 end
 function CC.unlock(on)
   if not holder or InCombatLockdown() then return end
   if on and not mover then
     mover = CreateFrame('Frame', nil, UIParent); mover:SetFrameStrata('HIGH'); mover:EnableMouse(true); mover:EnableMouseWheel(true)
-    mover:SetPoint('TOPRIGHT', holder, 'TOPRIGHT', 6, 6); mover:SetSize(SIZE * 3 + 12, SIZE + 12)
+    mover:SetPoint('CENTER', holder, 'CENTER', 0, -SIZE * 0.15); mover:SetSize(SIZE * 4 + SPACE * 3 + 12, SIZE * 1.4 + 12)
     local f = mover:CreateTexture(nil, 'BACKGROUND'); f:SetAllPoints(); f:SetColorTexture(.12, .43, .86, .16)
     local tag = mover:CreateFontString(nil, 'OVERLAY'); tag:SetFont(STANDARD_TEXT_FONT, 12, ''); tag:SetText('Crowd control'); tag:SetPoint('BOTTOM', mover, 'TOP', 0, 2)
     holder:SetMovable(true); holder:SetClampedToScreen(true)
@@ -336,7 +354,7 @@ function CC.unlock(on)
   if mover then mover:SetShown(on) end
   if on then CC.test() end
 end
-function CC.resetPlace() db.ccPos = nil; anchorHolder() end
+function CC.resetPlace() db.ccSpot = nil; db.ccPos = nil; anchorHolder() end
 
 -- the plate ring group follows the setting (out of combat: groups can't change in a fight)
 local function plateGroups()
@@ -394,7 +412,7 @@ ns.starts[#ns.starts + 1] = start
 function ns.ccSlash(msg)
   msg = (msg or ''):lower()
   if not db then return end
-  if msg == 'test' then CC.test(); ns.say('a pretend 15 s Fear beside your target frame.')
+  if msg == 'test' then CC.test(); ns.say('a pretend 15 s Fear under your character.')
   else
     local n = 0; for _ in pairs(holds) do n = n + 1 end
     ns.say(('crowd-control timers %s, %d held now. /omadoomed cc test shows one.'):format(db.cc ~= false and 'on' or 'off', n))

@@ -31,7 +31,7 @@ return {
     T.eq(cat.name, 'OmaDoomed'); T.eq(cat.parent.name, 'Oma')
     T.eq(UI.S.addOnCategories[1], cat.parent, 'the Oma parent registered at login')
     local kinds = {}; for _, i in ipairs(cat.layout.inits) do kinds[#kinds + 1] = i.kind == 'header' and ('header:' .. i.text) or i.kind end
-    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Over enemies,checkbox,checkbox,dropdown,dropdown,slider,checkbox,checkbox,checkbox,checkbox,header:Mob list,checkbox,slider,slider,dropdown,checkbox,checkbox,checkbox,checkbox,checkbox,slider,button,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Help,button,button,button",
+    T.eq(table.concat(kinds, ','), "header:Your target frame,checkbox,checkbox,dropdown,dropdown,slider,dropdown,checkbox,button,header:Over enemies,checkbox,checkbox,dropdown,dropdown,slider,checkbox,checkbox,checkbox,checkbox,header:Mob list,checkbox,slider,slider,dropdown,checkbox,checkbox,checkbox,checkbox,checkbox,slider,button,button,checkbox,header:Where the rings go,dropdown,header:Ring look,dropdown,slider,slider,header:Help,button,button,button",
       'grouped by place on screen (sheet 60): headers, controls, Pick, the preview button and the two report buttons')
   end,
   ['saved values are kept, not reset to defaults'] = function(W, T)
@@ -112,9 +112,17 @@ return {
     local ns = setup(W, { before = function() OmaDoomedDB = { v = 3, rings = { squares = 'all' } } end })
     T.eq(OmaDoomedDB.rings.othersMode, 'blizzard'); T.eq(OmaDoomedDB.rings.squares, 'all')
   end,
-  ['upgrade: default squares stay As rings (migration 4)'] = function(W, T)
+  ['upgrade: default squares become As rings (4), then Team row only (5)'] = function(W, T)
     local ns = setup(W, { before = function() OmaDoomedDB = { v = 3, rings = { squares = 'notmine', othersAlpha = 40 } } end })
-    T.eq(OmaDoomedDB.rings.othersMode, 'rings'); T.eq(OmaDoomedDB.rings.squares, 'notmine'); T.eq(OmaDoomedDB.rings.othersAlpha, 40)
+    T.eq(OmaDoomedDB.rings.othersMode, 'team'); T.eq(OmaDoomedDB.rings.others, false); T.eq(OmaDoomedDB.rings.squares, 'notmine'); T.eq(OmaDoomedDB.rings.othersAlpha, 40)
+  end,
+  ['upgrade 5: As rings becomes Team row only once; Blizzard default stays'] = function(W, T)
+    setup(W, { before = function() OmaDoomedDB = { v = 4, rings = { othersMode = 'rings', others = true, squares = 'notmine' } } end })
+    T.eq(OmaDoomedDB.v, 5); T.eq(OmaDoomedDB.rings.othersMode, 'team'); T.eq(OmaDoomedDB.rings.others, false)
+  end,
+  ['upgrade 5: Blizzard default is left alone'] = function(W, T)
+    setup(W, { before = function() OmaDoomedDB = { v = 4, rings = { othersMode = 'blizzard', others = false, squares = 'all' } } end })
+    T.eq(OmaDoomedDB.rings.othersMode, 'blizzard'); T.eq(OmaDoomedDB.rings.squares, 'all')
   end,
 
   ['upgrade: debug leftovers and Does It Die look settings are removed, learned ticks and settings kept'] = function(W, T)
@@ -126,7 +134,7 @@ return {
           plateFillOpacity = 40, skullIcon = 'cross', focusOutlineColor = 'gold', nameplateMode = 'markerIcon', waitFirstTick = 'off' } }
     end })
     local db = OmaDoomedDB
-    T.eq(db.v, 4, 'saved-data version 4')
+    T.eq(db.v, 5, 'saved-data version 5')
     T.eq(db.tfdump, nil, 'the target-frame debug dump is gone'); T.eq(db.plateGeo, nil)
     T.eq(#db.errs, 20, 'the error list keeps its newest 20'); T.eq(db.errs[20], 'old error 30'); T.eq(db.errs[1], 'old error 11')
     T.eq(db.track.ticks[172], 16.3, 'learned tick sizes kept'); T.eq(db.track.tickWeights[172], 29); T.eq(db.track.omaRatio.Corruption, 1.09)

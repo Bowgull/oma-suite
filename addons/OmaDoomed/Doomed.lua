@@ -105,12 +105,18 @@ local function sizeSkull()
 end
 P.sizeSkull = function() pcall(sizeSkull) end
 
--- the health bar's width, or a stand-in when it's hidden or not laid out yet (the sizer then sets the real one)
-local function barWidth()
-  local ok, w = pcall(hb.GetWidth, hb)
-  if ok and not Secret.is(w) and type(w) == 'number' and w > 0 then return w end
-  return 120
+-- the health bar's size. Forever can hide it in a fight (2026-11-17 12:43: GetHeight came back secret mid-fight, the
+-- Essence particles did maths on it, and the whole kill bar switched off for the session). So every read keeps the
+-- last real value and a hidden one never reaches maths. Stand-ins before the first real read: 120 wide (the old
+-- default) and 15 tall (Blizzard's Camelot TargetFrame.lua: healthBarsContainer:SetHeight(15)).
+local lastW, lastH = 120, 15
+local function readSize(get)
+  local ok, v = pcall(get, hb)
+  if ok and not Secret.is(v) and type(v) == 'number' and v > 0 then return v end
 end
+local function barWidth() local w = readSize(hb.GetWidth); if w then lastW = w end; return lastW end
+local function barHeight() local h = readSize(hb.GetHeight); if h then lastH = h end; return lastH end
+P.barSize = function() return barWidth(), barHeight() end   -- for tests
 
 local function build()
   if built then return true end
@@ -399,12 +405,12 @@ local function drawPiece(s, d, i, now, anow)
     if o.spark then local al = o.spark; glowRight(s.spark, o.glow[1] * al, o.glow[2] * al, o.glow[3] * al) end
     shown(s.spark, o.spark ~= nil)
     if o.stripes then   -- the stripes drift toward the green
-      local bw, bh = hb:GetWidth(), hb:GetHeight(); local at = K.stripesAt(anow)
+      local bw, bh = barWidth(), barHeight(); local at = K.stripesAt(anow)
       texCoord(s.pre, at, at + bw / 24, 0, bh / 24); color4(s.pre, o.tn[1], o.tn[2], o.tn[3], K.STRIPES_A)
     end
     shown(s.pre, o.stripes)
     if o.motes then
-      local bw = hb:GetWidth(); local at = K.motesAt(anow)
+      local bw = barWidth(); local at = K.motesAt(anow)
       texCoord(s.motes, at, at + bw / 128 * 2, 0, 1); color3(s.motes, o.tn[1] * K.MOTES_K, o.tn[2] * K.MOTES_K, o.tn[3] * K.MOTES_K)
     end
     shown(s.motes, o.motes)
@@ -422,28 +428,34 @@ local function drawPiece(s, d, i, now, anow)
         local a = K.lightA(flare)
         color3(s.spillC, tone[1] * a, tone[2] * a, tone[3] * a)
         glowRight(s.wash, tone[1] * a * .6, tone[2] * a * .6, tone[3] * a * .6)
-        if (o.light == 'cinders' or o.light == 'essence') and b and s.right then
-          local age = anow - b.at; local H = hb:GetHeight()
-          for k = 1, 5 do
-            local l, fade, e = K.particle(k, age)
-            local t = s.parts[k]
-            if l then
-              np = k
-              local sd = (b.at * 7.3 + k * .618) % 1
-              t:ClearAllPoints()
-              t:SetPoint('CENTER', s.right, 'LEFT', -px(2 + (k - 1) * 3 + math.sin(age * 4 + k * 1.7) * 2, hb), -H * .3 + e * H * (.5 + sd * .3))
-              if o.light == 'cinders' then
-                if t.omTex ~= 1 then t.omTex = 1; t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\mote') end
-                local z = px(5 - 2 * l, hb); t:SetSize(z, z)
-                color4(t, tone[1], tone[2], tone[3], .7 * fade)
-              else
-                if t.omTex ~= 2 then t.omTex = 2; t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\haze') end
-                local z = px(12 + 16 * l, hb); t:SetSize(z, z)
-                color4(t, o.haze[1], o.haze[2], o.haze[3], .45 * fade)
-              end
-              shown(t, true)
-            else shown(t, false) end
-          end
+        if (o.light == 'cinders' or o.light == 'essence') and b and s.right and not P.noParticles then
+          -- the particles are decoration: if they ever fail, only they switch off (logged once), never the kill bar
+          local okP, res = pcall(function()
+            local age = anow - b.at; local H = barHeight(); local n = 0
+            for k = 1, 5 do
+              local l, fade, e = K.particle(k, age)
+              local t = s.parts[k]
+              if l then
+                n = k
+                local sd = (b.at * 7.3 + k * .618) % 1
+                t:ClearAllPoints()
+                t:SetPoint('CENTER', s.right, 'LEFT', -px(2 + (k - 1) * 3 + math.sin(age * 4 + k * 1.7) * 2, hb), -H * .3 + e * H * (.5 + sd * .3))
+                if o.light == 'cinders' then
+                  if t.omTex ~= 1 then t.omTex = 1; t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\mote') end
+                  local z = px(5 - 2 * l, hb); t:SetSize(z, z)
+                  color4(t, tone[1], tone[2], tone[3], .7 * fade)
+                else
+                  if t.omTex ~= 2 then t.omTex = 2; t:SetTexture('Interface\\AddOns\\OmaDoomed\\Art\\haze') end
+                  local z = px(12 + 16 * l, hb); t:SetSize(z, z)
+                  color4(t, o.haze[1], o.haze[2], o.haze[3], .45 * fade)
+                end
+                shown(t, true)
+              else shown(t, false) end
+            end
+            return n
+          end)
+          if okP then np = res
+          else P.noParticles = true; np = 0; ns.error('kill bar particles off for this session: ' .. tostring(res)) end
         end
       end
     end

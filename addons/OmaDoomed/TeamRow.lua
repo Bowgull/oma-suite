@@ -30,9 +30,11 @@ local function text(parent, size, point, x, y)
   fs:SetTextColor(1, 1, 1, 1); fs:SetShadowColor(0, 0, 0, 1); fs:SetShadowOffset(1, -1)
   return fs
 end
+-- the squares take the mouse (2026-11-17, "tooltips on hover for other players spells"): no script of ours on them,
+-- so the game's own aura tooltip shows. The class dots stay click-through.
 function T.squareInit(key)
   return function(b)
-    b:SetSize(SQ, SQ); pcall(b.EnableMouse, b, false)
+    b:SetSize(SQ, SQ); pcall(b.EnableMouse, b, true)
     local icon = b:CreateTexture(nil, 'ARTWORK', nil, 0)
     icon:SetSize(ICON, ICON); icon:SetPoint('CENTER', b, 'CENTER'); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     local m = b:CreateMaskTexture(); m:SetTexture(MASK, 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE', 'TRILINEAR'); m:SetAllPoints(icon)
@@ -107,14 +109,53 @@ local function castChanged(on)
   T.place()
 end
 T.castChanged = castChanged
-local hooked
+-- 2026-11-17 (21:07 screenshot, sheet 107 #1): the target's Lightning Bolt bar lay over the rings; the slide never
+-- happened, so Forever doesn't pass the cast bar's OnShow to us. Ten times a second we also look whether it shows
+-- (IsVisible: plain, not secret, on Blizzard's own bar) and slide on a change. The hook stays for clients that fire it.
+local hooked, watch
+local function castBar() return _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar) end
+-- 2026-11-19 (Joshua: "when target is casting something the rings and other teammate stuff doesnt move down"): on
+-- Forever the bar's shown state can come back secret during a mob's cast, and then this never slid. Now the target's
+-- own cast is asked first (UnitCastingInfo / UnitChannelInfo, the same read the mob list's cast lines use): any answer
+-- at all means it casts, even a secret one (type() is safe on a secret). The bar still counts while its state is plain
+-- (it lingers on "Interrupted"), so the rows wait for it to go. The watch runs whether or not the bar can be hooked.
+local function targetCasts()
+  if not UnitExists('target') then return false end
+  for _, f in ipairs({ UnitCastingInfo, UnitChannelInfo }) do
+    if type(f) == 'function' then
+      local ok, name = pcall(f, 'target')
+      if ok and type(name) ~= 'nil' then return true end
+    end
+  end
+  return false
+end
+T.targetCasts = targetCasts
+local function castLook()
+  if R.readCastClear then R.readCastClear() end   -- where the cast bar sits, while the game still says (Rings.lua)
+  local on = targetCasts()
+  local bar = castBar()
+  if not on and type(bar) == 'table' then
+    local ok, shown = pcall(bar.IsVisible, bar)
+    if ok and not (ns.core and ns.core.Secret and ns.core.Secret.is(shown)) then on = shown == true end
+  end
+  if on ~= (R.castShown == true) then castChanged(on) end
+end
+T.castLook = castLook
 function T.hookCastBar()
-  local bar = _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar)
-  if hooked or type(bar) ~= 'table' or type(bar.HookScript) ~= 'function' then return end
-  hooked = true
-  bar:HookScript('OnShow', function() castChanged(true) end)
-  bar:HookScript('OnHide', function() castChanged(false) end)
-  local ok, shown = pcall(bar.IsShown, bar); if ok and shown == true then castChanged(true) end
+  if not watch then
+    watch = CreateFrame('Frame')
+    local acc = 0
+    watch:SetScript('OnUpdate', function(_, el) acc = acc + el; if acc >= .1 then acc = 0; castLook() end end)
+  end
+  local bar = castBar()
+  if not hooked and type(bar) == 'table' and type(bar.HookScript) == 'function' then
+    hooked = true
+    pcall(bar.HookScript, bar, 'OnShow', function() castChanged(true) end)
+    pcall(bar.HookScript, bar, 'OnHide', function() castLook() end)   -- the target may still be casting (a new cast)
+    -- 2026-11-24: another add-on (BetterBlizzFrames) may move the bar as it shows, or later: place again where it ended up
+    if hooksecurefunc then pcall(hooksecurefunc, bar, 'SetPoint', function() if R.castShown then castChanged(true) end end) end
+  end
+  castLook()
 end
 
 -- which classes get a full line: your group's classes first (fixed order), then the rest, up to MAXLINES; the others dots

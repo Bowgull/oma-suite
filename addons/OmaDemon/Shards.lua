@@ -110,18 +110,56 @@ countText:SetPoint('LEFT', root, 'RIGHT', 10 * PX, -2 * PX); countText:SetTextCo
 
 -- ---------- placing the row: 10 px under the pet frame, left edge on the pet portrait; never anchored to it ----------
 local testNoPet = false   -- /omademon shards nopet: show the no-pet spot for 15 s
+-- The art is drawn in pixels of a 1080p screen at WoW's default UI scale. The row scales with the UI like Blizzard's
+-- own frames (it used to be pinned to physical pixels, so on a smaller UI scale the gems dwarfed the pet frame).
+-- 2026-11-13 (sheet 46 B, Joshua: "b for soul shard"): gem size is tied to the pet frame's scale, so the gems grow and
+-- shrink with the pet frame (Edit Mode size, the couch layout). At 100% they're ~1.8x the old size on the Shadow.
+-- 2026-11-19 fix, "gems sometimes big, sometimes small": the pet frame's scale used to be copied only when place()
+-- ran (login, zoning, pet in or out, end of a fight, PetFrame:SetScale). The pet frame's size also comes from the
+-- frames it sits in (PlayerFrame and its bottom container, sized by Edit Mode and BetterBlizzFrames, often after our
+-- login copy), and those changes never told us, so the row kept whichever size it last copied until the next pet
+-- swap or fight. Now the size is worked out in one place, re-checked while the row shows, and a bad read (a
+-- "secret" value or zero) keeps the last good size instead of jumping.
+local relGood = 1
+local function petRel()
+  local ok, r = pcall(function()
+    local pf, us = _G.PetFrame, UIParent:GetEffectiveScale()
+    if not (pf and pf.GetEffectiveScale) then return nil end
+    return pf:GetEffectiveScale() / us
+  end)
+  if ok and type(r) == 'number' and not (issecretvalue and issecretvalue(r)) and r > 0.05 and r < 20 then relGood = r end
+  return relGood
+end
+local function gemScale() return .55 * petRel() * ((db and db.size) or 100) / 100 end   -- .55: tuned 2026-11-13 ("still a bit big" at .65)
+local function applyScale()   -- true when the size really changed
+  local s = gemScale()
+  if math.abs(root:GetScale() - s) < .001 then return false end
+  root:SetScale(s); return true
+end
+local function plainNum(v) return type(v) == 'number' and not (issecretvalue and issecretvalue(v)) end
+-- the middle of your own health and mana bars, in screen pixels (nil when no bar can be read). Every name the game or
+-- a frame add-on may use is tried; only the bars that show count, and their left and right edges are joined.
+local function barsCentre()
+  local found, l, r = {}, nil, nil
+  local function try(get) local ok, f = pcall(get); if ok and type(f) == 'table' and f.GetLeft then found[#found + 1] = f end end
+  try(function() return PlayerFrame_GetHealthBar and PlayerFrame_GetHealthBar() end)
+  try(function() return PlayerFrame_GetManaBar and PlayerFrame_GetManaBar() end)
+  try(function() return PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.HealthBarsContainer.HealthBar end)
+  try(function() return PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.ManaBarArea.ManaBar end)
+  try(function() return PlayerFrame.healthbar end); try(function() return PlayerFrame.manabar end)
+  try(function() return _G.PlayerFrameHealthBar end); try(function() return _G.PlayerFrameManaBar end)
+  for _, f in ipairs(found) do
+    local ok, fl, fr, s, vis = pcall(function() return f:GetLeft(), f:GetRight(), f:GetEffectiveScale(), f:IsVisible() end)
+    if ok and vis and plainNum(fl) and plainNum(fr) and plainNum(s) and fr > fl then
+      fl, fr = fl * s, fr * s
+      l = (l and math.min(l, fl)) or fl; r = (r and math.max(r, fr)) or fr
+    end
+  end
+  if l then return (l + r) / 2 end
+end
 local function place()
-  -- our own plain frame: fine to move in combat too (a pet summoned mid-fight)
-  -- The art is drawn in pixels of a 1080p screen at WoW's default UI scale. The row now scales with the UI like
-  -- Blizzard's own frames (it used to be pinned to physical pixels, so on a smaller UI scale the gems dwarfed the
-  -- pet frame). Same size as before at 1080p and the default UI scale.
-  -- 2026-11-13 (sheet 46 B, Joshua: "b for soul shard"): gem size is tied to the pet frame's scale, so the gems grow and
-  -- shrink with the pet frame (Edit Mode size, the couch layout). At 100% they're ~1.8x the old size on the Shadow.
-  local pf = _G.PetFrame
-  local rel = 1
-  if pf and pf.GetEffectiveScale and UIParent:GetEffectiveScale() > 0 then rel = pf:GetEffectiveScale() / UIParent:GetEffectiveScale() end
-  -- .55: tuned on the Shadow 2026-11-13 with Joshua (.65 was "still a bit big, only slightly"); ~40 px crystals there
-  root:SetScale(.55 * rel * ((db and db.size) or 100) / 100)
+  -- our own plain frame: fine to move and size in combat too (a pet summoned mid-fight)
+  applyScale()
   -- 2026-11-10 (Joshua: follow the pet frame; no pet = slide up under you). Measured with /omademon shards probe: the row's
   -- old spot (232,237 TV px) is the pet portrait's bottom-left (235,237) less 3 px. So: pinned to PetPortrait while
   -- the pet is out (it moves when the pet frame moves); with no pet, up where the pet frame's top is (157 px), just
@@ -150,7 +188,18 @@ local function place()
       root:SetPoint('TOPLEFT', pet, 'BOTTOMLEFT', -3, 0); if db then db.placed = 'under pet' end
     end
   elseif holder and holder == _G.PlayerBottomManagedFrameContainer then
-    root:SetPoint('TOPLEFT', holder, 'TOPLEFT', 59, 0); if db then db.placed = 'under you' end
+    -- 2026-11-19 (measured on Joshua's 1080p screenshot, no demon): the old fixed +59 put the row's centre at x 212
+    -- while the player bars' centre is x 183, 29 px right and 23 px past the frame's edge. Now the row's centre sits
+    -- on the centre of your health and mana bars, read from the bars themselves in screen pixels, so it holds at any
+    -- UI scale, frame size or gem size. Same height as before (the top of the frame that holds the pet frame).
+    local bx = barsCentre()
+    local hl = pcall(holder.GetLeft, holder) and holder:GetLeft()
+    local rs = root:GetEffectiveScale()
+    if bx and plainNum(hl) and rs > 0 then
+      root:SetPoint('TOP', holder, 'TOPLEFT', (bx - hl * holder:GetEffectiveScale()) / rs, 0); if db then db.placed = 'under you, centred on your bars' end
+    else
+      root:SetPoint('TOPLEFT', holder, 'TOPLEFT', 59, 0); if db then db.placed = 'under you' end
+    end
   else
     root:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 232, -157); if db then db.placed = 'fixed, under you' end
   end
@@ -404,5 +453,12 @@ end)
 ns.gemSheet, ns.gemCells, ns.gemRoot = sheet, CELL, root
 -- the pet frame's size changes (Edit Mode): follow it. Our own frame only; theirs untouched.
 if _G.PetFrame and hooksecurefunc then hooksecurefunc(_G.PetFrame, 'SetScale', function() place() end) end
+-- the frames the pet frame sits in can change its size without touching PetFrame itself: re-check a few times a
+-- second while the row shows (one multiply, no work unless the size really moved), and re-place when it does
+local scaleAcc = 0
+root:SetScript('OnUpdate', function(_, dt)
+  scaleAcc = scaleAcc + dt; if scaleAcc < .25 then return end; scaleAcc = 0
+  if db and applyScale() then place() end
+end)
 local lookEv = CreateFrame('Frame'); lookEv:RegisterEvent('PLAYER_LOGIN')
 lookEv:SetScript('OnEvent', function() setLook() end)

@@ -1,0 +1,313 @@
+-- OmaWay offline smoke test: a small fake WoW, then the three files, then the checks.
+--   cd addons/OmaWay && luajit tests/smoke.lua
+local checks, fails = 0, 0
+local function ok(v, what) checks = checks + 1; if not v then fails = fails + 1; print('FAIL ' .. what) end end
+local function near(a, b, eps) return math.abs(a - b) <= (eps or 1e-3) end
+
+-- ---------- fake frames ----------
+local frames = {}
+local Obj = {}
+Obj.__index = function(t, k)
+  local m = rawget(Obj, k); if m then return m end
+  if type(k) == 'string' and k:sub(1, 1) == '_' then return nil end   -- the fake's own fields
+  if type(k) == 'string' and k:match('^[a-z]') then return nil end    -- the add-on's own fields (f.tex...)
+  return function() end                              -- any other method: a quiet no-op
+end
+function Obj.Show(s) s._shown = true end
+function Obj.Hide(s) s._shown = false end
+function Obj.SetShown(s, v) s._shown = v and true or false end
+function Obj.IsShown(s) return s._shown ~= false end
+function Obj.SetScript(s, k, fn) s._scripts = s._scripts or {}; s._scripts[k] = fn end
+function Obj.GetScript(s, k) return s._scripts and s._scripts[k] end
+function Obj.SetAlpha(s, a) s._alpha = a end
+function Obj.GetAlpha(s) return s._alpha or 1 end
+function Obj.SetRotation(s, r) s._rot = r end
+function Obj.SetSize(s, w, h) s._w, s._h = w, h end
+function Obj.SetPoint(s, a, rel, b, x, y) s._pts = s._pts or {}; s._pts[a] = { rel, b, x, y } end
+function Obj.ClearAllPoints(s) s._pts = {} end
+function Obj.IsMouseOver() return false end
+function Obj.GetLeft() return 900 end
+function Obj.GetTop() return 1000 end
+function Obj.GetEffectiveScale() return 1 end
+function Obj.GetStringWidth() return 80 end
+function Obj.SetText(s, t) s._text = t end
+function Obj.GetText(s) return s._text end
+function Obj.SetTexture(s, t) s._tex = t end
+function Obj.GetCenter() return 100, 100 end
+function Obj.GetWidth() return 140 end
+function Obj.GetHeight() return 140 end
+function Obj.GetPoint(s) return 'TOPLEFT', nil, 'BOTTOMLEFT', 900, 1000 end
+function Obj.CreateTexture(s) local t = setmetatable({}, Obj); s._texs = s._texs or {}; s._texs[#s._texs + 1] = t; return t end
+function Obj.CreateFontString() return setmetatable({}, Obj) end
+function Obj.RegisterEvent(s, e) s._events = s._events or {}; s._events[e] = true end
+function CreateFrame(kind, name, parent)
+  local f = setmetatable({ _kind = kind, _name = name }, Obj)
+  frames[#frames + 1] = f
+  if name then _G[name] = f end
+  return f
+end
+UIParent, Minimap = CreateFrame('Frame'), CreateFrame('Frame')
+STANDARD_TEXT_FONT = 'Fonts\\FRIZQT__.TTF'
+BackdropTemplateMixin = {}
+function InCombatLockdown() return false end
+function GetCursorPosition() return CURSOR or 0 end
+local printed = {}
+print0 = print
+print = function(m) printed[#printed + 1] = tostring(m) end
+
+-- ---------- fake world ----------
+local facing, inside = 0, false
+function GetPlayerFacing() return facing end
+function IsInInstance() return inside, inside and 'party' or 'none' end
+local player = { x = 100, y = 100 }
+local HBD = {}
+function HBD:GetWorldCoordinatesFromZone(x, y, mapID) return x * 1000, y * 1000, 0 end
+function HBD:GetPlayerWorldPosition() return player.x, player.y, 0 end
+function HBD:GetPlayerZone() return 1426 end
+function HBD:GetPlayerZonePosition() return .1, .1 end
+-- world X is north, Y is west; the angle runs counter-clockwise from north, like the real library
+function HBD:GetWorldVector(inst, ox, oy, dx, dy) local x, y = dx - ox, dy - oy; return math.atan2(y, x) % (2 * math.pi), math.sqrt(x * x + y * y) end
+function LibStub(name, silent) if name == 'HereBeDragons-2.0' then return HBD end end
+C_AddOns = { IsAddOnLoaded = function() return false end }
+-- the other add-ons
+GuidelimeDataChar = { mainFrameShowing = true }
+local glToggles = 0
+Guidelime = { toggleMainFrame = function() glToggles = glToggles + 1; GuidelimeDataChar.mainFrameShowing = not GuidelimeDataChar.mainFrameShowing end }
+local said = {}
+local reloads = 0
+function ReloadUI() reloads = reloads + 1 end
+SlashCmdList = {
+  -- Questie's slash 'tracker show|hide' reloads the whole UI in the real game: OmaWay must never use it
+  ACECONSOLE_QUESTIE = function(m) said[#said + 1] = 'SLASH questie ' .. m; ReloadUI() end,
+  DETAILS = function(m) said[#said + 1] = 'details ' .. m end,
+}
+local QT = { Show = function() end, Hide = function() said[#said + 1] = 'questie tracker GONE' end,
+  Collapse = function() said[#said + 1] = 'questie tracker fold' end, Expand = function() said[#said + 1] = 'questie tracker open' end }
+QuestieLoader = { ImportModule = function(_, n) if n == 'QuestieTracker' then return QT end end }
+
+-- ---------- load ----------
+local ns = {}
+for _, file in ipairs({ 'Core.lua', 'Arrow.lua', 'Quests.lua', 'Modes.lua', 'MinimapButton.lua' }) do
+  local chunk = assert(loadfile(file)); chunk('OmaWay', ns)
+end
+local function fire(e) for _, f in ipairs(frames) do if f._events and f._events[e] and f._scripts and f._scripts.OnEvent then f._scripts.OnEvent(f, e) end end end
+fire('PLAYER_LOGIN'); fire('PLAYER_ENTERING_WORLD')
+local arrow = _G.OmaWayArrow
+local function tick(n, el) for _ = 1, n or 1 do local s = arrow:GetScript('OnUpdate'); if s then s(arrow, el or .05) end end end
+
+-- ---------- the TomTom slot ----------
+ok(TomTom and TomTom.omaway, 'with no TomTom installed, OmaWay answers in its place')
+ok(TomTom.AddWaypoint and TomTom.SetCrazyArrow and TomTom.RemoveWaypoint, "Guidelime's check passes (AddWaypoint and SetCrazyArrow)")
+ok(not arrow:IsShown(), 'no waypoint: no arrow')
+-- Guidelime's own call (Map.lua updateTomTomArrow): 0..1 map coords, its options table
+local uid = TomTom:AddWaypoint(1426, .5, .1, { title = 'Apothecary Lydon', from = 'Guidelime', crazy = true, arrivaldistance = 0 })
+ok(uid ~= nil, 'a waypoint handle comes back')
+ok(arrow:IsShown(), 'the arrow shows')
+-- target straight north of the player (world X is north), facing north: the arrow points straight up
+local w = ns.waypoint(); player.x, player.y = w.wx - 200, w.wy
+local off, on = arrow._texs[1], arrow._texs[2]
+facing = 0; tick(40)
+ok(near(on._rot, 0, .01), 'on course: pointing straight up (' .. tostring(on._rot) .. ')')
+ok(near(on:GetAlpha(), 1) and near(off:GetAlpha(), 0), 'on course: the violet well, no red')
+ok(ns.distance() and near(ns.distance(), 200, .5), 'the distance is the world distance in yards (200)')
+ok((arrow._texs and true) and (on._rot == off._rot), 'both wells turn together')
+-- turn to face west (+90 deg): the target is now on your right, so the arrow turns -90 deg; it eases, not jumps
+facing = math.pi / 2; tick(1, .016)
+ok(on._rot < 0 and on._rot > -math.pi / 2 + .05, 'the first frame only starts the turn (eased): ' .. on._rot)
+tick(80)
+ok(near(on._rot, -math.pi / 2, .01), 'then it settles on -90 deg')
+-- face away (south): red
+facing = math.pi; tick(120)
+ok(near(off:GetAlpha(), 1) and near(on:GetAlpha(), 0), 'facing away: the red well')
+-- walk up to it: arrived
+player.x, player.y = w.wx - 3, w.wy; tick(2)
+local hereTex = arrow._texs[3]
+ok(near(on:GetAlpha(), 0) and (hereTex:GetAlpha() or 0) > .5, "within 5 yards: the arrow gives way to the gold 'here' ring")
+player.x, player.y = w.wx - 200, w.wy; facing = 0; tick(40)
+-- remove: the arrow goes
+TomTom:RemoveWaypoint(uid)
+ok(not arrow:IsShown(), "Guidelime's RemoveWaypoint hides it")
+
+-- ---------- modes ----------
+TomTom:AddWaypoint(1426, .5, .1, { title = 'Test' })
+ok(arrow:IsShown(), 'quest mode: the arrow shows')
+said = {}; glToggles = 0
+inside = true; fire('ZONE_CHANGED_NEW_AREA')
+ok(ns.modes.current() == 'dungeon', 'inside a dungeon: dungeon mode by itself')
+ok(not arrow:IsShown(), 'dungeon mode: the arrow is put away')
+ok(GuidelimeDataChar.mainFrameShowing == false and glToggles == 1, 'the Guidelime guide is hidden')
+local s = table.concat(said, ',')
+ok(s:find('questie tracker fold', 1, true) and not s:find('GONE', 1, true), 'the Questie tracker folds to its header (never vanishes)')
+ok(s:find('details show', 1, true), 'the damage meter shows')
+said = {}
+inside = false; fire('ZONE_CHANGED_NEW_AREA')
+ok(ns.modes.current() == 'quest', 'out of the dungeon: quest mode again')
+ok(arrow:IsShown() and GuidelimeDataChar.mainFrameShowing == true, 'guide and arrow back')
+s = table.concat(said, ',')
+ok(s:find('questie tracker open', 1, true) and s:find('details hide', 1, true), 'tracker unfolds, meter away')
+-- no chip any more (2026-11-17, "these should all be one thing"): the minimap button is the one control
+ok(_G.OmaWayModeChip == nil, 'there is no QUEST / DUNGEON chip')
+local chip = _G.OmaWayMinimapButton
+ok(chip:GetScript('OnMouseWheel') == nil and arrow:GetScript('OnMouseWheel') == nil, 'no mouse-wheel sizing anywhere')
+
+-- ---------- quests (sheet 115): focus > another add-on > the nearest job ----------
+do
+  TomTom:RemoveWaypoint(); ns.clearWaypoint()
+  local function spawnsAt(x, y) return { x = x, y = y } end
+  local log = {
+    [100] = { name = 'Elixir of Pain', IsComplete = function() return 0 end, Finisher = { NPC = { 2216 } },
+      Objectives = { { Type = 'item', Description = 'Mountain Lion Blood', Collected = 3, Needed = 10, spawnList = spawnsAt(.6, .1) } } },
+    [200] = { name = 'Battle of Hillsbrad', IsComplete = function() return 0 end,
+      Objectives = { { Type = 'monster', Description = 'Hillsbrad Farmer slain', Collected = 4, Needed = 6, spawnList = spawnsAt(.5, .3) } } },
+  }
+  local D = {}
+  -- distance from the player in world yards (the fake world: map x*1000, y*1000)
+  function D.GetNearestObjective(sl) local dx, dy = sl.x * 1000 - player.x, sl.y * 1000 - player.y; return { sl.x * 100, sl.y * 100 }, 85, 'Thing', math.sqrt(dx * dx + dy * dy) end
+  function D.GetNearestFinisherOrStarter(fin) local dx, dy = 400 - player.x, 100 - player.y; return { 40, 10 }, 85, 'Apothecary Lydon', math.sqrt(dx * dx + dy * dy) end
+  -- today's Questie: the quests you have in QuestLogCache (ids, read only), each quest's data from QuestieDB.GetQuest
+  local ids = setmetatable({}, { __index = function(_, k) return log[k] and true or nil end, __pairs = nil })
+  local C = { questLog_DO_NOT_MODIFY = setmetatable({}, { __index = function(_, k) return log[k] and {} or nil end }) }
+  local function syncIds() local t = {}; for id in pairs(log) do t[id] = {} end; C.questLog_DO_NOT_MODIFY = t end
+  syncIds()
+  local DB = { GetQuest = function(id) return log[id] end }
+  local Z = { GetUiMapIdByAreaId = function(_, z) return 1426 end }
+  QuestieLoader = { ImportModule = function(_, n) return ({ DistanceUtils = D, QuestLogCache = C, QuestieDB = DB, ZoneDB = Z, QuestieTracker = QT })[n] end }
+  QUESTLOG_SYNC = syncIds
+  Questie = { db = { char = {} } }
+  player.x, player.y = 500, 100
+  ns.quests.step()
+  local w = ns.waypoint()
+  ok(w and w.questId == 100, 'nothing else steers: the nearest job (the lion blood, 100 yd, not the farmers, 200 yd)')
+  ok(w and w.line2 == 'Mountain Lion Blood  3/10', 'its progress on the plate: ' .. tostring(w and w.line2))
+  ok(w and w.icon:find('loot', 1, true), 'a loot icon for an item to collect')
+  -- the farmers become only a little closer: no flick
+  player.x, player.y = 550, 180; tick(1)
+  ns.quests.step()
+  ok(ns.waypoint().questId == 100, 'another quest just a bit closer: the arrow keeps its target')
+  -- a Guidelime step arrives: it steers
+  local g = TomTom:AddWaypoint(1426, .2, .2, { title = 'Krusk', from = 'Guidelime' })
+  ns.quests.step()
+  ok(ns.waypoint().title == 'Krusk', 'a guide step beats the nearest job')
+  -- you focus a quest in Questie: it wins, even over the guide
+  Questie.db.char.TrackerFocus = 200; ns.quests.step()
+  ok(ns.waypoint().questId == 200 and ns.waypoint().focus, 'your focused quest beats the guide')
+  ok(ns.waypoint().icon:find('slay', 1, true), 'a kill icon for mobs to slay')
+  Questie.db.char.TrackerFocus = nil; ns.quests.step()
+  ok(ns.waypoint().title == 'Krusk', 'unfocus: back to the guide')
+  TomTom:RemoveWaypoint(g); ns.quests.step()
+  ok(ns.waypoint() and ns.waypoint().questId ~= nil, 'the guide step gone: the nearest job again')
+  -- a quest done: its hand-in
+  log[200] = nil; QUESTLOG_SYNC(); log[100].IsComplete = function() return 1 end; ns.quests.step()
+  ok(ns.waypoint().title == 'Apothecary Lydon' and ns.waypoint().icon:find('complete', 1, true), 'done: the hand-in, with the ? icon')
+  ok(ns.waypoint().line2 == 'Elixir of Pain · hand in', 'and says so')
+  log[100] = nil; QUESTLOG_SYNC(); ns.quests.step()
+  ok(ns.waypoint() == nil, 'an empty quest log: no arrow')
+end
+
+-- ---------- the minimap button: one click, everything together ----------
+do
+  local mb = _G.OmaWayMinimapButton
+  ok(mb ~= nil, 'there is a minimap button')
+  TomTom:AddWaypoint(1426, .5, .1, { title = 'Test' })
+  ok(arrow:IsShown() and GuidelimeDataChar.mainFrameShowing, 'on: the guide and the arrow show')
+  said = {}
+  mb:GetScript('OnClick')(mb, 'LeftButton')
+  local s1 = table.concat(said, ',')
+  ok(not arrow:IsShown(), 'left-click: the arrow goes, even with a waypoint')
+  ok(GuidelimeDataChar.mainFrameShowing == false, 'and the guide')
+  ok(s1:find('questie tracker fold', 1, true), 'and the Questie tracker folds')
+  ok(s1:find('details show', 1, true), 'and the damage meter comes on')
+  TomTom:AddWaypoint(1426, .4, .1, { title = 'Another' })
+  ok(not arrow:IsShown(), 'a new waypoint does not bring the arrow back while off')
+  fire('ZONE_CHANGED_NEW_AREA')
+  ok(not arrow:IsShown(), 'a zone change outside a dungeon keeps your click')
+  said = {}
+  mb:GetScript('OnClick')(mb, 'LeftButton')
+  local s2 = table.concat(said, ',')
+  ok(arrow:IsShown() and GuidelimeDataChar.mainFrameShowing, 'left-click again: guide and arrow back')
+  ok(s2:find('questie tracker open', 1, true) and s2:find('details hide', 1, true), 'tracker unfolds, meter away')
+  -- a dungeon door still switches it by itself, and ends the click's hold
+  inside = true; fire('ZONE_CHANGED_NEW_AREA')
+  ok(not arrow:IsShown() and OmaWayDB.mode == 'auto', 'into a dungeon: all off by itself')
+  inside = false; fire('ZONE_CHANGED_NEW_AREA')
+  ok(arrow:IsShown(), 'out again: all back')
+  TomTom:RemoveWaypoint()
+end
+
+-- ---------- the plate (2026-11-18 in game: one line sat high and ran into the right gem) ----------
+do
+  local P = ns.arrow.parts
+  TomTom:AddWaypoint(1426, .5, .1, { title = 'OmaWay test' }); player.x, player.y = 0, 0; facing = 0; tick(10)
+  local l1 = P.line1._pts and (P.line1._pts.LEFT or P.line1._pts.BOTTOMLEFT)
+  ok(l1 and l1[1] == P.plate and l1[3] == 24, 'one line, no icon: it starts right after the left gem (24 px), from the plate itself')
+  ok(P.line1._pts.LEFT ~= nil, 'and it is centred top to bottom')
+  ok(P.plate._w == 24 + 80 + 28, 'the plate is the text plus both gems wide (' .. tostring(P.plate._w) .. ')')
+  ok(not P.grip:IsShown(), 'the //// grip is hidden until the mouse is on the arrow')
+  arrow:GetScript('OnEnter')(arrow); ok(P.grip:IsShown(), 'mouse on the arrow: the grip shows')
+  arrow:GetScript('OnLeave')(arrow); ok(not P.grip:IsShown(), 'mouse off: gone again')
+  OmaWayDB.plate = 'text'; ns.arrow.look(); ns.arrowChanged(); tick(10)
+  ok(not P.bg:IsShown() and P.plate._w == 80, 'Text only: no plate behind the text, no gem space')
+  OmaWayDB.plate = 'off'; ns.arrow.look()
+  ok(not P.plate:IsShown(), 'Nothing: no plate at all')
+  OmaWayDB.plate = nil; ns.arrow.look(); TomTom:RemoveWaypoint()
+end
+
+-- ---------- a guide open: never the nearest job from elsewhere (2026-11-18) ----------
+do
+  TomTom:RemoveWaypoint(); ns.clearAuto(); Questie.db.char.TrackerFocus = nil
+  GuidelimeWindow = setmetatable({ _shown = true }, Obj); GuidelimeDataChar.currentGuide = 'TUGs 22-24 Hillsbrad Foothills'
+  ns.quests.step()
+  ok(ns.waypoint() == nil, 'a guide open with a step that has no spot: no arrow to some other quest')
+  GuidelimeWindow = nil; GuidelimeDataChar.currentGuide = nil
+end
+
+-- ---------- the guide's real step on the arrow, and the right-side dock (2026-11-18) ----------
+do
+  local stepFrame = { textBox = { GetText = function() return '|T icon:12|t|cffffffffFly to |cff00ff00Orgrimmar|r\nthen take the zeppelin' end } }
+  GuidelimeWindow = setmetatable({ steps = { [3] = stepFrame }, _shown = true }, Obj)
+  GuidelimeArrow = { element = { step = { index = 3 } } }
+  TomTom:AddWaypoint(1426, .5, .1, { title = 'Follow current step', from = 'Guidelime' })
+  player.x, player.y = 0, 0; facing = 0; textAccReset = true; tick(10)
+  ok(ns.waypoint().title == 'Fly to Orgrimmar', "the arrow says the guide's own step, not 'Follow current step': " .. tostring(ns.waypoint().title))
+  ok(ns.waypoint().line2 == 'then take the zeppelin', 'and its second line')
+  Questie_BaseFrame = setmetatable({ _shown = true }, Obj)
+  ns.modes.dock()
+  local gp = GuidelimeWindow._pts and GuidelimeWindow._pts.TOPRIGHT
+  ok(gp and gp[1] == Questie_BaseFrame and gp[2] == 'BOTTOMRIGHT', 'TUG docks right under the Questie tracker')
+  local tp = Questie_BaseFrame._pts and Questie_BaseFrame._pts.TOPRIGHT
+  ok(tp and tp[1] == Minimap, 'the tracker sits under the minimap on the right')
+  OmaWayDB.dock = false; GuidelimeWindow._pts = {}; ns.modes.dock()
+  ok(next(GuidelimeWindow._pts) == nil, 'dock off: your own spots are left alone')
+  OmaWayDB.dock = nil; TomTom:RemoveWaypoint(); GuidelimeWindow, GuidelimeArrow, Questie_BaseFrame = nil, nil, nil
+end
+
+-- ---------- sizing: only the //// grip, 32 to 192 ----------
+ok(OmaWayDB.size == 64, 'starts at 64 px')
+local grip
+for _, f in ipairs(frames) do if f._kind == 'Button' and f:GetScript('OnMouseDown') and f ~= chip then grip = f end end
+ok(grip, 'the //// grip exists')
+CURSOR = 0; grip:GetScript('OnMouseDown')(grip); CURSOR = 500; grip:GetScript('OnUpdate')(grip, .016); grip:GetScript('OnMouseUp')(grip)
+ok(OmaWayDB.size == 192, 'dragged far: stops at 192')
+CURSOR = 0; grip:GetScript('OnMouseDown')(grip); CURSOR = -500; grip:GetScript('OnUpdate')(grip, .016); grip:GetScript('OnMouseUp')(grip)
+ok(OmaWayDB.size == 32, 'dragged back: stops at 32')
+OmaWayDB.locked = true; local before = OmaWayDB.size
+CURSOR = 0; grip:GetScript('OnMouseDown')(grip); ok(grip:GetScript('OnUpdate') == nil, 'locked: the grip does nothing'); OmaWayDB.locked = false
+
+-- ---------- the real TomTom wins ----------
+do
+  local savedTT = TomTom; TomTom = nil
+  C_AddOns.IsAddOnLoaded = function(n) return n == 'TomTom' end
+  local ns2 = {}; assert(loadfile('Core.lua'))('OmaWay', ns2)
+  ok(TomTom == nil and not ns2.standIn, 'with TomTom installed OmaWay leaves its slot alone')
+  TomTom = savedTT; C_AddOns.IsAddOnLoaded = function() return false end
+end
+
+-- /omaway test puts a point beside you (2026-11-18 BugSack: 'H and H:GetPlayerZonePosition()' lost y)
+SlashCmdList.OMAWAY('clear'); Questie.db.char.TrackerFocus = nil
+SlashCmdList.OMAWAY('test')
+ok(ns.external() and ns.external().title == 'OmaWay test', '/omaway test sets a point next to you')
+SlashCmdList.OMAWAY('clear')
+ok(reloads == 0, 'nothing ever reloads the UI (' .. reloads .. ' reloads)')
+print = print0
+print(('OmaWay smoke: %d checks, %d failed'):format(checks, fails))
+if fails > 0 then os.exit(1) end
