@@ -2,6 +2,6 @@
 ## Title: OmaChat
 ## Notes: Keeps WoW's chat log on, so the phone remote can show chat.
 ## Author: Omashu
-## Version: 1
+## Version: 2
 
 OmaChat.lua

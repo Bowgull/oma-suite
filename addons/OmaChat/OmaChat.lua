@@ -6,7 +6,7 @@
 -- The strip (version 2, 2026-11-11): ONE row of 1x1 screen pixels on the bottom edge. Pixel 1 magenta, pixel 2 cyan,
 -- pixel 3 = (2, 79, 77) ("v2"), then 3 bytes per pixel in red, green, blue (every level 0-255 arrives exactly: the
 -- /omachat ramp test, 768 of 768). The bytes:
---   flags (1: chat box open, 2: aux's search box is on screen, 4: aux's search box has the keyboard) | how many lines (1) |
+--   flags (1: chat box open, 2: an auction search box is up (Improved Forever's or aux's), 4: it has the keyboard) | how many lines (1) |
 --   each line: number (2) + length (2) + speaker's class (1: 0 unknown, else WoW's class ID) + UTF-8 |
 --   check (2: CRC-16/CCITT of every byte before it)
 -- It always shows the NEWEST lines that fit (300 bytes, about 105 pixels), so a line stays on the strip for several
@@ -71,10 +71,39 @@ local function findAuxBox()
     f = EnumerateFrames(f)
   end
 end
+-- Improved Forever's auction window (2026-11-24, replacing aux on the couch). Its Buy page has a search box
+-- (ImprovedForeverAuctionSearch) but shows it only with the mouse: with the pad in hand it's hidden and the page has
+-- no text search at all, and IF hides it again on every redraw. So OmaChat brings its own box, over the spot where
+-- IF's would be, while the phone types. Enter hands the text to IF's box with SetText: IF's own OnTextChanged hook
+-- then runs its search (in the category picked). IF is used when its Buy page is up; aux otherwise.
+local function ifTarget()
+  local s, w = _G.ImprovedForeverAuctionSearch, _G.ImprovedForeverAuctionBuy
+  local side = s and s:GetParent()
+  if w and w:IsShown() and side and side:IsVisible() then return s end
+end
+local ifBox = CreateFrame("EditBox", "OmashuAHSearch", UIParent, "InputBoxTemplate")
+ifBox:SetFrameStrata("FULLSCREEN_DIALOG"); ifBox:SetAutoFocus(false); ifBox:SetMaxLetters(60); ifBox:Hide()
+local function ifDone(self) self:ClearFocus(); self:Hide() end
+ifBox:SetScript("OnEnterPressed", function(self)
+  local s = ifTarget()
+  if s then s:SetText(strtrim(self:GetText() or "")) end
+  ifDone(self)
+end)
+ifBox:SetScript("OnEscapePressed", ifDone)
+ifBox:SetScript("OnEditFocusLost", function(self) self:Hide() end)
+local function ifFocus(s)
+  local w, h = s:GetSize()
+  ifBox:ClearAllPoints(); ifBox:SetPoint("CENTER", s, "CENTER", 0, 0); ifBox:SetSize(math.max(w or 0, 160), math.max(h or 0, 20))
+  ifBox:SetText(""); ifBox:Show(); ifBox:SetFocus(); ifBox:SetCursorPosition(0)
+end
+
 local ahOpen = false
 local focusBtn = CreateFrame("Button", "OmashuAuxSearchFocus", UIParent)
 focusBtn:SetScript("OnClick", function()
-  local b = ahOpen and findAuxBox()
+  if not ahOpen then return end
+  local s = ifTarget()
+  if s then return ifFocus(s) end
+  local b = findAuxBox()
   if b and b:IsVisible() then b:SetFocus(); b:SetText(""); b:SetCursorPosition(0) end
 end)
 local KEY = "CTRL-SHIFT-F11"
@@ -85,8 +114,10 @@ ahEv:SetScript("OnEvent", function(_, e)
   if InCombatLockdown() then return end
   if ahOpen then SetOverrideBindingClick(focusBtn, true, KEY, "OmashuAuxSearchFocus") else ClearOverrideBindings(focusBtn) end
 end)
-local function auxFlags()
-  if not ahOpen then return 0 end
+local function auxFlags()   -- 2: a search box the phone can type into is up (IF's Buy page, or aux's), 4: it has the keyboard
+  if not ahOpen then ifBox:Hide(); return 0 end
+  if ifTarget() then return 2 + (ifBox:HasFocus() and 4 or 0) end
+  if ifBox:IsShown() then ifBox:ClearFocus(); ifBox:Hide() end   -- IF's window closed or left Buy while typing
   local b = findAuxBox()
   if not (b and b:IsVisible()) then return 0 end
   return 2 + (b:HasFocus() and 4 or 0)
