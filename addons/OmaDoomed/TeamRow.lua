@@ -114,6 +114,8 @@ function T.hookCastBar()
   hooked = true
   bar:HookScript('OnShow', function() castChanged(true) end)
   bar:HookScript('OnHide', function() castChanged(false) end)
+  -- another add-on (BetterBlizzFrames) may move the bar as it shows, or later: place again where it ended up
+  if hooksecurefunc then hooksecurefunc(bar, 'SetPoint', function() if R.castShown then castChanged(true) end end) end
   local ok, shown = pcall(bar.IsShown, bar); if ok and shown == true then castChanged(true) end
 end
 

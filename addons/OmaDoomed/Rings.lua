@@ -331,11 +331,37 @@ end
 -- 2026-11-17 (09:58 screenshot, Joshua: "the rings are hanging with nothing there ... they should sit tight"): the
 -- rings sit right under the bars; only while the target is casting do they (and the team row under them) slide down to
 -- make room for its cast bar. Blizzard's own cast bar showing and hiding is the signal (R.castShown, TeamRow.lua).
-function R.castDrop() return (R.castShown and ns.team and ns.team.on()) and R.CAST_SLOT or 0 end
+-- 2026-11-24 (07:42 screenshots): BetterBlizzFrames (and add-ons like it) already move the cast bar down out of the
+-- way, so sliding the rings as well put them right under it. So the rings slide only when the bar really is where
+-- they sit: its top (or its icon's) reaches into the row. Positions are read, never assumed; if the game won't give
+-- them (hidden in a fight, or no such method), the old slide stands.
+local function lowBar()
+  local main = TargetFrame and TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
+  return main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
+end
+local function plainNum(v) return type(v) == 'number' and not (issecretvalue and issecretvalue(v)) and v == v end
+local function screen(f, edge)   -- an edge of f in screen pixels, or nil
+  if type(f) ~= 'table' or type(f[edge]) ~= 'function' or type(f.GetEffectiveScale) ~= 'function' then return end
+  local ok, v = pcall(f[edge], f); local ok2, k = pcall(f.GetEffectiveScale, f)
+  if ok and ok2 and plainNum(v) and plainNum(k) then return v * k end
+end
+function R.castBarClear()
+  local bar = _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar)
+  local low, p = lowBar(), framePair
+  local bottom = screen(low, 'GetBottom')
+  local top = screen(bar, 'GetTop')
+  if not (bottom and top and p) then return nil end
+  local iconTop = screen(bar.Icon, 'GetTop'); if iconTop and iconTop > top then top = iconTop end
+  local ok, k = pcall(p.anchor.GetEffectiveScale, p.anchor); if not (ok and plainNum(k)) then return nil end
+  return top <= bottom - (S + R.FRAME_GAP) * k + 0.5      -- the row's bottom edge, in screen pixels
+end
+function R.castDrop()
+  if not (R.castShown and ns.team and ns.team.on()) then return 0 end
+  return R.castBarClear() == true and 0 or R.CAST_SLOT
+end
 function R.placeFrameRow()
   local p = framePair; if not p or not TargetFrame then return end
-  local main = TargetFrame.TargetFrameContent and TargetFrame.TargetFrameContent.TargetFrameContentMain
-  local low = main and (main.ManaBar or (main.HealthBarsContainer and main.HealthBarsContainer.HealthBar))
+  local low = lowBar()
   p.anchor:ClearAllPoints()
   if low then p.anchor:SetPoint('BOTTOMLEFT', low, 'BOTTOMLEFT', R.FRAME_LEFT, -(S + R.FRAME_GAP) - R.castDrop() / R.FRAME_SCALE)
   else p.anchor:SetPoint('BOTTOMLEFT', TargetFrame, 'TOPLEFT', 24, -14) end
