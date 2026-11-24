@@ -226,7 +226,10 @@ return {
     T.ok(dot and curse, 'both numbers found')
     T.ok(curse < dot, ('curse %s smaller than DoT %s'):format(tostring(curse), tostring(dot)))
     T.eq(dot, math.floor(40 * .46 + .5), 'DoT number 46% of the ring (sheet 54)'); T.eq(curse, math.floor(40 * .36 + .5), 'curse number 36% (sheet 54)')
-    T.eq(numSize(UI.group(main, 'channel').buttons[1]), dot, 'channels keep the big number')
+    -- 2026-11-24: the channel ring is 1.25x, its number the same share of it
+    local ch = UI.group(main, 'channel').buttons[1]
+    T.eq(ch:GetWidth(), 50, 'channel ring 1.25x a DoT ring (40)')
+    T.eq(numSize(ch), math.floor(50 * .46 + .5), 'channels keep the big number, scaled with the ring')
     noErrors(T)
   end,
   -- sheet 51 B (approved "B"): the target-frame row is 28 px with a smaller number

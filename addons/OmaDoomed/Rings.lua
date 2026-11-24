@@ -352,7 +352,7 @@ local function makeFramePair()
   p.frameScale = R.FRAME_SCALE
   p.pt = 'BOTTOMLEFT'
   for _, c in ipairs({ p.ring, p.main }) do
-    c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, (S + R.FRAME_SPACE) * R.FRAME_ROW + 0.01)
+    c:ClearAllPoints(); c:SetPoint('BOTTOMLEFT', p.anchor, 'BOTTOMLEFT'); pcall(c.SetFlowLayoutMaximumLineSize, c, (S + R.FRAME_SPACE) * R.FRAME_ROW + (R.sizeOf('channel') - S) + 0.01)   -- room for the bigger channel ring
   end
   channelGroup(p, db.where ~= 'split')   -- in Haunt your channel and curses stay over the mob (chanPair), not on the frame
   p.ring:SetUnit('target'); p.main:SetUnit('target')
