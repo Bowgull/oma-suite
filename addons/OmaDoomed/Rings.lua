@@ -346,7 +346,16 @@ local function screen(f, edge)   -- an edge of f in screen pixels, or nil
   local ok, v = pcall(f[edge], f); local ok2, k = pcall(f.GetEffectiveScale, f)
   if ok and ok2 and plainNum(v) and plainNum(k) then return v * k end
 end
-function R.castBarClear()
+-- 2026-11-24 08:42 screenshot: in a fight Forever hides those positions too, so the old slide still ran. So a reading
+-- taken while they were plain (out of combat, or earlier in the fight) is kept and used while they're hidden; and
+-- with nothing read yet, BetterBlizzFrames loaded means its own placement, which keeps the bar clear of the row.
+local lastClear
+local function bbfLoaded()
+  local f = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
+  local ok, on = pcall(f, 'BetterBlizzFrames')
+  return ok and on == true
+end
+local function readClear()
   local bar = _G.TargetFrameSpellBar or (TargetFrame and TargetFrame.spellbar)
   local low, p = lowBar(), framePair
   local bottom = screen(low, 'GetBottom')
@@ -356,6 +365,13 @@ function R.castBarClear()
   local ok, k = pcall(p.anchor.GetEffectiveScale, p.anchor); if not (ok and plainNum(k)) then return nil end
   return top <= bottom - (S + R.FRAME_GAP) * k + 0.5      -- the row's bottom edge, in screen pixels
 end
+function R.castBarClear()
+  local now = readClear()
+  if now ~= nil then lastClear = now; return now end
+  if lastClear ~= nil then return lastClear end
+  if bbfLoaded() then return true end
+end
+R.readCastClear = function() local v = readClear(); if v ~= nil then lastClear = v end end   -- a reading while it's plain
 function R.castDrop()
   if not (R.castShown and ns.team and ns.team.on()) then return 0 end
   return R.castBarClear() == true and 0 or R.CAST_SLOT

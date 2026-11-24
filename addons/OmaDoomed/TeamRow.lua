@@ -131,6 +131,7 @@ local function targetCasts()
 end
 T.targetCasts = targetCasts
 local function castLook()
+  if R.readCastClear then R.readCastClear() end   -- where the cast bar sits, while the game still says (Rings.lua)
   local on = targetCasts()
   local bar = castBar()
   if not on and type(bar) == 'table' then

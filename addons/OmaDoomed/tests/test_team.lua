@@ -12,6 +12,20 @@ local function setup(W, rings, before)
 end
 local function noErrors(T) T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1])) end
 local function shows(UI, c, key) return #(UI.showing(c)[key] or {}) end
+local function hiddenFromStart(W, T, bbf)
+  local bar
+  local ns, F, UI = setup(W, { where = 'both' }, function()
+    bar = CreateFrame('StatusBar', 'TargetFrameSpellBar', UIParent); bar:Hide()
+    rawset(bar, 'GetTop', function() return W.secret(900) end)
+    C_AddOns = C_AddOns or {}; C_AddOns.IsAddOnLoaded = function(n) return bbf and n == 'BetterBlizzFrames' end
+  end)
+  F.mob('nameplate1', A, 'Skum', 300); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
+  local fp = ns.rings.framePair; T.ok(fp, 'rings on the target frame')
+  local function y() local pts = rawget(fp.anchor, '_pts'); return pts and pts.BOTTOMLEFT and pts.BOTTOMLEFT[4] end
+  local tight = y()
+  W.combat = true; bar:Show()
+  return y, tight
+end
 return {
   ['team row: the squares take the mouse (the game shows their tooltip); the class dots do not'] = function(W, T)
     local ns, F, UI = setup(W)
@@ -138,9 +152,15 @@ return {
     barTop = 875; bar:SetPoint('TOP', TargetFrame, 'BOTTOM', 0, -53)
     T.eq(y(), tight, 'and back up when it moves away')
     rawset(bar, 'GetTop', function() return W.secret(900) end); bar:Hide(); bar:Show()
-    T.ok(y() < tight, 'a hidden position: the old slide stands')
+    T.eq(y(), tight, 'hidden in the fight (08:42 screenshot): the last plain reading (clear) still holds')
     bar:Hide(); T.eq(y(), tight, 'the cast ends: tight')
     noErrors(T)
+  end,
+  ['team row: positions hidden from the start, BetterBlizzFrames loaded: it places the bar, the rings stay tight'] = function(W, T)
+    local y, tight = hiddenFromStart(W, T, true); T.eq(y(), tight); noErrors(T)
+  end,
+  ['team row: positions hidden from the start, no BetterBlizzFrames: the old slide'] = function(W, T)
+    local y, tight = hiddenFromStart(W, T, false); T.ok(y() < tight); noErrors(T)
   end,
   ['team row: off in settings, nothing is built'] = function(W, T)
     local ns, F, UI = setup(W, { team = false })
