@@ -66,7 +66,7 @@ ns.settings = Core.NewSettings({
     { key = 'odeb', store = R, default = true, control = 'check', label = "Other players' debuffs",
       tip = "Other players' debuffs on a mob as small soft squares beside its health bar, glowing in their type's colour. Takes a /reload." },
     { key = 'cc', store = R, default = true, control = 'check', label = 'Crowd-control timers',
-      tip = "Your Fear, Banish, Howl of Terror and your Sayaad's Seduction as a teal ring over the mob. When it isn't your target or is off screen, the ring stands beside your target frame instead, so you always see how long is left." },
+      tip = "Your Fear, Banish, Howl of Terror and your Sayaad's Seduction as a teal ring over the mob. When it isn't your target or is off screen, a big ring with its name shows under your character instead, so you always see how long is left." },
 
     -- 2026-11-16 (sheet 83): the mob list, its own store (OmaDoomedDB.list)
     { header = 'Mob list' },

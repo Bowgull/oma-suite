@@ -154,6 +154,27 @@ return {
     T.eq(M.biteOf('Corruption'), nil, 'closed'); T.ok(not slot(M, 'Corruption').ghost:IsShown())
     noErrors(T)
   end,
+  -- 2026-11-24 bug report (07:02, Elder Ashenvale Bear): Doomed.lua:434 'attempt to perform arithmetic on local H (a
+  -- secret number value)': with the Essence or Cinders tick light, a tick read the health bar's height, which Forever
+  -- hides in combat, and the kill bar paused until /reload. The drawing now uses the last plain size.
+  ['a tick in combat with the bar\'s size hidden: Essence, Cinders and the stripes keep drawing'] = function(W, T)
+    for _, light in ipairs({ 'essence', 'cinders' }) do
+      local ns, F, UI, M, DOTS = setup(W)
+      ns.db.tick = light; ns.db.cast = 'stripes'
+      local hb = TargetFrame.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar
+      hb:SetSize(120, 12)
+      DOTS[A] = { dot(W, 'Corruption', 47, 12), dot(W, 'Immolate', 20, 15, { provisional = true }) }
+      W.advance(1, FRAME)
+      W.combat = true
+      hb.GetWidth = function() return W.secret(120) end; hb.GetHeight = function() return W.secret(12) end
+      DOTS[A][1].damage = 35
+      W.advance(10 * FRAME, FRAME)
+      T.ok(M.biteOf('Corruption'), light .. ': the tick still bites')
+      T.ok(not ns.parts.doomed.off, light .. ': the kill bar is still running')
+      noErrors(T)
+      W.combat = false; hb.GetWidth = nil; hb.GetHeight = nil
+    end
+  end,
   ['a target switch wipes every bit of state from the last mob'] = function(W, T)
     local ns, F, UI, M, DOTS = setup(W)
     DOTS[A] = { dot(W, 'Corruption', 47, 12, { appliedAt = W.now }), dot(W, 'Immolate', 20, 15) }

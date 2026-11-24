@@ -115,6 +115,33 @@ return {
     T.eq(y(), tight, 'the cast ends: back up tight')
     noErrors(T)
   end,
+  -- 2026-11-24 screenshots: BetterBlizzFrames had already moved the cast bar below the rings; sliding them too put
+  -- them under it. Where the bar really is decides (edges in screen px; the row is S + gap tall, here 45 px at scale 1).
+  ['team row: a cast bar another add-on already moved below the rings leaves them tight'] = function(W, T)
+    local bar
+    local ns, F, UI = setup(W, { where = 'both' }, function()
+      bar = CreateFrame('StatusBar', 'TargetFrameSpellBar', UIParent); bar:Hide()
+    end)
+    F.mob('nameplate1', A, 'Skum', 300); W.fire('NAME_PLATE_UNIT_ADDED', 'nameplate1'); F.target(A); W.advance(.5)
+    local fp = ns.rings.framePair; T.ok(fp, 'rings on the target frame')
+    local main = TargetFrame.TargetFrameContent.TargetFrameContentMain
+    local low = main.ManaBar or main.HealthBarsContainer.HealthBar
+    rawset(low, 'GetBottom', function() return 928 end)
+    local barTop = 875
+    rawset(bar, 'GetTop', function() return barTop end)
+    local function y() local pts = rawget(fp.anchor, '_pts'); return pts and pts.BOTTOMLEFT and pts.BOTTOMLEFT[4] end
+    local tight = y()
+    W.combat = true; bar:Show()
+    T.eq(y(), tight, 'the bar sits 53 px down, under the 45 px row: the rings stay tight')
+    barTop = 918; bar:SetPoint('TOP', TargetFrame, 'BOTTOM', 0, -10)
+    T.ok(y() < tight, 'the bar moved up into the row: now they slide')
+    barTop = 875; bar:SetPoint('TOP', TargetFrame, 'BOTTOM', 0, -53)
+    T.eq(y(), tight, 'and back up when it moves away')
+    rawset(bar, 'GetTop', function() return W.secret(900) end); bar:Hide(); bar:Show()
+    T.ok(y() < tight, 'a hidden position: the old slide stands')
+    bar:Hide(); T.eq(y(), tight, 'the cast ends: tight')
+    noErrors(T)
+  end,
   ['team row: off in settings, nothing is built'] = function(W, T)
     local ns, F, UI = setup(W, { team = false })
     T.eq(ns.team.c, nil, 'no team row'); noErrors(T)

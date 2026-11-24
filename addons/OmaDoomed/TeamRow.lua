@@ -151,6 +151,8 @@ function T.hookCastBar()
     hooked = true
     pcall(bar.HookScript, bar, 'OnShow', function() castChanged(true) end)
     pcall(bar.HookScript, bar, 'OnHide', function() castLook() end)   -- the target may still be casting (a new cast)
+    -- 2026-11-24: another add-on (BetterBlizzFrames) may move the bar as it shows, or later: place again where it ended up
+    if hooksecurefunc then pcall(hooksecurefunc, bar, 'SetPoint', function() if R.castShown then castChanged(true) end end) end
   end
   castLook()
 end

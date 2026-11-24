@@ -155,6 +155,15 @@ local function styleOf(sp, provisional, lk, pr, landAge, landLook)
   return Style.piece(look, sp, ask)
 end
 
+-- the plate bar's size for the texture maths: Forever can hide it in combat (2026-11-24, the same 'arithmetic on a
+-- secret number' as the target bar), so the last plain size is kept on the piece and a hidden one never reaches maths
+local function barSize(c)
+  local okW, w = pcall(c.hb.GetWidth, c.hb); local okH, h = pcall(c.hb.GetHeight, c.hb)
+  if okW and plain(w) and type(w) == 'number' then c.bw = w end
+  if okH and plain(h) and type(h) == 'number' then c.bh = h end
+  return c.bw or 120, c.bh or 12
+end
+
 -- every frame: what moves with your cast bar ('While you cast', the same setting as the target frame), and the
 -- ease to full colour as a cast lands (no snap)
 local function chargeOne(b, c, now)
@@ -167,10 +176,10 @@ local function chargeOne(b, c, now)
     if c.look == 'charging' then c.ch:SetValue(c.dmg * pr)
     elseif c.look == 'smoulder' then local o = styleOf(c.sp, true, 'smoulder', pr); barColor(b, o.base[1], o.base[2], o.base[3])
     elseif c.look == 'stripes' then
-      local bw, bh = c.hb:GetWidth(), c.hb:GetHeight(); local o = Style.stripesAt(now)
+      local bw, bh = barSize(c); local o = Style.stripesAt(now)
       c.ov.pre:SetTexCoord(o, o + bw / 24, 0, math.max(.01, bh / 24))
     elseif c.look == 'motes' then
-      local bw = c.hb:GetWidth(); local o = Style.motesAt(now)
+      local bw = barSize(c); local o = Style.motesAt(now)
       c.ov.motes:SetTexCoord(o, o + bw / 128 * 2, 0, 1)
     end
   end

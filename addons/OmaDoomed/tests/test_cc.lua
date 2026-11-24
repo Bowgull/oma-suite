@@ -1,5 +1,5 @@
--- Crowd-control timers (CrowdControl.lua, sheet 48): the teal ring on the held mob's plate, and the ring beside the
--- target frame whenever the held mob isn't your target or its plate is off screen.
+-- Crowd-control timers (CrowdControl.lua, sheet 48): the teal ring on the held mob's plate, and (2026-11-24) the big
+-- named ring under your character whenever the held mob isn't your target or its plate is off screen.
 local A, B = 'Creature-0-1-0-1-100-AAAA', 'Creature-0-1-0-1-101-BBBB'
 local FEAR, FEAR3, BANISH, SEDUCE = 5782, 6215, 710, 6358
 
@@ -145,10 +145,31 @@ return {
     T.ok(ns.cc and ns.cc.unlock, 'mover exists')
     ns.moblist.slash('move')
     ns.cc.unlock(true)
-    OmaDoomedDB.rings.ccPos = { x = 300, y = 400, scale = 1.2 }
+    OmaDoomedDB.rings.ccSpot = { x = 300, y = 400, scale = 1.2 }
     ns.cc.anchorHolder()
     ns.moblist.slash('lock')
-    T.eq(OmaDoomedDB.rings.ccPos.x, 300, 'kept after locking')
+    T.eq(OmaDoomedDB.rings.ccSpot.x, 300, 'kept after locking')
     T.eq(#(OmaDoomedDB.errs or {}), 0, 'no caught errors: ' .. tostring((OmaDoomedDB.errs or {})[1]))
+  end,
+  -- 2026-11-24 (approved on the mockup): under your character, named, one ring per hold, side by side and centred
+  ['Fear and Seduction on two mobs off screen: two named rings side by side, centred under you'] = function(W, T)
+    local ns, F, UI = setup(W)
+    twoMobs(W, F); W.combat = true
+    cast(W, FEAR); F.alias('pettarget', 'nameplate2'); cast(W, SEDUCE, 'pet')
+    offScreen(W, 'nameplate1'); offScreen(W, 'nameplate2'); F.target(nil); W.advance(.2)
+    local fear, sed = ring(ns, 'fear'), ring(ns, 'seduce')
+    T.ok(fear and sed, 'both rings show')
+    T.eq(fear.name:GetText(), 'Fear', 'named'); T.eq(sed.name:GetText(), 'Seduction', 'named')
+    local pf, ps = rawget(fear, '_pts').CENTER, rawget(sed, '_pts').CENTER
+    T.ok(pf[3] < 0 and ps[3] > 0 and math.abs(pf[3] + ps[3]) < 1e-6, 'centred: Fear left, Seduction right')
+    local hp = rawget(ns.cc.rings.fear:GetParent(), '_pts').CENTER
+    T.eq(hp[1], UIParent, 'on the screen, not the target frame'); T.eq(hp[2], 'BOTTOM', 'centred above the bottom (the action bars)')
+    noErrors(T)
+  end,
+  ['a place saved for the old spot beside the target frame is not used'] = function(W, T)
+    local ns = setup(W, { ccPos = { x = 300, y = 400, scale = 1.2 } })
+    ns.cc.anchorHolder()
+    local holder = ns.cc.test() and ns.cc.rings.fear:GetParent()
+    T.eq(rawget(holder, '_pts').CENTER[2], 'BOTTOM', 'the new spot under you')
   end,
 }
