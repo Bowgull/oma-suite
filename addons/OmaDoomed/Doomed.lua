@@ -105,11 +105,20 @@ local function sizeSkull()
 end
 P.sizeSkull = function() pcall(sizeSkull) end
 
--- the health bar's width, or a stand-in when it's hidden or not laid out yet (the sizer then sets the real one)
+-- the health bar's size, or a stand-in when it's hidden or not laid out yet (the sizer then sets the real one).
+-- 2026-11-24 (bug report 07:02, Doomed.lua:434 'arithmetic on a secret number'): in combat Forever can hide a Blizzard
+-- bar's size, so the drawing never reads it. It uses P.W / P.H: plain numbers measured here at build and kept up to
+-- date by the sizer below, which skips a hidden size.
+local function plainSize(v) return not Secret.is(v) and type(v) == 'number' and v > 0 end
 local function barWidth()
   local ok, w = pcall(hb.GetWidth, hb)
-  if ok and not Secret.is(w) and type(w) == 'number' and w > 0 then return w end
+  if ok and plainSize(w) then return w end
   return 120
+end
+local function barHeight()
+  local ok, h = pcall(hb.GetHeight, hb)
+  if ok and plainSize(h) then return h end
+  return 12
 end
 
 local function build()
@@ -144,6 +153,7 @@ local function build()
   -- green. Now every edge is a "mark" hung straight off the health's end, one link deep, all moved in the same pass:
   -- the way Blizzard's own smooth bars work (one value glides, everything is drawn from it).
   local W = barWidth()
+  P.W, P.H = W, barHeight()
   P.marks = {}
   P.baseEdge = baseEdge
   local function hang(m, edge)
@@ -164,9 +174,10 @@ local function build()
     return m
   end
   P.newMark = newMark
+  function P.fitHeight(h) if plainSize(h) then P.H = h end end
   function P.fitWidth(w)
-    if Secret.is(w) or type(w) ~= 'number' or w <= 0 or w == W then return end
-    W = w; P.base:SetWidth(w)
+    if not plainSize(w) or w == W then return end
+    W = w; P.W = w; P.base:SetWidth(w)
     for _, m in ipairs(P.marks) do m.L:SetWidth(w); m.R:SetWidth(w) end
   end
   P.E = { [0] = newMark() }   -- E[0]: the far end of the pieces (the health's end plus any bite still closing)
@@ -261,7 +272,7 @@ local function build()
   -- the pieces' bars are as wide as the health bar; another add-on may resize it after we're built (BetterBlizzFrames
   -- does at login and on its settings): our own frame on the bar hears it and follows (a hidden size is skipped)
   local sizer = CreateFrame('Frame', nil, clip); sizer:SetAllPoints(hb)
-  sizer:SetScript('OnSizeChanged', function(_, w) P.fitWidth(w) end)
+  sizer:SetScript('OnSizeChanged', function(_, w, h) P.fitWidth(w); P.fitHeight(h) end)
   P.sizer = sizer
 
   -- the skull and bones, on the ring's top edge like a raid mark (sheet 23 v5); none when the frame has no portrait
@@ -399,12 +410,12 @@ local function drawPiece(s, d, i, now, anow)
     if o.spark then local al = o.spark; glowRight(s.spark, o.glow[1] * al, o.glow[2] * al, o.glow[3] * al) end
     shown(s.spark, o.spark ~= nil)
     if o.stripes then   -- the stripes drift toward the green
-      local bw, bh = hb:GetWidth(), hb:GetHeight(); local at = K.stripesAt(anow)
+      local bw, bh = P.W, P.H; local at = K.stripesAt(anow)
       texCoord(s.pre, at, at + bw / 24, 0, bh / 24); color4(s.pre, o.tn[1], o.tn[2], o.tn[3], K.STRIPES_A)
     end
     shown(s.pre, o.stripes)
     if o.motes then
-      local bw = hb:GetWidth(); local at = K.motesAt(anow)
+      local bw = P.W; local at = K.motesAt(anow)
       texCoord(s.motes, at, at + bw / 128 * 2, 0, 1); color3(s.motes, o.tn[1] * K.MOTES_K, o.tn[2] * K.MOTES_K, o.tn[3] * K.MOTES_K)
     end
     shown(s.motes, o.motes)
@@ -423,7 +434,7 @@ local function drawPiece(s, d, i, now, anow)
         color3(s.spillC, tone[1] * a, tone[2] * a, tone[3] * a)
         glowRight(s.wash, tone[1] * a * .6, tone[2] * a * .6, tone[3] * a * .6)
         if (o.light == 'cinders' or o.light == 'essence') and b and s.right then
-          local age = anow - b.at; local H = hb:GetHeight()
+          local age = anow - b.at; local H = P.H
           for k = 1, 5 do
             local l, fade, e = K.particle(k, age)
             local t = s.parts[k]
