@@ -24,6 +24,8 @@ local function world(level)
   }
   local function open(id, title) W.tabs[#W.tabs + 1] = { guideId = id, title = title }; return id end
   _G.Polestar = {
+    settings = {},
+    Set = function(k, v) _G.Polestar.settings[k] = v end,
     Dungeons = {
       List = function() return list end,
       PickUp = function(k) return open('lookup/pickup/' .. k, k .. ': pick up') end,
@@ -44,6 +46,13 @@ local function eq(a, b, m) if a ~= b then error((m or 'eq') .. ': expected ' .. 
 local function ok(v, m) if not v then error(m or 'expected true', 2) end end
 
 local tests = {}
+tests['Alliance: Polestar dungeons in route switched on at Run them; Horde left off'] = function()
+  world(1); W.faction = 'Alliance'; fire('PLAYER_LOGIN')
+  eq(Polestar.dungeonRoute, true); eq(Polestar.settings['behavior.dungeons'], 'run')
+  world(30); fire('PLAYER_LOGIN')
+  eq(Polestar.dungeonRoute, nil, 'Horde: untouched'); eq(Polestar.settings['behavior.dungeons'], nil)
+end
+
 tests['an Alliance character is never touched, at any level'] = function()
   world(30); W.faction = 'Alliance'
   W.tabs = { { guideId = 'a/redridge', title = 'Redridge Mountains' }, { guideId = 'h/ash27', title = 'Ashenvale & Thousand Needles' } }

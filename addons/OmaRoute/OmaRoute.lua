@@ -171,7 +171,21 @@ local function checkInside()
   end
 end
 
+-- Alliance (Joshua 2026-11-26, the paladin alt: quest + dungeons, "Run them"): Polestar's own "Dungeons in my route"
+-- is built but held back by its author (ns.dungeonRoute = false, Core/Init.lua: "a test turns it on with
+-- Polestar.dungeonRoute = true before login"; read at call time). Turned on here for Alliance characters only, with the
+-- setting at "run"; the Set fires Polestar's own SETTING_CHANGED so its route re-reads. Horde characters keep it off,
+-- so Bujuju's OmaRoute is unchanged.
+local function allianceDungeons()
+  local P = PS()
+  if not (P and P.Set and UnitFactionGroup and UnitFactionGroup('player') == 'Alliance') then return end
+  P.dungeonRoute = true
+  P.Set('behavior.dungeons', 'run')
+  note('Polestar dungeons in route: on, run')
+end
+
 local f = CreateFrame('Frame')
+f:RegisterEvent('PLAYER_LOGIN')
 f:RegisterEvent('PLAYER_ENTERING_WORLD')
 f:RegisterEvent('ZONE_CHANGED_NEW_AREA')
 f:RegisterEvent('QUEST_TURNED_IN')
@@ -179,6 +193,7 @@ f:RegisterEvent('PLAYER_LEVEL_UP')
 f:RegisterEvent('PLAYER_REGEN_ENABLED')
 local warned = false
 f:SetScript('OnEvent', function(_, ev)
+  if ev == 'PLAYER_LOGIN' then allianceDungeons(); return end
   if not D() then
     if not warned and ev == 'PLAYER_ENTERING_WORLD' then warned = true; C_Timer.After(10, function() if not D() then say('Polestar is not loaded, so there is no route.') end end) end
     return
