@@ -143,7 +143,7 @@ tests['paladin v3: Mastercraft and Polestar on/off on set 1 LT+RT left and right
   local body; for _, m in pairs(W.macros) do if m.name == 'Polestar' then body = m.body end end
   ok(body and body:find('ui.shown', 1, true), 'toggles the guide window')
   local mc; for _, m in pairs(W.macros) do if m.name == 'Mastercraft' then mc = m.body end end
-  ok(mc and mc:find('/mc', 1, true) and mc:find('SetGamePadCursorControl', 1, true), 'Mastercraft opens with the pointer')
+  ok(mc == '/mc', 'Mastercraft opens its window')
 end
 
 tests['warlock: Well Fed food with an unreadable number still goes on the food button; Pointer macro retired'] = function()
