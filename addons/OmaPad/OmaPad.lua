@@ -214,6 +214,10 @@ local function charDB()
     end
     c.mine = c.mine or {}; c.his = c.his or {}
     c.rulesV = c.rulesV or 1
+    -- 2026-11-26 (Bunji, level 1): a brand-new character comes with buttons the game put on the pad bars itself
+    -- (Will to Survive, the starting food). Taken as "his", they blocked the main seal button and doubled two spells.
+    -- A new character (level 1 or 2) hands them to the add-on once, so the next pass lays the bars out clean.
+    if not c.layoutV and (UnitLevel('player') or 99) <= 2 then c.fresh = true end
     c.started = true
   end
   return c
@@ -419,6 +423,13 @@ local function apply()
   -- Notice his own changes: a slot that no longer holds what the add-on put there is his for good.
   for s, sig in pairs(db.mine) do
     if sigOf(s) ~= sig then db.his[s] = sigOf(s) or 'cleared'; db.mine[s] = nil end
+  end
+  -- A brand-new character (charDB's `fresh`): everything on the pad bars is the game's own start, so it is the add-on's
+  -- to lay out: adopt it and force the version step below to clear and re-place.
+  if db.fresh then
+    for s = PAD_FIRST, PAD_LAST do local sig = sigOf(s); if sig then db.mine[s] = sig; db.his[s] = nil end end
+    db.layoutV = nil
+    db.fresh = nil
   end
   -- New layout version: take the add-on's own buttons off; his stay where they are.
   local moved = 0
