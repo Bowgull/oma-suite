@@ -89,7 +89,7 @@ local function closeOld()
   for i = #tabs, 1, -1 do
     local title = (tabs[i].title or ''):lower()
     for _, w in ipairs(OLD_GUIDES) do
-      if title:find(w, 1, true) then e.CloseTab(i); note('closed tab ' .. tabs[i].title) end
+      if title:find(w, 1, true) then local name = tabs[i].title; e.CloseTab(i); note('closed tab ' .. tostring(name)) end
     end
   end
   t.closedOld = true
@@ -118,6 +118,13 @@ local function step(reason)
   if opening or InCombatLockdown() then return end
   local d, e = D(), E()
   if not (d and e and e.TabIds) then return end
+  -- A new character (2026-11-26: the paladin alt at level 1) stays quiet until it is near the route's first dungeon:
+  -- no tabs closed, no pick-up opened, no chat line.
+  -- The route is Horde (Tarren Mill, the Barrens): an Alliance character is left alone (Joshua 2026-11-26: the paladin
+  -- levels with Polestar's own "Dungeons in my route" instead).
+  if UnitFactionGroup and UnitFactionGroup('player') ~= 'Horde' then return end
+  local r = route()
+  if not r or not r[1] or UnitLevel('player') < (r[1].minLevel or 0) - 2 then return end
   closeOld()
   local cur, i, n = current()
   if not cur then
@@ -154,6 +161,7 @@ end
 
 -- Inside the current dungeon: mark it run.
 local function checkInside()
+  if UnitFactionGroup and UnitFactionGroup('player') ~= 'Horde' then return end
   local cur, i = current()
   if not cur then return end
   local _, kind, _, _, _, _, _, mapID = GetInstanceInfo()

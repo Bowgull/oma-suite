@@ -2,9 +2,10 @@
 -- A fake WoW and a fake Polestar: a dungeon list, tabs, pick-up and hand-in guides that open tabs.
 local W
 local function world(level)
-  W = { level = level, tabs = {}, said = {}, inst = { nil, 'none' }, hand = {}, events = nil, timers = {} }
+  W = { faction = 'Horde', level = level, tabs = {}, said = {}, inst = { nil, 'none' }, hand = {}, events = nil, timers = {} }
   _G.OmaRouteDB = nil
   _G.UnitLevel = function() return W.level end
+  _G.UnitFactionGroup = function() return W.faction end
   _G.InCombatLockdown = function() return false end
   _G.date = os.date
   _G.print = function(m) W.said[#W.said + 1] = m end
@@ -43,6 +44,22 @@ local function eq(a, b, m) if a ~= b then error((m or 'eq') .. ': expected ' .. 
 local function ok(v, m) if not v then error(m or 'expected true', 2) end end
 
 local tests = {}
+tests['an Alliance character is never touched, at any level'] = function()
+  world(30); W.faction = 'Alliance'
+  W.tabs = { { guideId = 'a/redridge', title = 'Redridge Mountains' }, { guideId = 'h/ash27', title = 'Ashenvale & Thousand Needles' } }
+  fire('PLAYER_ENTERING_WORLD'); W.level = 40; fire('PLAYER_LEVEL_UP')
+  eq(#W.tabs, 2, 'tabs untouched'); eq(#W.said, 0, 'silent')
+end
+
+tests['a level 1 alt is left alone: no tabs closed, no pick-up, no chat line'] = function()
+  world(1)
+  W.tabs = { { guideId = 'a/elwynn', title = 'Elwynn Forest' }, { guideId = 'h/ash27', title = 'Ashenvale & Thousand Needles' } }
+  fire('PLAYER_ENTERING_WORLD'); fire('PLAYER_LEVEL_UP')
+  eq(#W.tabs, 2, 'tabs untouched'); eq(#W.said, 0, 'silent')
+  W.level = 26; fire('PLAYER_LEVEL_UP')
+  ok(has('lookup/pickup/city-of-dalaran'), 'starts two levels before Dalaran (28)')
+end
+
 tests['Scarlet Monastery comes twice, each visit run and handed in on its own'] = function()
   world(30)
   fire('PLAYER_ENTERING_WORLD')
