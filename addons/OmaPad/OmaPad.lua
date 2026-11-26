@@ -21,7 +21,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local VERSIONS = { WARLOCK = 15, PALADIN = 2 } -- layout version per class: bump a class's number when its LAYOUT changes
+local VERSIONS = { WARLOCK = 16, PALADIN = 2 } -- layout version per class: bump a class's number when its LAYOUT changes
 local function playerClass() return select(2, UnitClass('player')) end
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
@@ -97,7 +97,7 @@ LAYOUTS.WARLOCK = {
   -- v11 (Joshua 2026-11-26: "I'm just using succubus", Felhunter "pretty bad for leveling and dungeons rn"): the main
   -- demon button prefers the Succubus/Incubus and never jumps to the Felhunter.
   { 1, 'LTRT', D, 'spell', { 'Summon Succubus', 'Summon Incubus', 'Summon Sayaad', 'Summon Voidwalker', 'Summon Imp' } },
-  { 1, 'LTRT', X, 'spell', 'Curse of Weakness' },                        -- v13 (Joshua 2026-11-26): for melee elites in dungeons
+  { 1, 'LTRT', X, 'spell', 'Curse of Recklessness' },                    -- v16 (Joshua 2026-11-26): "I want recklessness not weakness"
   { 1, 'LTRT', Y, 'item', BANDAGES },                                     -- v14 (Joshua 2026-11-26): bandages; no drink (Life Tap)
   { 1, 'LTRT', B, 'spell', { 'Demon Armor', 'Demon Skin' } },
   { 1, 'LTRT', A, 'spell', 'Create Healthstone' },
@@ -113,7 +113,7 @@ LAYOUTS.WARLOCK = {
   { 2, 'RT', U, 'spell', 'Drain Soul' },                                 -- soul shards (shares RT+up on set 1 until 41)
   { 2, 'RT', D, 'spell', 'Banish' },
   { 2, 'LTRT', D, 'spell', 'First Aid' },                                -- v14: Find Minerals dropped (Node Sight tracks)
-  { 2, 'RT', B, 'spell', 'Curse of Recklessness' },
+  { 2, 'RT', B, 'spell', 'Curse of Weakness' },                          -- v16: swapped with set 1's Recklessness
   { 2, 'RT', A, 'spell', 'Curse of Exhaustion' },
   { 2, 'LT', R, 'spell', { 'Subjugate Demon', 'Enslave Demon' } },       -- v11: Forever renamed it Subjugate Demon
   { 2, 'RT', R, 'spell', 'Eye of Kilrogg' },
