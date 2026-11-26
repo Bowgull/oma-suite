@@ -135,6 +135,24 @@ tests['paladin v2: First Aid, Cooking, Fishing and the best bandage on set 2 LT+
   eq(OmaPadCharDB.layoutV, 2, 'paladin layout v2')
 end
 
+tests['warlock: Well Fed food with an unreadable number still goes on the food button; Pointer macro retired'] = function()
+  load('WARLOCK', 'Bujuju', {}, nil)
+  W.macros[1] = { name = 'Pointer', icon = 1, body = '/click OmaPointerToggle' }
+  W.bags[21072] = 3                                                 -- Smoked Sagefish
+  C_Container.GetContainerNumSlots = function(bag) return bag == 0 and 1 or 0 end
+  C_Container.GetContainerItemID = function(bag, slot) if bag == 0 and slot == 1 then return 21072 end end
+  C_Item.GetItemInfoInstant = function(id) if id == 21072 then return id, nil, nil, nil, nil, 0, 5 end end
+  C_Item.GetItemInfo = function(id) if id == 21072 then return 'Smoked Sagefish', nil, nil, nil, 10 end end
+  _G.C_TooltipInfo = { GetBagItem = function() return { lines = { { leftText = 'Smoked Sagefish' },
+    { leftText = 'Use: Eat to recover over 21 sec. If you spend at least 10 seconds eating you will become well fed.' } } } end }
+  pad()
+  _G.C_TooltipInfo = nil
+  local a = W.slots[slotOf(2, 'LTRT', B)]
+  ok(a and a[1] == 'item' and a[2] == 21072, 'Sagefish on the food button')
+  eq(GetMacroIndexByName('Pointer'), 0, 'dead Pointer macro deleted')
+  ok(OmaPadCharDB.foodScan[1]:find('Eat to recover'), 'tooltip line kept in foodScan')
+end
+
 tests['paladin: level 20 upgrades in place and the old spell drops to its second button'] = function()
   load('PALADIN', 'Pally', {}, nil)
   learn({ 'Seal of Righteousness', 'Holy Light', 'Devotion Aura', 'Judgement', 'Divine Protection' })
