@@ -697,6 +697,13 @@ SlashCmdList.OMASHURXP = function(m)
   local n = tonumber((m or ''):match('limit%s+(%d+)')); if n then LIMIT = n; say('RestedXP fit line ' .. n .. ' px'); return end
   rxpProbe()
 end
+-- The breath / fatigue bar sat on Polestar's arrow text at the top (Joshua 2026-11-26, swimming): moved under it.
+-- Polestar's arrow, distance and step line end about 190 px down (135 units at 1080p); the bar now starts at 150.
+local function moveBreathBar()
+  local f = rawget(_G, 'MirrorTimerContainer') or rawget(_G, 'MirrorTimer1')
+  if not f or InCombatLockdown() then return end
+  f:ClearAllPoints(); f:SetPoint('TOP', UIParent, 'TOP', 0, -150)
+end
 local busy
 local function later() if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply() end) end
 
@@ -707,7 +714,7 @@ end
 ev:SetScript('OnEvent', function(_, e)
   if e == 'PLAYER_ENTERING_WORLD' then
     C_Timer.After(3, function()
-      pcall(keepRxpProfile); pcall(settings); pcall(hideTracker); pcall(meterButtonOnly); pcall(setMeters, false)
+      pcall(keepRxpProfile); pcall(settings); pcall(moveBreathBar); pcall(hideTracker); pcall(meterButtonOnly); pcall(setMeters, false)
       C_Timer.After(30, function() pcall(memory) end)
       apply()
     end)
