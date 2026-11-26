@@ -14,6 +14,7 @@ my world of warcraft addons. built for warlock life in WoW Forever, mostly so i 
 | **[OmaPointer](addons/OmaPointer)** | a mouse pointer for the controller: right stick moves, d-pad steps between buttons, A clicks (test build) |
 | **[OmaGuide](addons/OmaGuide)** | lets the controller reach the RestedXP guide box: tick steps with the pad |
 | **[OmaChat](addons/OmaChat)** | keeps WoW's chat log on so a phone remote can show chat |
+| **[OmaRoute](addons/OmaRoute)** | a dungeon route: every dungeon for your level in order, each run through Polestar's live pick-up and hand-in guides |
 
 `dev/` holds test and mock addons used while building. `tools/` has the install scripts and helpers.
 
@@ -32,7 +33,7 @@ the scripts back up your old copy first and check every file after.
 
 ## tests
 
-OmaDoomed, OmaDemon and OmaPad run offline against a fake WoW:
+OmaDoomed, OmaDemon, OmaPad and OmaRoute run offline against a fake WoW:
 
 ```bash
 cd addons/OmaDoomed && luajit tests/run.lua
