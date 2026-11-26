@@ -10,6 +10,7 @@ local function world()
   _G.UnitClass = function() return 'Paladin', 'PALADIN' end
   _G.UnitLevel = function() return 23 end
   _G.GetRealZoneText = function() return 'Duskwood' end
+  _G.GetMoney = function() return 32000 end
   _G.UnitXP = function() return 410 end
   _G.UnitXPMax = function() return 1000 end
   _G.C_Timer = { After = function(_, fn) W.timers[#W.timers + 1] = fn end }
@@ -49,7 +50,7 @@ local tests = {}
 tests['save writes one JSON string with everything the book needs'] = function()
   world(); OmaBook.save()
   local j = OmaBookDB.json
-  ok(j:find('"name":"Bunji"', 1, true), 'name'); ok(j:find('"zone":"Duskwood"', 1, true), 'zone'); ok(j:find('"level":23', 1, true), 'level'); ok(j:find('"unspent":1', 1, true), 'unspent')
+  ok(j:find('"name":"Bunji"', 1, true), 'name'); ok(j:find('"zone":"Duskwood"', 1, true), 'zone'); ok(j:find('"money":32000', 1, true), 'gold carried'); ok(j:find('"level":23', 1, true), 'level'); ok(j:find('"unspent":1', 1, true), 'unspent')
   ok(j:find('"Deflection":5', 1, true) and j:find('"Sanctified Judgement":1', 1, true), 'talent ranks'); ok(not j:find('"9"', 1, true), 'no unbought talents')
   ok(j:find('"spells":["Holy Strike","Judgement"]', 1, true), 'active spells, sorted, no passives')
   ok(j:find('"Two-Handed Maces":110', 1, true) and j:find('"First Aid":60', 1, true), 'skills'); ok(not j:find('Weapon Skills', 1, true), 'no headers')

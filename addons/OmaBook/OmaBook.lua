@@ -3,7 +3,7 @@
 -- JSON string, kept fresh in memory and written to disk by the game itself on /reload and logout. Couch Mode reads that
 -- file (GET /book) and Aang turns it into the book. Nothing here is live: the book says "as of your last reload".
 --
---   json = { v, at, name, realm, faction, class, zone, level, xp, xpMax, unspent, talents = { [name] = rank },
+--   json = { v, at, name, realm, faction, class, zone, level, money (copper), xp, xpMax, unspent, talents = { [name] = rank },
 --            spells = { name, ... }, train = { { name, lvl } }, skills = { [name] = rank }, weapon = { id, name, dps }, bags = { [itemID] = count },
 --            done = { [questID] = true }, log = { questID, ... }, cu = { rich, max, list = { { id, name, slot, price, pct } } } }
 
@@ -140,7 +140,7 @@ end
 
 local function gather()
   local d = { v = V, at = time(), name = UnitName('player'), realm = GetRealmName(), faction = (UnitFactionGroup('player')),
-    class = select(2, UnitClass('player')), zone = GetRealZoneText and GetRealZoneText() or nil, level = UnitLevel('player'), xp = UnitXP('player'), xpMax = UnitXPMax('player') }
+    class = select(2, UnitClass('player')), zone = GetRealZoneText and GetRealZoneText() or nil, level = UnitLevel('player'), money = GetMoney and GetMoney() or nil, xp = UnitXP('player'), xpMax = UnitXPMax('player') }
   d.talents, d.unspent = {}, 0
   local ok, t, u = pcall(talents); if ok then d.talents, d.unspent = t, u end
   d.spells, d.train = {}, {}
@@ -166,7 +166,7 @@ _G.OmaBook = { save = save, enc = enc }   -- for the offline tests
 local f = CreateFrame('Frame')
 local queued = false
 local function soon() if queued then return end; queued = true; C_Timer.After(3, function() queued = false; save() end) end
-for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'PLAYER_LEVEL_UP', 'BAG_UPDATE_DELAYED', 'SPELLS_CHANGED', 'TRAIT_CONFIG_UPDATED', 'QUEST_TURNED_IN', 'PLAYER_EQUIPMENT_CHANGED', 'PLAYER_LOGOUT' }) do
+for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'PLAYER_LEVEL_UP', 'BAG_UPDATE_DELAYED', 'SPELLS_CHANGED', 'TRAIT_CONFIG_UPDATED', 'QUEST_TURNED_IN', 'PLAYER_EQUIPMENT_CHANGED', 'PLAYER_MONEY', 'PLAYER_LOGOUT' }) do
   f:RegisterEvent(e)
 end
 f:SetScript('OnEvent', function(_, e) if e == 'PLAYER_LOGOUT' then save() else soon() end end)
