@@ -15,7 +15,9 @@ local function world(level)
   local list = {
     { key = 'excavation-site-wetlands', name = 'Excavation Site: Wetlands', minLevel = 26, maxLevel = 33, map = 2998 },
     { key = 'city-of-dalaran', name = 'City of Dalaran', minLevel = 28, maxLevel = 35, map = 2959 },
-    { key = 'scarlet-monastery-graveyard', name = 'Scarlet Monastery: Graveyard', minLevel = 30, maxLevel = 38, map = 189 },
+    { key = 'scarlet-monastery', name = 'Scarlet Monastery', minLevel = 30, maxLevel = 46, map = 189 },
+    { key = 'razorfen-downs', name = 'Razorfen Downs', minLevel = 37, maxLevel = 46, map = 129 },
+    { key = 'the-drowned-city', name = 'The Drowned City', minLevel = 35, maxLevel = 42, map = 3001 },
     { key = 'razorfen-kraul', name = 'Razorfen Kraul', minLevel = 29, maxLevel = 38, map = 47 },
     { key = 'gnomeregan', name = 'Gnomeregan', minLevel = 29, maxLevel = 38, map = 90 },
   }
@@ -41,6 +43,22 @@ local function eq(a, b, m) if a ~= b then error((m or 'eq') .. ': expected ' .. 
 local function ok(v, m) if not v then error(m or 'expected true', 2) end end
 
 local tests = {}
+tests['Scarlet Monastery comes twice, each visit run and handed in on its own'] = function()
+  world(30)
+  fire('PLAYER_ENTERING_WORLD')
+  local function finish(map, key)
+    W.inst = { map, 'party' }; W.hand[key] = { 1 }; fire('ZONE_CHANGED_NEW_AREA')
+    W.inst = { nil, 'none' }; fire('ZONE_CHANGED_NEW_AREA'); W.hand[key] = {}; fire('QUEST_TURNED_IN')
+  end
+  finish(2959, 'city-of-dalaran'); finish(2998, 'excavation-site-wetlands')
+  ok(has('lookup/pickup/scarlet-monastery'), 'first SM visit'); eq(OmaRouteDB.i, 3)
+  finish(189, 'scarlet-monastery')
+  ok(has('lookup/pickup/razorfen-kraul'), 'then Razorfen Kraul'); eq(OmaRouteDB.i, 4)
+  SlashCmdList.OMAROUTE('next'); SlashCmdList.OMAROUTE('next'); SlashCmdList.OMAROUTE('next')
+  ok(has('lookup/pickup/scarlet-monastery'), 'second SM visit opens its pick-up again'); eq(OmaRouteDB.i, 7)
+  ok(not OmaRouteDB.ran[7], 'second visit not marked run by the first')
+end
+
 tests['login: Ashenvale tabs close, Dalaran pick-up opens first (route order, not Polestar list order)'] = function()
   world(30)
   W.tabs = { { guideId = 'h/ash27', title = 'Ashenvale & Thousand Needles' }, { guideId = 'h/ash22', title = 'Ashenvale & Silverpine Forest' }, { guideId = 'x', title = 'Hillsbrad Foothills' } }
@@ -65,7 +83,7 @@ tests['outlevelled dungeons are skipped with a line'] = function()
   fire('PLAYER_ENTERING_WORLD')
   ok(has('lookup/pickup/city-of-dalaran'), '34 still fits Dalaran (to 35)')
   W.level = 36; fire('PLAYER_LEVEL_UP')
-  ok(has('lookup/pickup/scarlet-monastery-graveyard'), 'Excavation (to 33) and Dalaran (to 35) skipped at 36')
+  ok(has('lookup/pickup/scarlet-monastery'), 'Excavation (to 33) and Dalaran (to 35) skipped at 36: Scarlet Monastery')
   local skipped = 0; for _, m in ipairs(W.said) do if m:find('skipped') then skipped = skipped + 1 end end
   eq(skipped, 2)
 end
@@ -74,8 +92,13 @@ tests['/omroute next skips; a missing dungeon is noted, not guessed'] = function
   fire('PLAYER_ENTERING_WORLD')
   SlashCmdList.OMAROUTE('next')
   ok(has('lookup/pickup/excavation-site-wetlands'))
+  W.tabs = {}; W.hand = {}
+  _G.Polestar.Dungeons.List = function() return { { key = 'city-of-dalaran', name = 'City of Dalaran', minLevel = 28, maxLevel = 35, map = 2959 } } end
+  world(30) -- reload with a list missing most of the route
+  _G.Polestar.Dungeons.List = function() return { { key = 'city-of-dalaran', name = 'City of Dalaran', minLevel = 28, maxLevel = 35, map = 2959 } } end
+  fire('PLAYER_ENTERING_WORLD')
   local missing = false; for _, l in ipairs(OmaRouteDB.log) do if l:find('not in Polestar: drowned city') then missing = true end end
-  ok(missing, 'Drowned City (not in the fake list) noted')
+  ok(missing, 'Drowned City (not in that list) noted')
 end
 
 local pass, fail = 0, 0

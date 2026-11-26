@@ -18,16 +18,16 @@ local ADDON = ...
 -- The route, in order (Joshua's picks: to level 40, no Gnomeregan). Each entry: words the dungeon's name must hold,
 -- matched against Polestar's own list so its keys are never guessed. Eastern Kingdoms first (he's in Tarren Mill at
 -- 30), Kalimdor at about 35, back by zeppelin to Stranglethorn and Tirisfal at the end.
+-- Polestar keeps Scarlet Monastery as ONE dungeon (30-46, every wing), so it comes twice: Graveyard and Library early,
+-- Armory and Cathedral late (its pick-up guide holds back the higher quests until their level). `as` names a visit.
 local ROUTE = {
   { 'city of dalaran' },
   { 'excavation site' },
-  { 'scarlet monastery', 'graveyard' },
-  { 'scarlet monastery', 'library' },
+  { 'scarlet monastery', as = 'Scarlet Monastery: Graveyard and Library' },
   { 'razorfen kraul' },
   { 'razorfen downs' },
   { 'drowned city' },
-  { 'scarlet monastery', 'armory' },
-  { 'scarlet monastery', 'cathedral' },
+  { 'scarlet monastery', as = 'Scarlet Monastery: Armory and Cathedral', last = 40 },
 }
 local OLD_GUIDES = { 'ashenvale' } -- tab titles closed once
 
@@ -60,16 +60,15 @@ local function route()
   local list = d.List()
   if #list == 0 then return nil end
   resolved = {}
-  local taken = {}
   for _, words in ipairs(ROUTE) do
     local found = false
     for _, x in ipairs(list) do
       local name = (x.name or ''):lower()
       local all = true
       for _, w in ipairs(words) do if not name:find(w, 1, true) then all = false end end
-      if all and not taken[x.key] then
-        taken[x.key] = true; found = true
-        resolved[#resolved + 1] = { key = x.key, name = x.name, minLevel = x.minLevel, maxLevel = x.maxLevel, map = x.map }
+      if all and not found then
+        found = true
+        resolved[#resolved + 1] = { key = x.key, name = words.as or x.name, minLevel = x.minLevel, maxLevel = words.last or x.maxLevel, map = x.map }
       end
     end
     if not found then note('not in Polestar: ' .. table.concat(words, ' ')) end
@@ -128,7 +127,7 @@ local function step(reason)
   local t = db()
   local open = e.TabIds()
   local pick, hand = 'lookup/pickup/' .. cur.key, 'lookup/handin/' .. cur.key
-  if t.ran[cur.key] then
+  if t.ran[i] then
     local plan = d.HandinPlan and d.HandinPlan(cur.key)
     if plan and plan.hand and #plan.hand > 0 then
       if not open[hand] then opening = true; d.HandIn(cur.key); opening = false; note('hand-in ' .. cur.key) end
@@ -155,11 +154,11 @@ end
 
 -- Inside the current dungeon: mark it run.
 local function checkInside()
-  local cur = current()
+  local cur, i = current()
   if not cur then return end
   local _, kind, _, _, _, _, _, mapID = GetInstanceInfo()
-  if kind == 'party' and cur.map and mapID == cur.map and not db().ran[cur.key] then
-    db().ran[cur.key] = true
+  if kind == 'party' and cur.map and mapID == cur.map and not db().ran[i] then
+    db().ran[i] = true
     note('inside ' .. cur.key)
   end
 end
@@ -185,11 +184,16 @@ SLASH_OMAROUTE1 = '/omroute'
 SlashCmdList.OMAROUTE = function(msg)
   msg = (msg or ''):lower()
   local t = db()
-  if msg == 'next' then t.i = t.i + 1; t.announced = nil; step('skip')
+  if msg == 'next' then
+    local cur, e = current(), E()
+    if cur and e and e.CloseTab then
+      for _, id in ipairs({ 'lookup/handin/' .. cur.key, 'lookup/pickup/' .. cur.key }) do local ix = tabIndex(id); if ix then e.CloseTab(ix, true) end end
+    end
+    note('skipped ' .. (cur and cur.key or '?')); t.i = t.i + 1; t.announced = nil; step('skip')
   elseif msg == 'back' then t.i = math.max(1, t.i - 1); t.announced = nil; step('back')
   else
     local cur, i, n = current()
-    if cur then say(('dungeon %d of %d: %s%s.'):format(i, n, cur.name, t.ran[cur.key] and ', run, handing in' or ''))
+    if cur then say(('dungeon %d of %d: %s%s.'):format(i, n, cur.name, t.ran[i] and ', run, handing in' or ''))
     else say('no route (Polestar not ready, or finished).') end
   end
 end
