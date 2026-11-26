@@ -33,6 +33,9 @@ local function world()
   _G.GetNumSkillLines = function() return 3 end
   _G.GetSkillLineInfo = function(i) return ({ { 'Weapon Skills', true }, { 'Two-Handed Maces', false, nil, 110 }, { 'First Aid', false, nil, 60 } })[i][1],
     ({ true, false, false })[i], nil, ({ nil, 110, 60 })[i] end
+  _G.IsPlayerSpell = function(id) return id == 199 or id == 198 end
+  _G.GetProfessions = function() return nil, nil, nil, nil, 7 end
+  _G.GetProfessionInfo = function(i) if i == 7 then return 'First Aid', 'icon', 60 end end
   _G.GetInventoryItemID = function() return 6953 end
   _G.GetInventoryItemLink = function() return '|cff0070dd|Hitem:6953::::|h[Verigan\'s Fist]|h|r' end
   _G.C_Item = { GetItemStats = function() return { ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 25.63 } end, GetItemNameByID = function() return "Verigan's Fist" end,
@@ -72,8 +75,14 @@ tests['a broken game API never breaks the save'] = function()
   ok(OmaBookDB.json:find('"level":23', 1, true), 'still saved'); ok(OmaBookDB.json:find('"talents":[]', 1, true), 'empty talents')
 end
 tests['a reload that reads empty skills keeps the ones read before'] = function()
-  world(); OmaBook.save(); _G.GetNumSkillLines = function() return 0 end; W.events(nil, 'PLAYER_LOGOUT')
+  world(); OmaBook.save(); _G.GetNumSkillLines = function() return 0 end; _G.IsPlayerSpell = function() return false end; _G.GetProfessions = function() end; W.events(nil, 'PLAYER_LOGOUT')
   ok(OmaBookDB.json:find('"Two-Handed Maces":110', 1, true), 'skills kept')
+end
+tests['Forever (no skill lines): weapon skills from known spells, First Aid from professions'] = function()
+  world(); _G.GetNumSkillLines = nil; _G.GetSkillLineInfo = nil; OmaBook.save()
+  local j = OmaBookDB.json
+  ok(j:find('"Two-Handed Maces":1', 1, true) and j:find('"Maces":1', 1, true), 'weapon skills'); ok(not j:find('Polearms', 1, true), 'not unknown ones')
+  ok(j:find('"First Aid":60', 1, true), 'First Aid rank')
 end
 tests['JSON escapes quotes and control characters'] = function()
   world(); eq(OmaBook.enc({ a = 'x"y\n' }), '{"a":"x\\"y\\n"}')

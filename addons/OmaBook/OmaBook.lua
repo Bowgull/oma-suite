@@ -79,11 +79,27 @@ local function spells()
   return out, train
 end
 
+-- weapon skills and professions. Forever has no GetSkillLineInfo (checked in game 2026-11-26): a weapon skill is a
+-- spell you know (IsPlayerSpell), and professions such as First Aid come from GetProfessions / GetProfessionInfo.
+local WEAPON_SPELLS = { [196] = 'Axes', [197] = 'Two-Handed Axes', [198] = 'Maces', [199] = 'Two-Handed Maces', [200] = 'Polearms',
+  [201] = 'Swords', [202] = 'Two-Handed Swords', [227] = 'Staves', [1180] = 'Daggers' }
 local function skills()
   local out = {}
-  for i = 1, (GetNumSkillLines and GetNumSkillLines() or 0) do
-    local name, header, _, rank = GetSkillLineInfo(i)
-    if name and not header then out[name] = rank end
+  if GetNumSkillLines and GetSkillLineInfo then
+    for i = 1, GetNumSkillLines() do
+      local name, header, _, rank = GetSkillLineInfo(i)
+      if name and not header then out[name] = rank end
+    end
+  end
+  local known = IsPlayerSpell or (C_SpellBook and C_SpellBook.IsSpellKnown)
+  if known then for id, name in pairs(WEAPON_SPELLS) do if out[name] == nil and known(id) then out[name] = 1 end end end
+  if GetProfessions and GetProfessionInfo then
+    local list = { GetProfessions() }   -- primary 1, primary 2, archaeology, fishing, cooking, first aid: any may be nil
+    for k = 1, 8 do
+      local i = list[k]
+      local name, _, rank = i and GetProfessionInfo(i)
+      if name then out[name] = rank end
+    end
   end
   return out
 end
