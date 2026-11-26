@@ -161,6 +161,7 @@ end
 
 -- Inside the current dungeon: mark it run.
 local function checkInside()
+  if UnitFactionGroup and UnitFactionGroup('player') ~= 'Horde' then return end
   local cur, i = current()
   if not cur then return end
   local _, kind, _, _, _, _, _, mapID = GetInstanceInfo()
