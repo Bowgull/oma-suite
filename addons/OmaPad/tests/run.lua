@@ -125,6 +125,16 @@ tests['paladin: level 6 fills the pull, the seal and Holy Light once'] = functio
   eq(GetMacroIndexByName('PetFight'), 0, 'no demon macros on a paladin'); eq(GetMacroIndexByName('PetHome'), 0)
 end
 
+tests['paladin v2: First Aid, Cooking, Fishing and the best bandage on set 2 LT+RT'] = function()
+  load('PALADIN', 'Pally', {}, nil)
+  W.bags[3530] = 5; W.bags[6450] = 3                                -- wool, silk bandages
+  learn({ 'First Aid', 'Cooking', 'Fishing', 'Holy Light' }); pad()
+  eq(spellOn(2, 'LTRT', D), 'First Aid'); eq(spellOn(2, 'LTRT', R), 'Cooking'); eq(spellOn(2, 'LTRT', L), 'Fishing')
+  local a = W.slots[slotOf(2, 'LTRT', B)]
+  ok(a and a[1] == 'item' and a[2] == 6450, 'silk bandage (the best) on set 2 LT+RT B')
+  eq(OmaPadCharDB.layoutV, 2, 'paladin layout v2')
+end
+
 tests['paladin: level 20 upgrades in place and the old spell drops to its second button'] = function()
   load('PALADIN', 'Pally', {}, nil)
   learn({ 'Seal of Righteousness', 'Holy Light', 'Devotion Aura', 'Judgement', 'Divine Protection' })

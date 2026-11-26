@@ -21,7 +21,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local VERSIONS = { WARLOCK = 15, PALADIN = 1 } -- layout version per class: bump a class's number when its LAYOUT changes
+local VERSIONS = { WARLOCK = 15, PALADIN = 2 } -- layout version per class: bump a class's number when its LAYOUT changes
 local function playerClass() return select(2, UnitClass('player')) end
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
@@ -186,6 +186,10 @@ LAYOUTS.PALADIN = {
   { 2, 'LTRT', X, 'spell', 'Righteous Fury' },                             -- 10, tanking only
   { 2, 'LTRT', Y, 'spell', 'Seal of Fury' },                               -- 10, tanking only
   { 2, 'LTRT', A, 'spell', 'Smelting' },                                   -- Mining
+  { 2, 'LTRT', D, 'spell', 'First Aid' },                                  -- paladin v2 (Joshua 2026-11-26): the secondary
+  { 2, 'LTRT', R, 'spell', 'Cooking' },                                    -- professions, First Aid in the warlock's spot
+  { 2, 'LTRT', L, 'spell', 'Fishing' },
+  { 2, 'LTRT', B, 'item', BANDAGES },                                      -- best bandage in the bags
   -- SET 3 free (a Holy or Protection dual spec at 40).
 }
 local function classLayout() return LAYOUTS[playerClass()] or {} end
