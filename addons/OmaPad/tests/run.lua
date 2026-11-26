@@ -90,7 +90,7 @@ tests['warlock: old account-wide memory moves onto the warlock; his buttons stay
   pad()
   eq(OmaPadCharDB.mine[cor], 'spell:Corruption', 'mine moved to the character')
   eq(OmaPadCharDB.his[own], 'spell:Fireball', 'his moved to the character')
-  eq(OmaPadCharDB.layoutV, 14, 'moved, then updated to v14')
+  eq(OmaPadCharDB.layoutV, 15, 'moved, then updated to v15')
   eq(OmaPadDB.mine, nil, 'account copy removed'); eq(OmaPadDB.his, nil)
   eq(OmaPadDB.padMovedTo, 'Bujuju')
   eq(OmaPadDB.vendorV, 1, 'account settings untouched'); eq(OmaPadDB.settingsV, 4)
@@ -190,7 +190,7 @@ tests['warlock v10 -> v11: only the add-on\'s buttons move, his stay'] = functio
   learn({ 'Health Funnel', 'Corruption', 'Fireball', 'Wrack' })
   W.slots[hf] = { 'spell', spellId('Health Funnel') }; W.slots[mine] = { 'spell', spellId('Corruption') }; W.slots[his] = { 'spell', spellId('Fireball') }
   pad()
-  eq(OmaPadCharDB.layoutV, 14)
+  eq(OmaPadCharDB.layoutV, 15)
   eq(spellOn(1, 'none', L), 'Wrack', 'Health Funnel slot now Wrack'); eq(spellOn(2, 'LTRT', R), 'Health Funnel', 'Funnel moved to set 2')
   eq(spellOn(1, 'RT', X), 'Corruption', 'Corruption re-placed'); eq(spellOn(1, 'RT', Y), 'Fireball', 'his button kept')
 end
@@ -202,6 +202,8 @@ tests['warlock v14: best bandage on set 1, First Aid on set 2, no drink'] = func
   local a = W.slots[slotOf(1, 'LTRT', Y)]
   ok(a and a[1] == 'item' and a[2] == 6450, 'silk bandage (the best) on LT+RT Y')
   eq(spellOn(2, 'LTRT', D), 'First Aid')
+  W.bags[16893] = 1; pad()
+  local st = W.slots[slotOf(1, 'LTRT', L)]; ok(st and st[1] == 'item' and st[2] == 16893, 'Soulstone on LT+RT left')
   for s = 181, 264 do local b = W.slots[s]; ok(not (b and b[1] == 'item' and b[2] == 1645), 'water placed on ' .. s)
     ok(not (b and b[1] == 'spell' and (SPELL_NAMES[b[2]] == 'Tailoring' or SPELL_NAMES[b[2]] == 'Find Minerals')), 'dropped spell on ' .. s) end
 end
