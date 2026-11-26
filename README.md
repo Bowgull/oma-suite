@@ -10,7 +10,7 @@ my world of warcraft addons. built for warlock life in WoW Forever, mostly so i 
 |---|---|
 | **[OmaDoomed](addons/OmaDoomed)** | DoT rings over every enemy, a kill bar showing the health your DoTs will still take, a skull on mobs they'll finish, and crowd-control timers you can always see |
 | **[OmaDemon](addons/OmaDemon)** | your demon, readable from across the room: low-health glow, soul shards as gems under the pet frame, and your Soulstone, summons, Healthstones and armor looked after |
-| **[OmaPad](addons/OmaPad)** | a warlock controller layout that fills empty pad slots as you learn spells, and never replaces a button you changed |
+| **[OmaPad](addons/OmaPad)** | controller layouts for the warlock and the paladin (same design on both), filling empty pad slots as you learn spells, and never replacing a button you changed |
 | **[OmaPointer](addons/OmaPointer)** | a mouse pointer for the controller: right stick moves, d-pad steps between buttons, A clicks (test build) |
 | **[OmaGuide](addons/OmaGuide)** | lets the controller reach the RestedXP guide box: tick steps with the pad |
 | **[OmaChat](addons/OmaChat)** | keeps WoW's chat log on so a phone remote can show chat |
@@ -32,7 +32,7 @@ the scripts back up your old copy first and check every file after.
 
 ## tests
 
-OmaDoomed and OmaDemon run offline against a fake WoW:
+OmaDoomed, OmaDemon and OmaPad run offline against a fake WoW:
 
 ```bash
 cd addons/OmaDoomed && luajit tests/run.lua
