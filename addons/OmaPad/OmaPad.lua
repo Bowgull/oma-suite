@@ -21,7 +21,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local VERSIONS = { WARLOCK = 13, PALADIN = 1 } -- layout version per class: bump a class's number when its LAYOUT changes
+local VERSIONS = { WARLOCK = 14, PALADIN = 1 } -- layout version per class: bump a class's number when its LAYOUT changes
 local function playerClass() return select(2, UnitClass('player')) end
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
@@ -49,6 +49,7 @@ MACROS_BY_CLASS.PALADIN = { METERS_MACRO }
 local function classMacros() return MACROS_BY_CLASS[playerClass()] or { METERS_MACRO } end
 -- the warlock's retired macros (character macros, so only ever on the warlock)
 local OLD_MACROS = { WARLOCK = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink' } }
+local BANDAGES = { 14530, 14529, 8545, 8544, 6451, 6450, 3531, 3530, 2581, 1251 } -- Heavy Runecloth .. Linen, best first
 local POTIONS = { 13446, 3928, 1710, 929, 858, 118 }               -- Major .. Minor Healing Potion, best first
 local STONES = { 9421, 5510, 5509, 5511, 5512 }                    -- Major .. Minor Healthstone, best first
 local WATERS = { 8766, 1645, 1708, 1205, 1179, 159 }                -- vendor water, best first
@@ -90,12 +91,12 @@ LAYOUTS.WARLOCK = {
   -- button on set 2 for when you want a different one (rule 5 skips the set-2 copy of the one this button shows).
   { 1, 'LTRT', U, 'item', 6948 },                                          -- Hearthstone
   { 1, 'LTRT', R, 'spell', 'Curse of Tongues' },                         -- v12 (Joshua 2026-11-26, PvP ruleset): Tongues on set 1
-  { 1, 'LTRT', L, 'spell', 'Tailoring' },
+  -- v14: Tailoring dropped (now Herbalism; Node Sight switches tracking), LT+RT left free
   -- v11 (Joshua 2026-11-26: "I'm just using succubus", Felhunter "pretty bad for leveling and dungeons rn"): the main
   -- demon button prefers the Succubus/Incubus and never jumps to the Felhunter.
   { 1, 'LTRT', D, 'spell', { 'Summon Succubus', 'Summon Incubus', 'Summon Sayaad', 'Summon Voidwalker', 'Summon Imp' } },
   { 1, 'LTRT', X, 'spell', 'Curse of Weakness' },                        -- v13 (Joshua 2026-11-26): for melee elites in dungeons
-  { 1, 'LTRT', Y, 'drink', WATERS },
+  { 1, 'LTRT', Y, 'item', BANDAGES },                                     -- v14 (Joshua 2026-11-26): bandages; no drink (Life Tap)
   { 1, 'LTRT', B, 'spell', { 'Demon Armor', 'Demon Skin' } },
   { 1, 'LTRT', A, 'spell', 'Create Healthstone' },
   -- SET 2 (LB+RB, D-pad right): travel and utility. Fills in as you level.
@@ -109,7 +110,7 @@ LAYOUTS.WARLOCK = {
   { 2, 'none', D, 'spell', 'Unending Breath' },
   { 2, 'RT', U, 'spell', 'Drain Soul' },                                 -- soul shards (shares RT+up on set 1 until 41)
   { 2, 'RT', D, 'spell', 'Banish' },
-  { 2, 'LTRT', D, 'spell', 'Find Minerals' },                            -- v12: moved off set 1 for Tongues
+  { 2, 'LTRT', D, 'spell', 'First Aid' },                                -- v14: Find Minerals dropped (Node Sight tracks)
   { 2, 'RT', B, 'spell', 'Curse of Recklessness' },
   { 2, 'RT', A, 'spell', 'Curse of Exhaustion' },
   { 2, 'LT', R, 'spell', { 'Subjugate Demon', 'Enslave Demon' } },       -- v11: Forever renamed it Subjugate Demon
