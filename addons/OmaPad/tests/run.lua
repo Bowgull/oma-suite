@@ -153,6 +153,20 @@ tests['warlock: Well Fed food with an unreadable number still goes on the food b
   ok(OmaPadCharDB.foodScan[1]:find('Eat to recover'), 'tooltip line kept in foodScan')
 end
 
+tests['new character: the game\'s own starting buttons are laid out by the add-on, nothing doubled'] = function()
+  load('PALADIN', 'Bunji', {}, nil)
+  _G.UnitLevel = function() return 1 end
+  learn({ 'Seal of Righteousness', 'Will to Survive', 'Perception', 'Holy Light' })
+  W.slots[slotOf(1, 'none', U)] = { 'spell', spellId('Will to Survive') }   -- the game put these here at creation
+  W.slots[slotOf(1, 'none', D)] = { 'spell', spellId('Perception') }
+  pad()
+  eq(spellOn(1, 'none', U), 'Seal of Righteousness', 'main seal button freed')
+  eq(spellOn(1, 'RT', D), 'Will to Survive', 'racial on its own button')
+  eq(spellOn(1, 'none', D), nil, 'starting extra cleared (Righteousness second copy waits for 20)')
+  eq(#(OmaPadCharDB.check.dups), 0, 'no duplicates')
+  eq(OmaPadCharDB.fresh, nil, 'one time only')
+end
+
 tests['paladin: level 20 upgrades in place and the old spell drops to its second button'] = function()
   load('PALADIN', 'Pally', {}, nil)
   learn({ 'Seal of Righteousness', 'Holy Light', 'Devotion Aura', 'Judgement', 'Divine Protection' })
