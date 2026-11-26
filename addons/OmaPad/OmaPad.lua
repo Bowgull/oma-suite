@@ -21,7 +21,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local VERSIONS = { WARLOCK = 16, PALADIN = 2 } -- layout version per class: bump a class's number when its LAYOUT changes
+local VERSIONS = { WARLOCK = 16, PALADIN = 3 } -- layout version per class: bump a class's number when its LAYOUT changes
 local function playerClass() return select(2, UnitClass('player')) end
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
@@ -45,7 +45,11 @@ MACROS_BY_CLASS.WARLOCK = {                    -- Joshua's two demon buttons (hi
   { 'PetHome',  '/petpassive\n/petfollow', 'Ability_Tracking' },                     -- passive + come back
   METERS_MACRO,
 }
-MACROS_BY_CLASS.PALADIN = { METERS_MACRO }
+-- Paladin v3 (Joshua 2026-11-26): Mastercraft's window and Polestar's guide on/off (for hanging out in town) on the two
+-- set 1 buttons Blacksmithing and Find Minerals had (Find Minerals stays on once switched on; Mastercraft runs professions)
+local MASTERCRAFT_MACRO = { 'Mastercraft', '/mc', 'Trade_BlackSmithing' }
+local POLESTAR_MACRO = { 'Polestar', '/run Polestar.Set("ui.shown",not Polestar.Get("ui.shown"))', 'INV_Misc_Map_01' }
+MACROS_BY_CLASS.PALADIN = { METERS_MACRO, MASTERCRAFT_MACRO, POLESTAR_MACRO }
 local function classMacros() return MACROS_BY_CLASS[playerClass()] or { METERS_MACRO } end
 -- the warlock's retired macros (character macros, so only ever on the warlock)
 local OLD_MACROS = { WARLOCK = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink',
@@ -164,8 +168,8 @@ LAYOUTS.PALADIN = {
   { 1, 'LT', D, 'spell', { 'Divine Shield', 'Divine Protection' } },       -- Shield from 34
   -- LT + RT: out of the fight                                              (same slots as the warlock's)
   { 1, 'LTRT', U, 'item', 6948 },                                          -- Hearthstone
-  { 1, 'LTRT', R, 'spell', 'Find Minerals' },
-  { 1, 'LTRT', L, 'spell', 'Blacksmithing' },
+  { 1, 'LTRT', R, 'macro', 'Polestar' },                                 -- v3: guide on/off
+  { 1, 'LTRT', L, 'macro', 'Mastercraft' },                              -- v3: professions window
   { 1, 'LTRT', D, 'spell', { 'Retribution Aura', 'Devotion Aura' } },      -- the "always out" button (warlock: demon)
   { 1, 'LTRT', X, 'food', FOODS },
   { 1, 'LTRT', Y, 'drink', WATERS },

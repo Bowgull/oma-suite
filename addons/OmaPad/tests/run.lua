@@ -132,7 +132,16 @@ tests['paladin v2: First Aid, Cooking, Fishing and the best bandage on set 2 LT+
   eq(spellOn(2, 'LTRT', D), 'First Aid'); eq(spellOn(2, 'LTRT', R), 'Cooking'); eq(spellOn(2, 'LTRT', L), 'Fishing')
   local a = W.slots[slotOf(2, 'LTRT', B)]
   ok(a and a[1] == 'item' and a[2] == 6450, 'silk bandage (the best) on set 2 LT+RT B')
-  eq(OmaPadCharDB.layoutV, 2, 'paladin layout v2')
+  eq(OmaPadCharDB.layoutV, 3, 'paladin layout v3')
+end
+
+tests['paladin v3: Mastercraft and Polestar on/off on set 1 LT+RT left and right'] = function()
+  load('PALADIN', 'Pally', {}, nil)
+  learn({ 'Holy Light', 'Find Minerals', 'Blacksmithing' }); pad()
+  local function macroOn(set, mod, b) local a = W.slots[slotOf(set, mod, b)]; return a and a[1] == 'macro' and W.macros[a[2]] and W.macros[a[2]].name end
+  eq(macroOn(1, 'LTRT', L), 'Mastercraft'); eq(macroOn(1, 'LTRT', R), 'Polestar')
+  local body; for _, m in pairs(W.macros) do if m.name == 'Polestar' then body = m.body end end
+  ok(body and body:find('ui.shown', 1, true), 'toggles the guide window')
 end
 
 tests['warlock: Well Fed food with an unreadable number still goes on the food button; Pointer macro retired'] = function()
