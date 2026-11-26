@@ -48,7 +48,8 @@ MACROS_BY_CLASS.WARLOCK = {                    -- Joshua's two demon buttons (hi
 MACROS_BY_CLASS.PALADIN = { METERS_MACRO }
 local function classMacros() return MACROS_BY_CLASS[playerClass()] or { METERS_MACRO } end
 -- the warlock's retired macros (character macros, so only ever on the warlock)
-local OLD_MACROS = { WARLOCK = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink' } }
+local OLD_MACROS = { WARLOCK = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink',
+  'Pointer' } } -- Pointer (2026-11-26): OmaPointer's toggle; that add-on is removed, so its button is dead
 local BANDAGES = { 14530, 14529, 8545, 8544, 6451, 6450, 3531, 3530, 2581, 1251 } -- Heavy Runecloth .. Linen, best first
 local SOULSTONES = { 16896, 16895, 16893, 16892, 5232 }             -- Major .. Minor Soulstone, best first
 local POTIONS = { 13446, 3928, 1710, 929, 858, 118 }               -- Major .. Minor Healing Potion, best first
@@ -257,15 +258,16 @@ local function scanBags()
         local _, _, _, _, _, cls, sub = C_Item.GetItemInfoInstant(id)
         if cls == FOOD_CLASS and sub == FOOD_SUB then
           local name, _, _, _, minLevel = C_Item.GetItemInfo(id)
-          local lines, hp, mana, fed = tipLines(bag, slot), 0, 0, false
+          local lines, hp, mana, fed, use = tipLines(bag, slot), 0, 0, false, nil
           for _, l in ipairs(lines or {}) do
             local low = l:lower()
-            local a = low:match('restores ([%d,]+) health'); if a then hp = math.max(hp, tonumber((a:gsub(',', ''))) or 0) end
+            local a = low:match('restores ([%d,]+) health') or low:match('([%d,]+) health'); if a then hp = math.max(hp, tonumber((a:gsub(',', ''))) or 0) end
             local m = low:match('restores ([%d,]+) mana') or low:match('and ([%d,]+) mana'); if m then mana = math.max(mana, tonumber((m:gsub(',', ''))) or 0) end
             if low:find('well fed') then fed = true end
+            if not use and (low:find('^use') or low:find('restore')) then use = l end
           end
           found[#found + 1] = { id = id, name = name or ('item ' .. id), minLevel = minLevel or 0, hp = hp, mana = mana, fed = fed,
-                                usable = (minLevel or 0) <= lvl, tip = lines ~= nil }
+                                usable = (minLevel or 0) <= lvl, tip = lines ~= nil, use = use }
         end
       end
     end
@@ -275,6 +277,7 @@ local function scanBags()
   for _, f in ipairs(found) do
     fs[#fs + 1] = ('%s (%d): health %d, mana %d%s, level %d%s%s'):format(f.name, f.id, f.hp, f.mana,
       f.fed and ', Well Fed' or '', f.minLevel, f.usable and '' or ' TOO HIGH', f.tip and '' or ', no tooltip')
+      .. (f.use and (' | ' .. f.use:sub(1, 90)) or '')
   end
   return found
 end
@@ -283,6 +286,8 @@ local function bestConsumable(kind)
   for _, f in ipairs(scanBags()) do
     if f.usable then
       local amount = kind == 'food' and f.hp or f.mana
+      -- 2026-11-26: Smoked Sagefish read as "health 0" on Forever. Well Fed food whose number can't be read still counts.
+      if kind == 'food' and amount == 0 and f.fed and f.mana == 0 then amount = 1 end
       if amount > 0 then
         local score = (f.fed and 1e6 or 0) + amount
         if not bestScore or score > bestScore then best, bestScore = f.id, score end
