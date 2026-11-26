@@ -703,6 +703,9 @@ local function moveBreathBar()
   local f = rawget(_G, 'MirrorTimerContainer') or rawget(_G, 'MirrorTimer1')
   if not f or InCombatLockdown() then return end
   f:ClearAllPoints(); f:SetPoint('TOP', UIParent, 'TOP', 0, -150)
+  -- quest progress ("Half-Eaten Fish: 6/7") and the game's red errors: under the breath bar too (was TOP -122)
+  local e = rawget(_G, 'UIErrorsFrame')
+  if e then e:ClearAllPoints(); e:SetPoint('TOP', UIParent, 'TOP', 0, -190) end
 end
 local busy
 local function later() if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply() end) end
