@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: OmaRoute
+## Notes: Your dungeon route: every dungeon for your level in order, run through Polestar's own live pick-up and hand-in guides.
+## Author: Omashu
+## Version: 1
+## Dependencies: Polestar
+## SavedVariablesPerCharacter: OmaRouteDB
+
+OmaRoute.lua
