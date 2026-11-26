@@ -153,9 +153,16 @@ local function gather()
   return d
 end
 
+-- the last good read: while the game shuts the interface down (a reload or logout) some lists come back empty, so
+-- an empty skills or spells list then keeps the one read a moment earlier
+local last = {}
 local function save()
   local ok, d = pcall(gather)
   if not ok then return end
+  for _, k in ipairs({ 'skills', 'spells' }) do
+    if type(d[k]) == 'table' and next(d[k]) == nil and type(last[k]) == 'table' and next(last[k]) ~= nil then d[k] = last[k] end
+  end
+  last = d
   OmaBookDB = OmaBookDB or {}
   OmaBookDB.json = enc(d)
   OmaBookDB.at = d.at

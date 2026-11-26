@@ -71,6 +71,10 @@ tests['a broken game API never breaks the save'] = function()
   world(); _G.C_Traits = nil; _G.CheapUpgrades = nil; _G.C_SpellBook = nil; OmaBook.save()
   ok(OmaBookDB.json:find('"level":23', 1, true), 'still saved'); ok(OmaBookDB.json:find('"talents":[]', 1, true), 'empty talents')
 end
+tests['a reload that reads empty skills keeps the ones read before'] = function()
+  world(); OmaBook.save(); _G.GetNumSkillLines = function() return 0 end; W.events(nil, 'PLAYER_LOGOUT')
+  ok(OmaBookDB.json:find('"Two-Handed Maces":110', 1, true), 'skills kept')
+end
 tests['JSON escapes quotes and control characters'] = function()
   world(); eq(OmaBook.enc({ a = 'x"y\n' }), '{"a":"x\\"y\\n"}')
 end
