@@ -47,7 +47,9 @@ MACROS_BY_CLASS.WARLOCK = {                    -- Joshua's two demon buttons (hi
 }
 -- Paladin v3 (Joshua 2026-11-26): Mastercraft's window and Polestar's guide on/off (for hanging out in town) on the two
 -- set 1 buttons Blacksmithing and Find Minerals had (Find Minerals stays on once switched on; Mastercraft runs professions)
-local MASTERCRAFT_MACRO = { 'Mastercraft', '/mc', 'Trade_BlackSmithing' }
+-- Mastercraft's window is mouse-only, so the button also switches the game's own controller pointer (left stick moves
+-- it, A clicks) on with it, and off with the next press (Joshua 2026-11-26: "my controller won't use it")
+local MASTERCRAFT_MACRO = { 'Mastercraft', '/mc\n/run SetGamePadCursorControl(not IsGamePadCursorControlEnabled())', 'Trade_BlackSmithing' }
 local POLESTAR_MACRO = { 'Polestar', '/run Polestar.Set("ui.shown",not Polestar.Get("ui.shown"))', 'INV_Misc_Map_01' }
 MACROS_BY_CLASS.PALADIN = { METERS_MACRO, MASTERCRAFT_MACRO, POLESTAR_MACRO }
 local function classMacros() return MACROS_BY_CLASS[playerClass()] or { METERS_MACRO } end
