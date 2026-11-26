@@ -97,8 +97,10 @@ local function skills()
     local list = { GetProfessions() }   -- primary 1, primary 2, archaeology, fishing, cooking, first aid: any may be nil
     for k = 1, 8 do
       local i = list[k]
-      local name, _, rank = i and GetProfessionInfo(i)
-      if name then out[name] = rank end
+      if i then
+        local name, _, rank = GetProfessionInfo(i)
+        if name then out[name] = rank end
+      end
     end
   end
   return out
