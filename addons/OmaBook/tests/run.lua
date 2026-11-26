@@ -84,6 +84,28 @@ tests['Forever (no skill lines): weapon skills from known spells, First Aid from
   ok(j:find('"Two-Handed Maces":1', 1, true) and j:find('"Maces":1', 1, true), 'weapon skills'); ok(not j:find('Polearms', 1, true), 'not unknown ones')
   ok(j:find('"First Aid":60', 1, true), 'First Aid rank')
 end
+tests['trainer list from Polestar: new spells and upgrades, with cost'] = function()
+  world()
+  _G.Polestar = { QoL = { Spells = { NewAt = function(l) return ({ [4] = { { id = 10321, rank = 0, cost = 100 } }, [6] = { { id = 639, rank = 2, cost = 100 } } })[l] end } } }
+  local old = _G.C_Spell.GetSpellName
+  _G.C_Spell.GetSpellName = function(id) return ({ [10321] = 'Judgement', [639] = 'Holy Light' })[id] or old(id) end
+  OmaBook.save(); _G.Polestar = nil
+  local j = OmaBookDB.json
+  ok(j:find('{"cost":100,"id":10321,"lvl":4,"name":"Judgement","rank":0}', 1, true), 'new spell'); ok(j:find('"name":"Holy Light","rank":2', 1, true), 'upgrade')
+end
+local function book4()
+  _G.C_SpellBook.GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = 4 } end
+  _G.C_SpellBook.GetSpellBookItemInfo = function(i) return ({ { name = 'Judgement' }, { name = 'Holy Strike' }, { name = 'Two-Handed Weapon Spec', isPassive = true }, { name = 'Purify' } })[i] end
+end
+tests['new since the last reload: none the first time, then what was learned, for the whole session'] = function()
+  world(); OmaBook.save(); ok(OmaBookDB.json:find('"fresh":[]', 1, true), 'first load: nothing new')
+  local saved = OmaBookDB
+  world(); _G.OmaBookDB = saved; book4()
+  OmaBook.save(); ok(OmaBookDB.json:find('"fresh":["Purify"]', 1, true), 'learned since the last load'); OmaBook.save()
+  ok(OmaBookDB.json:find('"fresh":["Purify"]', 1, true), 'kept all session')
+  local saved2 = OmaBookDB; world(); _G.OmaBookDB = saved2; book4()
+  OmaBook.save(); ok(OmaBookDB.json:find('"fresh":[]', 1, true), 'next reload: gone')
+end
 tests['JSON escapes quotes and control characters'] = function()
   world(); eq(OmaBook.enc({ a = 'x"y\n' }), '{"a":"x\\"y\\n"}')
 end

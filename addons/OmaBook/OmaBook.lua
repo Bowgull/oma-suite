@@ -4,7 +4,7 @@
 -- file (GET /book) and Aang turns it into the book. Nothing here is live: the book says "as of your last reload".
 --
 --   json = { v, at, name, realm, faction, class, zone, level, money (copper), xp, xpMax, unspent, talents = { [name] = rank },
---            spells = { name, ... }, train = { { name, lvl } }, skills = { [name] = rank }, weapon = { id, name, dps }, bags = { [itemID] = count },
+--            spells = { name, ... }, train = { { name, lvl, rank, cost, id } }, fresh = { name, ... }, skills = { [name] = rank }, weapon = { id, name, dps }, bags = { [itemID] = count },
 --            done = { [questID] = true }, log = { questID, ... }, cu = { rich, max, list = { { id, name, slot, price, pct } } } }
 
 local V = 1
@@ -83,6 +83,22 @@ end
 -- spell you know (IsPlayerSpell), and professions such as First Aid come from GetProfessions / GetProfessionInfo.
 local WEAPON_SPELLS = { [196] = 'Axes', [197] = 'Two-Handed Axes', [198] = 'Maces', [199] = 'Two-Handed Maces', [200] = 'Polearms',
   [201] = 'Swords', [202] = 'Two-Handed Swords', [227] = 'Staves', [1180] = 'Daggers' }
+-- What the class trainer has for you now: Polestar's Forever trainer lists (QoL/ClassSpells.lua via Spells.NewAt), every
+-- level up to yours, spells you don't know yet (a higher rank only once the rank below is known or bought with it).
+-- rank 0 or 1 = a spell you've never had; 2+ = an upgrade. nil when Polestar isn't there (the spellbook list is used).
+local function trainable(level)
+  local S = rawget(_G, 'Polestar') and Polestar.QoL and Polestar.QoL.Spells
+  if not (S and S.NewAt) then return nil end
+  local out = {}
+  for lvl = 1, level do
+    for _, e in ipairs(S.NewAt(lvl) or {}) do
+      local name = spellName(e.id)
+      if name then out[#out + 1] = { name = name, lvl = lvl, rank = e.rank or 0, cost = e.cost or 0, id = e.id } end
+    end
+  end
+  return out
+end
+
 local function skills()
   local out = {}
   if GetNumSkillLines and GetSkillLineInfo then
@@ -163,6 +179,7 @@ local function gather()
   local ok, t, u = pcall(talents); if ok then d.talents, d.unspent = t, u end
   d.spells, d.train = {}, {}
   local ok3, sp, tr = pcall(spells); if ok3 then d.spells, d.train = sp, tr end
+  local ok4, pt = pcall(trainable, d.level or 0); if ok4 and pt then d.train = pt end
   d.skills = try(skills) or {}
   d.weapon = try(weapon)
   d.bags = try(bags) or {}
@@ -174,9 +191,19 @@ end
 -- the last good read: while the game shuts the interface down (a reload or logout) some lists come back empty, so
 -- an empty skills or spells list then keeps the one read a moment earlier
 local last = {}
+local fresh            -- spells new since the last reload or login: worked out once per session
 local function save()
   local ok, d = pcall(gather)
   if not ok then return end
+  OmaBookDB = OmaBookDB or {}
+  if not fresh and type(d.spells) == 'table' and #d.spells > 0 then
+    fresh = {}
+    local before = {}
+    for _, n in ipairs(type(OmaBookDB.loadSpells) == 'table' and OmaBookDB.loadSpells or {}) do before[n] = true end
+    if next(before) then for _, n in ipairs(d.spells) do if not before[n] then fresh[#fresh + 1] = n end end end
+    OmaBookDB.loadSpells = d.spells
+  end
+  d.fresh = fresh or {}
   for _, k in ipairs({ 'skills', 'spells' }) do
     if type(d[k]) == 'table' and next(d[k]) == nil and type(last[k]) == 'table' and next(last[k]) ~= nil then d[k] = last[k] end
   end
