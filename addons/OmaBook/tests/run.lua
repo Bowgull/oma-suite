@@ -22,16 +22,19 @@ local function world()
     GetNodeInfo = function(_, n) return ({ { activeRank = 5, entryIDs = { 10 } }, { activeRank = 1, entryIDs = { 20 } }, { activeRank = 0, entryIDs = { 30 } } })[n] end,
     GetEntryInfo = function(_, e) return { definitionID = e } end,
     GetDefinitionInfo = function(d) return { spellID = ({ [10] = 20060, [20] = 1311074, [30] = 9 })[d] } end }
-  _G.Enum = { SpellBookSpellBank = { Player = 0 } }
+  _G.Enum = { SpellBookSpellBank = { Player = 0 }, SpellBookItemType = { Spell = 1, FutureSpell = 2 } }
+  _G.C_Spell.GetSpellLevelLearned = function(id) return ({ [26573] = 20, [879] = 20, [24275] = 44 })[id] end
   _G.C_SpellBook = { GetNumSpellBookSkillLines = function() return 1 end,
-    GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = 3 } end,
-    GetSpellBookItemInfo = function(i) return ({ { name = 'Judgement' }, { name = 'Holy Strike' }, { name = 'Two-Handed Weapon Spec', isPassive = true } })[i] end }
+    GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = 6 } end,
+    GetSpellBookItemInfo = function(i) return ({ { name = 'Judgement' }, { name = 'Holy Strike' }, { name = 'Two-Handed Weapon Spec', isPassive = true },
+      { name = 'Consecration', spellID = 26573, itemType = 2 }, { name = 'Exorcism', spellID = 879, itemType = 2 }, { name = 'Hammer of Wrath', spellID = 24275, itemType = 2 } })[i] end }
   _G.GetNumSkillLines = function() return 3 end
   _G.GetSkillLineInfo = function(i) return ({ { 'Weapon Skills', true }, { 'Two-Handed Maces', false, nil, 110 }, { 'First Aid', false, nil, 60 } })[i][1],
     ({ true, false, false })[i], nil, ({ nil, 110, 60 })[i] end
   _G.GetInventoryItemID = function() return 6953 end
   _G.GetInventoryItemLink = function() return '|cff0070dd|Hitem:6953::::|h[Verigan\'s Fist]|h|r' end
-  _G.C_Item = { GetItemStats = function() return { ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 25.63 } end, GetItemNameByID = function() return "Verigan's Fist" end }
+  _G.C_Item = { GetItemStats = function() return { ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 25.63 } end, GetItemNameByID = function() return "Verigan's Fist" end,
+    GetItemInfoInstant = function() return 6953, 'Weapon', 'Two-Handed Maces', 'INVTYPE_2HWEAPON', 0, 2, 5 end }
   _G.C_Container = { GetContainerNumSlots = function(b) return b == 0 and 3 or 0 end,
     GetContainerItemInfo = function(b, s) return ({ { itemID = 5480, stackCount = 3 }, { itemID = 5480, stackCount = 5 }, nil })[s] end }
   _G.C_QuestLog = { IsQuestFlaggedCompleted = function(q) return q == 1806 end, GetNumQuestLogEntries = function() return 2 end,
@@ -49,6 +52,9 @@ tests['save writes one JSON string with everything the book needs'] = function()
   ok(j:find('"Deflection":5', 1, true) and j:find('"Sanctified Judgement":1', 1, true), 'talent ranks'); ok(not j:find('"9"', 1, true), 'no unbought talents')
   ok(j:find('"spells":["Holy Strike","Judgement"]', 1, true), 'active spells, sorted, no passives')
   ok(j:find('"Two-Handed Maces":110', 1, true) and j:find('"First Aid":60', 1, true), 'skills'); ok(not j:find('Weapon Skills', 1, true), 'no headers')
+  ok(j:find('"train":[{"lvl":20,"name":"Consecration"},{"lvl":20,"name":"Exorcism"}]', 1, true), 'trainable spells, not the far-off ones')
+  ok(not j:find('"spells":[^]]*Consecration'), 'future spells are not known spells')
+  ok(j:find('"sub":5', 1, true), 'weapon subclass')
   ok(j:find('"dps":25.63', 1, true) and j:find('"id":6953', 1, true), 'weapon')
   ok(j:find('"5480":8', 1, true), 'bag counts summed across stacks')
   ok(j:find('"1806":true', 1, true) and not j:find('"78093":true', 1, true), 'class quests done')

@@ -4,7 +4,7 @@
 -- file (GET /book) and Aang turns it into the book. Nothing here is live: the book says "as of your last reload".
 --
 --   json = { v, at, name, realm, faction, class, level, xp, xpMax, unspent, talents = { [name] = rank },
---            spells = { name, ... }, skills = { [name] = rank }, weapon = { id, name, dps }, bags = { [itemID] = count },
+--            spells = { name, ... }, train = { { name, lvl } }, skills = { [name] = rank }, weapon = { id, name, dps }, bags = { [itemID] = count },
 --            done = { [questID] = true }, log = { questID, ... }, cu = { rich, max, list = { { id, name, slot, price, pct } } } }
 
 local V = 1
@@ -57,19 +57,26 @@ local function talents()
   return ranks, unspent
 end
 
+-- known spells, plus the spellbook's "future" spells you're already high enough to learn (train) or will be soon
 local function spells()
-  local out, seen = {}, {}
+  local out, seen, train = {}, {}, {}
+  local future = Enum.SpellBookItemType and Enum.SpellBookItemType.FutureSpell
+  local level = UnitLevel('player') or 0
   if C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines then
     for t = 1, C_SpellBook.GetNumSpellBookSkillLines() do
       local line = C_SpellBook.GetSpellBookSkillLineInfo(t)
       for i = line.itemIndexOffset + 1, line.itemIndexOffset + line.numSpellBookItems do
         local s = C_SpellBook.GetSpellBookItemInfo(i, Enum.SpellBookSpellBank.Player)
-        if s and s.name and not seen[s.name] and not s.isPassive then seen[s.name] = true; out[#out + 1] = s.name end
+        if s and s.name and future and s.itemType == future then
+          local lvl = s.spellID and C_Spell.GetSpellLevelLearned and C_Spell.GetSpellLevelLearned(s.spellID)
+          if lvl and lvl > 0 and lvl <= level + 2 then train[#train + 1] = { name = s.name, lvl = lvl } end
+        elseif s and s.name and not seen[s.name] and not s.isPassive then seen[s.name] = true; out[#out + 1] = s.name end
       end
     end
   end
   table.sort(out)
-  return out
+  table.sort(train, function(a, b) if a.lvl ~= b.lvl then return a.lvl < b.lvl end return a.name < b.name end)
+  return out, train
 end
 
 local function skills()
@@ -87,7 +94,9 @@ local function weapon()
   local link = GetInventoryItemLink('player', 16)
   local stats = link and ((C_Item and C_Item.GetItemStats and C_Item.GetItemStats(link)) or (GetItemStats and GetItemStats(link))) or {}
   local name = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)) or (link and link:match('%[(.-)%]'))
-  return { id = id, name = name, dps = stats.ITEM_MOD_DAMAGE_PER_SECOND_SHORT }
+  -- weapon subclass (4 one-hand mace, 5 two-hand mace, 6 polearm, 1 two-hand axe, 8 two-hand sword...): picks the stone
+  local sub = C_Item and C_Item.GetItemInfoInstant and select(7, C_Item.GetItemInfoInstant(id))
+  return { id = id, name = name, dps = stats.ITEM_MOD_DAMAGE_PER_SECOND_SHORT, sub = sub }
 end
 
 local function bags()
@@ -134,7 +143,8 @@ local function gather()
     class = select(2, UnitClass('player')), level = UnitLevel('player'), xp = UnitXP('player'), xpMax = UnitXPMax('player') }
   d.talents, d.unspent = {}, 0
   local ok, t, u = pcall(talents); if ok then d.talents, d.unspent = t, u end
-  d.spells = try(spells) or {}
+  d.spells, d.train = {}, {}
+  local ok3, sp, tr = pcall(spells); if ok3 then d.spells, d.train = sp, tr end
   d.skills = try(skills) or {}
   d.weapon = try(weapon)
   d.bags = try(bags) or {}
