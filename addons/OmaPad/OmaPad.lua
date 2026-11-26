@@ -21,7 +21,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local VERSIONS = { WARLOCK = 11, PALADIN = 1 } -- layout version per class: bump a class's number when its LAYOUT changes
+local VERSIONS = { WARLOCK = 12, PALADIN = 1 } -- layout version per class: bump a class's number when its LAYOUT changes
 local function playerClass() return select(2, UnitClass('player')) end
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
@@ -89,7 +89,7 @@ LAYOUTS.WARLOCK = {
   -- Hearthstone and the professions here; ONE demon button that follows your newest demon; every demon has its own
   -- button on set 2 for when you want a different one (rule 5 skips the set-2 copy of the one this button shows).
   { 1, 'LTRT', U, 'item', 6948 },                                          -- Hearthstone
-  { 1, 'LTRT', R, 'spell', 'Find Minerals' },
+  { 1, 'LTRT', R, 'spell', 'Curse of Tongues' },                         -- v12 (Joshua 2026-11-26, PvP ruleset): Tongues on set 1
   { 1, 'LTRT', L, 'spell', 'Tailoring' },
   -- v11 (Joshua 2026-11-26: "I'm just using succubus", Felhunter "pretty bad for leveling and dungeons rn"): the main
   -- demon button prefers the Succubus/Incubus and never jumps to the Felhunter.
@@ -109,7 +109,7 @@ LAYOUTS.WARLOCK = {
   { 2, 'none', D, 'spell', 'Unending Breath' },
   { 2, 'RT', U, 'spell', 'Drain Soul' },                                 -- soul shards (shares RT+up on set 1 until 41)
   { 2, 'RT', D, 'spell', 'Banish' },
-  { 2, 'RT', Y, 'spell', 'Curse of Tongues' },
+  { 2, 'LTRT', D, 'spell', 'Find Minerals' },                            -- v12: moved off set 1 for Tongues
   { 2, 'RT', B, 'spell', 'Curse of Recklessness' },
   { 2, 'RT', A, 'spell', 'Curse of Exhaustion' },
   { 2, 'LT', R, 'spell', { 'Subjugate Demon', 'Enslave Demon' } },       -- v11: Forever renamed it Subjugate Demon
