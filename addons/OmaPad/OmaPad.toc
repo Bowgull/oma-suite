@@ -1,5 +1,6 @@
 ## Interface: 16001
 ## Title: OmaPad
-## Notes: Joshua's warlock controller layout. Fills empty pad slots as spells are learned; never replaces a button you changed yourself.
+## Notes: Joshua's controller layouts, one per class (warlock, paladin). Fills empty pad slots as spells are learned; never replaces a button you changed yourself.
 ## SavedVariables: OmaPadDB
+## SavedVariablesPerCharacter: OmaPadCharDB
 OmaPad.lua

@@ -1,4 +1,13 @@
--- OmaPad: Bujuju's warlock controller layout (WoW Forever gamepad UI), Affliction levelling.
+-- OmaPad: Joshua's controller layouts (WoW Forever gamepad UI), one per class: Bujuju's warlock (Affliction
+-- levelling) and the paladin alt (Retribution levelling). Both follow the same design, so the hands don't have to
+-- relearn anything between characters: RT + face = the pull, LT + face = keeping it going, bare D-pad = support,
+-- LT + D-pad = emergencies, LT + RT = out of the fight, set 2 = travel and utility, set 3 free.
+--
+-- Class-aware (2026-11-26, Joshua: "class aware is best"): every class has its own LAYOUT and layout version, and the
+-- add-on's memory of which buttons it placed and which are his lives PER CHARACTER (OmaPadCharDB). It used to live
+-- in the account-wide OmaPadDB, where a second character's bars would have read as "he changed all of these".
+-- The warlock's old account-wide memory is moved onto the warlock the first time it logs in, unchanged, so not one
+-- of its buttons moves. A class without a layout gets only the Meters macro.
 --
 -- The gamepad bars have 3 sets (LB+RB + D-pad left/right), 28 slots each, read from the game 2026-11-09:
 --   set 1 = 181-208, set 2 = 209-236, set 3 = 237-264. In each set: no trigger 4 (D-pad), then LT, RT and
@@ -12,7 +21,8 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local V = 10                                   -- layout version: bump when LAYOUT changes
+local VERSIONS = { WARLOCK = 10, PALADIN = 1 } -- layout version per class: bump a class's number when its LAYOUT changes
+local function playerClass() return select(2, UnitClass('player')) end
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
 local function slotOf(set, bar, btn) return 181 + (set - 1) * 28 + BAR[bar] + btn end
@@ -24,22 +34,29 @@ local function petFightBody()
     if n == 'PET_MODE_DEFENSIVEASSIST' then return '/click PetActionButton' .. i .. ' LeftButton 1\n/petattack' end
   end
 end
-local MACROS = {                               -- Joshua's two demon buttons (his old "Good Boi", split for the pad)
+local METERS_MACRO = { 'Meters', '/ommeters', 'INV_Misc_PocketWatch_01' }         -- damage + threat meters, show/hide
+local MACROS_BY_CLASS = {}
+MACROS_BY_CLASS.WARLOCK = {                    -- Joshua's two demon buttons (his old "Good Boi", split for the pad)
   -- Defensive Assist + attack (Joshua 2026-11-11, "fighting for weeks"). Measured in game: Forever's pet bar has Assist,
   -- Defensive Assist and Passive (no plain Defensive, so /petdefensive does nothing) and no slash command for Defensive
   -- Assist. So the macro presses that pet-bar button, with "LeftButton 1" = key down (this engine's buttons ignore the
   -- key-up a bare /click sends). Its slot depends on the demon, so the body is rebuilt whenever the pet changes.
   { 'PetFight', function() return petFightBody() end, 'Ability_Warrior_Charge' },     -- defensive assist + attack my target
   { 'PetHome',  '/petpassive\n/petfollow', 'Ability_Tracking' },                     -- passive + come back
-  { 'Meters',   '/ommeters', 'INV_Misc_PocketWatch_01' },                            -- damage + threat meters, show/hide
+  METERS_MACRO,
 }
-local OLD_MACROS = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink' }
+MACROS_BY_CLASS.PALADIN = { METERS_MACRO }
+local function classMacros() return MACROS_BY_CLASS[playerClass()] or { METERS_MACRO } end
+-- the warlock's retired macros (character macros, so only ever on the warlock)
+local OLD_MACROS = { WARLOCK = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne', 'PetTwo', 'Stone', 'Drink' } }
+local POTIONS = { 13446, 3928, 1710, 929, 858, 118 }               -- Major .. Minor Healing Potion, best first
 local STONES = { 9421, 5510, 5509, 5511, 5512 }                    -- Major .. Minor Healthstone, best first
 local WATERS = { 8766, 1645, 1708, 1205, 1179, 159 }                -- vendor water, best first
 local FOODS  = { 8948, 4608, 4607, 4606, 4605, 4604 }               -- vendor mushrooms (Undercity), best first
 
--- { set, bar, button, kind, name or list (best first) }    kind: spell | macro | item
-local LAYOUT = {
+-- { set, bar, button, kind, name or list (best first) }    kind: spell | macro | item | food | drink
+local LAYOUTS = {}
+LAYOUTS.WARLOCK = {
   -- SET 1 (v6, Joshua 2026-11-09: "the buttons I want to press most are the face buttons"). Eight most-pressed actions on
   -- trigger + face buttons (bare face buttons are Blizzard's: jump, back, interact, inspect). A whole pull = hold RT, X Y B A.
   -- v7 (Joshua 2026-11-10): "my right trigger is the main pull, the left trigger the other stuff": LT and RT swapped in every set.
@@ -108,7 +125,90 @@ local LAYOUT = {
   -- SET 3 otherwise free for talents and anything later.
 }
 
+-- Paladin (Human, Retribution levelling, 2026-11-26). Mirrors the warlock button for button by JOB, not by spell
+-- (Joshua: "It should follow the warlocks design"): what the warlock pulls with, the paladin pulls with, and so on.
+-- Lists upgrade in place (rule 2) and rule 5 keeps the lower spell off a second button until the upgrade arrives:
+-- before 20, Seal of Righteousness sits on D-pad up and D-pad down stays empty; at 20 up becomes Seal of Command and
+-- Righteousness drops to down (the Unsealed Wrath swap at 40). The same for Holy Light (LT X -> LT Y at 20).
+-- Racials are listed for both paladin races, so the button is right whichever one he plays.
+LAYOUTS.PALADIN = {
+  -- RT + face: the pull                                                    (warlock: Corruption, Bane, wand, PetFight)
+  { 1, 'RT', X, 'spell', 'Judgement' },                                    -- 4
+  { 1, 'RT', Y, 'spell', 'Holy Strike' },                                  -- 6
+  { 1, 'RT', B, 'spell', 'Consecration' },                                 -- 20
+  { 1, 'RT', A, 'spell', 'Exorcism' },                                     -- 20
+  -- LT + face: keeping it going                                            (warlock: Life Tap, Drain Life, Immolate, Fear)
+  { 1, 'LT', X, 'spell', { 'Flash of Light', 'Holy Light' } },             -- Holy Light until 20
+  { 1, 'LT', Y, 'spell', 'Holy Light' },                                   -- fills at 20
+  { 1, 'LT', B, 'spell', 'Repentance' },                                   -- talent, 33
+  { 1, 'LT', A, 'spell', 'Hammer of Justice' },                            -- 8: the paladin's Fear
+  -- bare D-pad: support = the Seals                                        (warlock: PetHome, Healthstone, Funnel, Bolt)
+  { 1, 'none', U, 'spell', { 'Seal of Command', 'Seal of Righteousness' } }, -- main seal: Command from 20
+  { 1, 'none', R, 'item', POTIONS },                                       -- Healing Potion (the Healthstone button)
+  { 1, 'none', L, 'spell', 'Seal of the Crusader' },                       -- 6
+  { 1, 'none', D, 'spell', 'Seal of Righteousness' },                      -- fills at 20 (Unsealed Wrath swap)
+  -- RT + D-pad                                                             (warlock: Siphon, curses, racial, Meters)
+  { 1, 'RT', U, 'spell', 'Hammer of Wrath' },                              -- 44
+  { 1, 'RT', L, 'spell', 'Holy Wrath' },                                   -- 50
+  { 1, 'RT', D, 'spell', { 'Will to Survive', 'Will of the Forsaken' } },  -- stun break racial, Human or Undead
+  { 1, 'RT', R, 'macro', 'Meters' },
+  -- LT + D-pad: emergencies                                                (warlock: Cannibalize, Coil, Howl, Ward)
+  { 1, 'LT', U, 'spell', { 'Cannibalize', 'Perception' } },                -- the other racial
+  { 1, 'LT', R, 'spell', 'Lay on Hands' },                                 -- 10
+  { 1, 'LT', L, 'spell', 'Blessing of Freedom' },                          -- 18
+  { 1, 'LT', D, 'spell', { 'Divine Shield', 'Divine Protection' } },       -- Shield from 34
+  -- LT + RT: out of the fight                                              (same slots as the warlock's)
+  { 1, 'LTRT', U, 'item', 6948 },                                          -- Hearthstone
+  { 1, 'LTRT', R, 'spell', 'Find Minerals' },
+  { 1, 'LTRT', L, 'spell', 'Blacksmithing' },
+  { 1, 'LTRT', D, 'spell', { 'Retribution Aura', 'Devotion Aura' } },      -- the "always out" button (warlock: demon)
+  { 1, 'LTRT', X, 'food', FOODS },
+  { 1, 'LTRT', Y, 'drink', WATERS },
+  { 1, 'LTRT', B, 'spell', 'Blessing of Might' },                          -- self-buff (warlock: Demon Armor)
+  { 1, 'LTRT', A, 'spell', 'Blessing of Kings' },                          -- 20 (warlock: Create Healthstone)
+  -- SET 2 (LB+RB, D-pad right): travel and utility, same places as the warlock's.
+  { 2, 'none', U, 'spell', { 'Summon Charger', 'Summon Warhorse' } },     -- mount (40), the Felsteed slot
+  { 2, 'none', R, 'spell', 'Redemption' },                                 -- 12, the Soulstone slot
+  { 2, 'none', L, 'spell', 'Divine Intervention' },                        -- 30, the Ritual of Summoning slot
+  { 2, 'none', D, 'spell', 'Sense Undead' },
+  { 2, 'LT', X, 'spell', 'Blessing of Wisdom' },                           -- 14
+  { 2, 'LT', Y, 'spell', 'Blessing of Protection' },                       -- 10
+  { 2, 'LT', B, 'spell', { 'Cleanse', 'Purify' } },                        -- Cleanse from 42
+  { 2, 'LT', A, 'spell', 'Turn Undead' },                                  -- 24
+  { 2, 'RT', L, 'spell', 'Concentration Aura' },                           -- 22
+  { 2, 'RT', U, 'spell', 'Shadow Resistance Aura' },                       -- 28
+  { 2, 'RT', R, 'spell', 'Frost Resistance Aura' },                        -- 32
+  { 2, 'RT', D, 'spell', 'Fire Resistance Aura' },                         -- 36
+  { 2, 'LTRT', X, 'spell', 'Righteous Fury' },                             -- 10, tanking only
+  { 2, 'LTRT', Y, 'spell', 'Seal of Fury' },                               -- 10, tanking only
+  { 2, 'LTRT', A, 'spell', 'Smelting' },                                   -- Mining
+  -- SET 3 free (a Holy or Protection dual spec at 40).
+}
+local function classLayout() return LAYOUTS[playerClass()] or {} end
+
 OmaPadDB = OmaPadDB or {}
+-- Per-character memory (rules 3 and 4): which buttons the add-on placed (mine), which are his (his), and the layout
+-- and rules versions they were made under, plus this character's checks (waiting, blocked, check, sim, foodScan).
+-- One-time move: the warlock's memory used to sit in the account-wide OmaPadDB. The first warlock to log in after
+-- this change takes it over exactly as it was (same version numbers, so nothing is re-placed); it is then removed
+-- from OmaPadDB so no other character can ever read it as its own. A fresh character starts with rulesV = 1, so the
+-- old "adopt everything on set 1" step never runs on it: buttons he placed before the add-on stay untouched.
+local PER_CHAR = { 'mine', 'his', 'rulesV', 'layoutV', 'waiting', 'blocked', 'check', 'sim', 'foodScan' }
+local function charDB()
+  OmaPadCharDB = OmaPadCharDB or {}
+  local c = OmaPadCharDB
+  if not c.started then
+    local acct = OmaPadDB or {}
+    if playerClass() == 'WARLOCK' and acct.mine and not acct.padMovedTo then
+      for _, k in ipairs(PER_CHAR) do c[k] = acct[k]; acct[k] = nil end
+      acct.padMovedTo = UnitName('player') or 'warlock'
+    end
+    c.mine = c.mine or {}; c.his = c.his or {}
+    c.rulesV = c.rulesV or 1
+    c.started = true
+  end
+  return c
+end
 local function say(m) print('|cffe8c860Omashu:|r ' .. m) end
 local spellName = function(id) return (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)) or (GetSpellInfo and GetSpellInfo(id)) end
 local function knownId(name)
@@ -127,7 +227,7 @@ local function inList(list, v) if type(list) ~= 'table' then return list == v en
 -- Smart food and water (Joshua, 2026-11-09). Scan the bags for anything that is Food & Drink, read what it restores
 -- from its tooltip, and pick: food = cooked Well Fed food first (+5% kill XP on Forever), then the most health;
 -- drink = Well Fed smoothies first, then the most mana. Only things usable at your level. If no tooltip can be read,
--- the fixed vendor lists above still work. Every scan is written to OmaPadDB.foodScan for checking.
+-- the fixed vendor lists above still work. Every scan is written to OmaPadCharDB.foodScan for checking.
 local FOOD_CLASS, FOOD_SUB = 0, 5                                        -- Consumable, Food & Drink
 local scan, scanAt = nil, 0
 local function tipLines(bag, slot)
@@ -163,9 +263,9 @@ local function scanBags()
     end
   end
   scan, scanAt = found, GetTime()
-  OmaPadDB.foodScan = {}
+  local fs = {}; charDB().foodScan = fs
   for _, f in ipairs(found) do
-    OmaPadDB.foodScan[#OmaPadDB.foodScan + 1] = ('%s (%d): health %d, mana %d%s, level %d%s%s'):format(f.name, f.id, f.hp, f.mana,
+    fs[#fs + 1] = ('%s (%d): health %d, mana %d%s, level %d%s%s'):format(f.name, f.id, f.hp, f.mana,
       f.fed and ', Well Fed' or '', f.minLevel, f.usable and '' or ' TOO HIGH', f.tip and '' or ', no tooltip')
   end
   return found
@@ -225,8 +325,8 @@ local function ownsOption(e, sig)
 end
 
 local function makeMacros()
-  for _, n in ipairs(OLD_MACROS) do local i = GetMacroIndexByName(n); if i > 0 then DeleteMacro(i) end end
-  for _, m in ipairs(MACROS) do
+  for _, n in ipairs(OLD_MACROS[playerClass()] or {}) do local i = GetMacroIndexByName(n); if i > 0 then DeleteMacro(i) end end
+  for _, m in ipairs(classMacros()) do
     local i = GetMacroIndexByName(m[1])
     local body = m[2]; if type(body) == 'function' then body = body() end
     if body then
@@ -256,7 +356,7 @@ local PAD_FIRST, PAD_LAST = 181, 264
 -- set 1's Drain Soul wins until Siphon Life replaces it, then set 2's Drain Soul fills in.
 local function runRules(board, st)
   local placed, upgraded, cleared, waiting, blocked, claimed = 0, 0, 0, {}, {}, {}
-  for _, e in ipairs(LAYOUT) do
+  for _, e in ipairs(classLayout()) do
     local slot = slotOf(e[1], e[2], e[3])
     local cur = board.get(slot)
     if st.his[slot] then
@@ -296,8 +396,7 @@ end
 local function apply()
   if InCombatLockdown() then return end
   makeMacros()
-  local db = OmaPadDB
-  db.mine = db.mine or {}; db.his = db.his or {}
+  local db, V = charDB(), VERSIONS[playerClass()] or 0
   -- One-time: older versions stored names, and everything on 181-208 was the add-on's. Adopt it.
   if (db.rulesV or 0) < 1 then
     db.mine, db.his = {}, {}
@@ -325,26 +424,53 @@ local function apply()
   end
 end
 
--- /ompad sim: replays levelling from 7 to 41 on a COPY of the bars (nothing on screen changes) and checks each step:
--- no duplicates, every known demon reachable once, Joshua's own buttons untouched. Results in OmaPadDB.sim.
-local SIM_STEPS = {
-  { 7,  { 'Shadow Bolt', 'Immolate', 'Corruption', 'Life Tap', 'Summon Imp', 'Demon Skin', 'Shoot', 'Will of the Forsaken', 'Cannibalize', 'Tailoring', 'Find Minerals' } },
-  { 10, { 'Bane of Agony', 'Fear', 'Curse of Weakness', 'Drain Soul', 'Summon Voidwalker', 'Create Healthstone' } },
-  { 12, { 'Health Funnel' }, 'his' },                                       -- here Joshua puts his own thing on RT up
-  { 20, { 'Drain Life', 'Summon Sayaad', 'Ritual of Summoning', 'Create Soulstone', 'Unending Breath', 'Demon Armor' } },
-  { 30, { 'Summon Felhunter', 'Banish' } },
-  { 41, { 'Siphon Life', 'Curse of the Elements', 'Summon Felsteed' } },
+-- /ompad sim: replays levelling on a COPY of the bars (nothing on screen changes) and checks each step: no
+-- duplicates, every spell in the class's "once" list on exactly one button, Joshua's own buttons untouched.
+-- Results in OmaPadCharDB.sim. Warlock: 7-41, every known demon once. Paladin: 6-44, the seals and heals that move
+-- between buttons (Righteousness, Command, Holy Light, Flash of Light) once each at every level.
+local SIMS = {
+  WARLOCK = {
+    steps = {
+      { 7,  { 'Shadow Bolt', 'Immolate', 'Corruption', 'Life Tap', 'Summon Imp', 'Demon Skin', 'Shoot', 'Will of the Forsaken', 'Cannibalize', 'Tailoring', 'Find Minerals' } },
+      { 10, { 'Bane of Agony', 'Fear', 'Curse of Weakness', 'Drain Soul', 'Summon Voidwalker', 'Create Healthstone' } },
+      { 12, { 'Health Funnel' }, 'his' },                                   -- here Joshua puts his own thing on LT+RT up
+      { 20, { 'Drain Life', 'Summon Sayaad', 'Ritual of Summoning', 'Create Soulstone', 'Unending Breath', 'Demon Armor' } },
+      { 30, { 'Summon Felhunter', 'Banish' } },
+      { 41, { 'Siphon Life', 'Curse of the Elements', 'Summon Felsteed' } },
+    },
+    once = { 'Summon Imp', 'Summon Voidwalker', 'Summon Sayaad', 'Summon Felhunter' },
+    -- a demon may be missing only if Joshua took that demon's own set-2 button for something else
+    ownSlot = { ['Summon Imp'] = slotOf(2, 'LTRT', U), ['Summon Voidwalker'] = slotOf(2, 'LTRT', R),
+                ['Summon Sayaad'] = slotOf(2, 'LTRT', D), ['Summon Felhunter'] = slotOf(2, 'LTRT', L) },
+  },
+  PALADIN = {
+    steps = {
+      { 6,  { 'Seal of Righteousness', 'Holy Light', 'Devotion Aura', 'Judgement', 'Blessing of Might', 'Holy Strike',
+              'Seal of the Crusader', 'Divine Protection', 'Will to Survive', 'Perception', 'Blacksmithing', 'Find Minerals', 'Sense Undead' } },
+      { 10, { 'Hammer of Justice', 'Purify', 'Lay on Hands', 'Blessing of Protection', 'Righteous Fury', 'Seal of Fury' } },
+      { 12, { 'Redemption' }, 'his' },                                      -- here Joshua puts his own thing on LT+RT up
+      { 20, { 'Blessing of Wisdom', 'Retribution Aura', 'Blessing of Freedom', 'Consecration', 'Exorcism', 'Flash of Light',
+              'Blessing of Kings', 'Seal of Command' } },
+      { 34, { 'Repentance', 'Divine Shield', 'Turn Undead', 'Divine Intervention', 'Concentration Aura' } },
+      { 44, { 'Summon Warhorse', 'Cleanse', 'Hammer of Wrath' } },
+    },
+    once = { 'Seal of Righteousness', 'Seal of Command', 'Holy Light', 'Flash of Light' },
+    ownSlot = {},
+  },
 }
 local function simulate()
+  local class = playerClass()
+  local sim = SIMS[class]
+  if not sim then say('no simulation for ' .. tostring(class)); return end
+  local db, V = charDB(), VERSIONS[class] or 0
   local bars, st = {}, { mine = {}, his = {} }
   for s = PAD_FIRST, PAD_LAST do bars[s] = sigOf(s) end
-  for s, v in pairs(OmaPadDB.mine or {}) do st.mine[s] = v end
-  for s, v in pairs(OmaPadDB.his or {}) do st.his[s] = v end
+  for s, v in pairs(db.mine or {}) do st.mine[s] = v end
+  for s, v in pairs(db.his or {}) do st.his[s] = v end
   local board = { get = function(s) return bars[s] end, put = function(s, sig) bars[s] = sig; return true end, clear = function(s) bars[s] = nil end }
-  if (OmaPadDB.layoutV or 0) ~= V then for s in pairs(st.mine) do bars[s] = nil; st.mine[s] = nil end end
+  if (db.layoutV or 0) ~= V then for s in pairs(st.mine) do bars[s] = nil; st.mine[s] = nil end end
   local known, report, ok = {}, {}, true
-  local DEMONS = { 'Summon Imp', 'Summon Voidwalker', 'Summon Sayaad', 'Summon Felhunter' }
-  for _, step in ipairs(SIM_STEPS) do
+  for _, step in ipairs(sim.steps) do
     for _, n in ipairs(step[2]) do known[n] = true end
     if step[3] == 'his' then local s = slotOf(1, 'LTRT', U); bars[s] = 'spell:Joshua own choice'; st.mine[s] = nil; st.his[s] = bars[s] end
     fakeKnown = known
@@ -352,26 +478,27 @@ local function simulate()
     fakeKnown = nil
     if not okRun then ok = false; report[#report + 1] = ('lvl %d: ERROR %s'):format(step[1], tostring(err)); break end
     local dups = duplicates(board, st.mine)
-    local demons = {}
-    for _, d in ipairs(DEMONS) do if known[d] then local n = 0; for s = PAD_FIRST, PAD_LAST do if bars[s] == 'spell:' .. d then n = n + 1 end end
-      -- exactly once, unless Joshua took that demon's own button for something else (then 0 is right)
-      local own = ({ ['Summon Imp'] = slotOf(2, 'LTRT', U), ['Summon Voidwalker'] = slotOf(2, 'LTRT', R), ['Summon Sayaad'] = slotOf(2, 'LTRT', D), ['Summon Felhunter'] = slotOf(2, 'LTRT', L) })[d]
+    local once = {}
+    for _, d in ipairs(sim.once) do if known[d] then local n = 0; for s = PAD_FIRST, PAD_LAST do if bars[s] == 'spell:' .. d then n = n + 1 end end
+      local own = sim.ownSlot[d]
       local excused = n == 0 and own and st.his[own]
-      demons[#demons + 1] = d:gsub('Summon ', '') .. '=' .. n .. (excused and ' (his button)' or ''); if n > 1 or (n == 0 and not excused) then ok = false end end end
+      once[#once + 1] = d:gsub('Summon ', '') .. '=' .. n .. (excused and ' (his button)' or ''); if n > 1 or (n == 0 and not excused) then ok = false end end end
     local hisOk = not st.his[slotOf(1, 'LTRT', U)] or bars[slotOf(1, 'LTRT', U)] == 'spell:Joshua own choice'
     if #dups > 0 or not hisOk then ok = false end
-    report[#report + 1] = ('lvl %d: RT face %s/%s/%s/%s | LT face %s/%s/%s/%s | RT up=%s | set2 RT up=%s | demons %s | dups %s | his %s'):format(step[1],
+    report[#report + 1] = ('lvl %d: RT face %s/%s/%s/%s | LT face %s/%s/%s/%s | D-pad up=%s down=%s | RT up=%s | set2 RT up=%s | once %s | dups %s | his %s'):format(step[1],
       tostring(bars[slotOf(1, 'RT', X)]), tostring(bars[slotOf(1, 'RT', Y)]), tostring(bars[slotOf(1, 'RT', B)]), tostring(bars[slotOf(1, 'RT', A)]),
       tostring(bars[slotOf(1, 'LT', X)]), tostring(bars[slotOf(1, 'LT', Y)]), tostring(bars[slotOf(1, 'LT', B)]), tostring(bars[slotOf(1, 'LT', A)]),
-      tostring(bars[slotOf(1, 'RT', U)]), tostring(bars[slotOf(2, 'RT', U)]), table.concat(demons, ' '), #dups == 0 and 'none' or table.concat(dups, '; '),
+      tostring(bars[slotOf(1, 'none', U)]), tostring(bars[slotOf(1, 'none', D)]),
+      tostring(bars[slotOf(1, 'RT', U)]), tostring(bars[slotOf(2, 'RT', U)]), table.concat(once, ' '), #dups == 0 and 'none' or table.concat(dups, '; '),
       hisOk and 'kept' or 'TOUCHED')
   end
-  OmaPadDB.sim = { at = date('%Y-%m-%d %H:%M:%S'), pass = ok, steps = report }
+  db.sim = { at = date('%Y-%m-%d %H:%M:%S'), pass = ok, steps = report }
   say('simulation ' .. (ok and '|cff60ff60passed|r' or '|cffff6060FAILED|r') .. ' (' .. #report .. ' steps, details saved)')
 end
 
 -- RestedXP: this realm keeps changing its name, which gives RestedXP a blank profile. Keep Bujuju's own.
 local function keepRxpProfile()
+  if playerClass() ~= 'WARLOCK' then return end                -- Bujuju's profile only; never put it on another character
   local adb = LibStub and LibStub('AceDB-3.0', true); if not adb or not adb.db_registry then return end
   for db in pairs(adb.db_registry) do
     if db.sv == RXPSettings and db.profiles and db.profiles['Bujuju Banton'] and db:GetCurrentProfile() ~= 'Bujuju Banton' then
@@ -569,7 +696,7 @@ SlashCmdList.OMASHUPAD = function(m)
     OmaPadDB.keys, OmaPadDB.keyCVars = out, cv
     say('pad keys saved; /reload to write them to the file (an add-on can\'t reload by itself).'); return
   end
-  if m == 'mine' then OmaPadDB.his = {}; OmaPadDB.rulesV = 0 end
+  if m == 'mine' then local c = charDB(); c.his = {}; c.rulesV = 0 end
   apply()
 end
 
