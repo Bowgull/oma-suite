@@ -21,7 +21,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local VERSIONS = { WARLOCK = 10, PALADIN = 1 } -- layout version per class: bump a class's number when its LAYOUT changes
+local VERSIONS = { WARLOCK = 11, PALADIN = 1 } -- layout version per class: bump a class's number when its LAYOUT changes
 local function playerClass() return select(2, UnitClass('player')) end
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
@@ -73,7 +73,7 @@ LAYOUTS.WARLOCK = {
   -- bare D-pad: support
   { 1, 'none', U, 'macro', 'PetHome' },                                  -- demon: passive + follow
   { 1, 'none', R, 'item', STONES },                                      -- Healthstone
-  { 1, 'none', L, 'spell', 'Health Funnel' },
+  { 1, 'none', L, 'spell', 'Wrack' },                                    -- v11: capstone channel (was Health Funnel -> set 2)
   { 1, 'none', D, 'spell', 'Shadow Bolt' },
   -- RT + D-pad
   { 1, 'RT', U, 'spell', { 'Siphon Life', 'Drain Soul' } },              -- Drain Soul until 41, then Siphon Life (Drain Soul -> set 2)
@@ -84,23 +84,25 @@ LAYOUTS.WARLOCK = {
   { 1, 'LT', U, 'spell', 'Cannibalize' },
   { 1, 'LT', R, 'spell', 'Death Coil' },
   { 1, 'LT', L, 'spell', 'Howl of Terror' },
-  { 1, 'LT', D, 'spell', 'Shadow Ward' },
+  { 1, 'LT', D, 'spell', 'Amplify Curse' },                              -- v11: before Bane every few pulls (Shadow Ward dropped)
   -- LT + RT: out of the fight. v8 (Joshua 2026-11-10, "Is there a way to get them on page one?" / "Sounds good"):
   -- Hearthstone and the professions here; ONE demon button that follows your newest demon; every demon has its own
   -- button on set 2 for when you want a different one (rule 5 skips the set-2 copy of the one this button shows).
   { 1, 'LTRT', U, 'item', 6948 },                                          -- Hearthstone
   { 1, 'LTRT', R, 'spell', 'Find Minerals' },
   { 1, 'LTRT', L, 'spell', 'Tailoring' },
-  { 1, 'LTRT', D, 'spell', { 'Summon Felhunter', 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus', 'Summon Voidwalker', 'Summon Imp' } },
+  -- v11 (Joshua 2026-11-26: "I'm just using succubus", Felhunter "pretty bad for leveling and dungeons rn"): the main
+  -- demon button prefers the Succubus/Incubus and never jumps to the Felhunter.
+  { 1, 'LTRT', D, 'spell', { 'Summon Succubus', 'Summon Incubus', 'Summon Sayaad', 'Summon Voidwalker', 'Summon Imp' } },
   { 1, 'LTRT', X, 'food', FOODS },
   { 1, 'LTRT', Y, 'drink', WATERS },
   { 1, 'LTRT', B, 'spell', { 'Demon Armor', 'Demon Skin' } },
   { 1, 'LTRT', A, 'spell', 'Create Healthstone' },
   -- SET 2 (LB+RB, D-pad right): travel and utility. Fills in as you level.
-  { 2, 'LTRT', U, 'spell', 'Summon Imp' },                               -- every demon, one each (v8)
-  { 2, 'LTRT', R, 'spell', 'Summon Voidwalker' },
-  { 2, 'LTRT', D, 'spell', { 'Summon Sayaad', 'Summon Succubus', 'Summon Incubus' } },
-  { 2, 'LTRT', L, 'spell', 'Summon Felhunter' },
+  { 2, 'LTRT', U, 'spell', 'Summon Imp' },                               -- the odd swap (v11: the only spare demon left)
+  { 2, 'LTRT', R, 'spell', 'Health Funnel' },                            -- v11: was Voidwalker
+  { 2, 'LTRT', L, 'spell', 'Drain Mana' },                               -- v11: was Felhunter
+  { 2, 'RT', X, 'spell', 'Curse of Weakness' },                          -- v11: RT face on set 2 = all curses
   { 2, 'none', U, 'spell', { 'Summon Dreadsteed', 'Summon Felsteed' } }, -- mount (40)
   { 2, 'none', R, 'spell', 'Create Soulstone' },                         -- 18
   { 2, 'none', L, 'spell', 'Ritual of Summoning' },                      -- 20
@@ -110,7 +112,7 @@ LAYOUTS.WARLOCK = {
   { 2, 'RT', Y, 'spell', 'Curse of Tongues' },
   { 2, 'RT', B, 'spell', 'Curse of Recklessness' },
   { 2, 'RT', A, 'spell', 'Curse of Exhaustion' },
-  { 2, 'LT', R, 'spell', 'Enslave Demon' },
+  { 2, 'LT', R, 'spell', { 'Subjugate Demon', 'Enslave Demon' } },       -- v11: Forever renamed it Subjugate Demon
   { 2, 'RT', R, 'spell', 'Eye of Kilrogg' },
   { 2, 'LT', L, 'spell', 'Detect Invisibility' },
   { 2, 'LT', D, 'spell', 'Sense Demons' },
@@ -426,7 +428,7 @@ end
 
 -- /ompad sim: replays levelling on a COPY of the bars (nothing on screen changes) and checks each step: no
 -- duplicates, every spell in the class's "once" list on exactly one button, Joshua's own buttons untouched.
--- Results in OmaPadCharDB.sim. Warlock: 7-41, every known demon once. Paladin: 6-44, the seals and heals that move
+-- Results in OmaPadCharDB.sim. Warlock: 7-41, Imp, Succubus and the v11 additions once, Felhunter and Shadow Ward never. Paladin: 6-44, the seals and heals that move
 -- between buttons (Righteousness, Command, Holy Light, Flash of Light) once each at every level.
 local SIMS = {
   WARLOCK = {
@@ -434,14 +436,14 @@ local SIMS = {
       { 7,  { 'Shadow Bolt', 'Immolate', 'Corruption', 'Life Tap', 'Summon Imp', 'Demon Skin', 'Shoot', 'Will of the Forsaken', 'Cannibalize', 'Tailoring', 'Find Minerals' } },
       { 10, { 'Bane of Agony', 'Fear', 'Curse of Weakness', 'Drain Soul', 'Summon Voidwalker', 'Create Healthstone' } },
       { 12, { 'Health Funnel' }, 'his' },                                   -- here Joshua puts his own thing on LT+RT up
-      { 20, { 'Drain Life', 'Summon Sayaad', 'Ritual of Summoning', 'Create Soulstone', 'Unending Breath', 'Demon Armor' } },
-      { 30, { 'Summon Felhunter', 'Banish' } },
-      { 41, { 'Siphon Life', 'Curse of the Elements', 'Summon Felsteed' } },
+      { 20, { 'Drain Life', 'Summon Succubus', 'Ritual of Summoning', 'Create Soulstone', 'Unending Breath', 'Demon Armor', 'Amplify Curse' } },
+      { 30, { 'Summon Felhunter', 'Banish', 'Subjugate Demon', 'Drain Mana', 'Curse of Tongues', 'Shadow Ward' } },
+      { 41, { 'Siphon Life', 'Curse of the Elements', 'Summon Felsteed', 'Wrack' } },
     },
-    once = { 'Summon Imp', 'Summon Voidwalker', 'Summon Sayaad', 'Summon Felhunter' },
-    -- a demon may be missing only if Joshua took that demon's own set-2 button for something else
-    ownSlot = { ['Summon Imp'] = slotOf(2, 'LTRT', U), ['Summon Voidwalker'] = slotOf(2, 'LTRT', R),
-                ['Summon Sayaad'] = slotOf(2, 'LTRT', D), ['Summon Felhunter'] = slotOf(2, 'LTRT', L) },
+    -- Imp and Succubus are reachable exactly once; the Felhunter never gets a button (see mainDemon below)
+    once = { 'Summon Imp', 'Summon Succubus', 'Curse of Weakness', 'Health Funnel', 'Wrack', 'Amplify Curse', 'Subjugate Demon' },
+    never = { 'Summon Felhunter', 'Shadow Ward' },
+    ownSlot = { ['Summon Imp'] = slotOf(2, 'LTRT', U) },
   },
   PALADIN = {
     steps = {
@@ -455,6 +457,7 @@ local SIMS = {
       { 44, { 'Summon Warhorse', 'Cleanse', 'Hammer of Wrath' } },
     },
     once = { 'Seal of Righteousness', 'Seal of Command', 'Holy Light', 'Flash of Light' },
+    never = {},
     ownSlot = {},
   },
 }
@@ -483,6 +486,8 @@ local function simulate()
       local own = sim.ownSlot[d]
       local excused = n == 0 and own and st.his[own]
       once[#once + 1] = d:gsub('Summon ', '') .. '=' .. n .. (excused and ' (his button)' or ''); if n > 1 or (n == 0 and not excused) then ok = false end end end
+    for _, d in ipairs(sim.never) do for s = PAD_FIRST, PAD_LAST do if bars[s] == 'spell:' .. d then
+      ok = false; once[#once + 1] = d .. ' ON ' .. s end end end
     local hisOk = not st.his[slotOf(1, 'LTRT', U)] or bars[slotOf(1, 'LTRT', U)] == 'spell:Joshua own choice'
     if #dups > 0 or not hisOk then ok = false end
     report[#report + 1] = ('lvl %d: RT face %s/%s/%s/%s | LT face %s/%s/%s/%s | D-pad up=%s down=%s | RT up=%s | set2 RT up=%s | once %s | dups %s | his %s'):format(step[1],

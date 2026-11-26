@@ -78,7 +78,7 @@ local function ok(v, msg) if not v then error(msg or 'expected true', 2) end end
 
 local tests = {}
 
-tests['warlock: old account-wide memory moves onto the warlock and no button moves'] = function()
+tests['warlock: old account-wide memory moves onto the warlock; his buttons stay'] = function()
   -- what the old version left in OmaPadDB: Corruption on RT X (placed by the add-on), his own thing on RT Y
   local cor, own = slotOf(1, 'RT', X), slotOf(1, 'RT', Y)
   local acct = { mine = { [cor] = 'spell:Corruption' }, his = { [own] = 'spell:Fireball' }, rulesV = 1, layoutV = 10,
@@ -90,7 +90,7 @@ tests['warlock: old account-wide memory moves onto the warlock and no button mov
   pad()
   eq(OmaPadCharDB.mine[cor], 'spell:Corruption', 'mine moved to the character')
   eq(OmaPadCharDB.his[own], 'spell:Fireball', 'his moved to the character')
-  eq(OmaPadCharDB.layoutV, 10, 'layout version kept')
+  eq(OmaPadCharDB.layoutV, 11, 'moved, then updated to v11 (only the add-on\'s own buttons re-placed)')
   eq(OmaPadDB.mine, nil, 'account copy removed'); eq(OmaPadDB.his, nil)
   eq(OmaPadDB.padMovedTo, 'Bujuju')
   eq(OmaPadDB.vendorV, 1, 'account settings untouched'); eq(OmaPadDB.settingsV, 4)
@@ -163,6 +163,36 @@ tests['sim: both classes pass'] = function()
   ok(OmaPadCharDB.sim and OmaPadCharDB.sim.pass, 'paladin sim: ' .. table.concat(OmaPadCharDB.sim and OmaPadCharDB.sim.steps or {}, '\n'))
   load('WARLOCK', 'Bujuju', {}, nil); pad('sim')
   ok(OmaPadCharDB.sim and OmaPadCharDB.sim.pass, 'warlock sim: ' .. table.concat(OmaPadCharDB.sim and OmaPadCharDB.sim.steps or {}, '\n'))
+end
+
+tests['warlock v11: Succubus stays the main demon, Felhunter never gets a button'] = function()
+  load('WARLOCK', 'Bujuju', {}, nil)
+  learn({ 'Summon Imp', 'Summon Voidwalker', 'Summon Succubus', 'Summon Felhunter' }); pad()
+  eq(spellOn(1, 'LTRT', D), 'Summon Succubus', 'main demon button')
+  eq(spellOn(2, 'LTRT', U), 'Summon Imp', 'Imp kept for the odd swap')
+  for s = 181, 264 do local a = W.slots[s]; ok(not (a and SPELL_NAMES[a[2]] == 'Summon Felhunter'), 'Felhunter placed on ' .. s) end
+end
+
+tests['warlock v11: Wrack, Amplify Curse, curses and Subjugate get their buttons; no Shadow Ward'] = function()
+  load('WARLOCK', 'Bujuju', {}, nil)
+  learn({ 'Curse of Weakness', 'Curse of the Elements', 'Curse of Tongues', 'Wrack', 'Amplify Curse', 'Subjugate Demon',
+          'Drain Mana', 'Health Funnel', 'Shadow Ward' }); pad()
+  eq(spellOn(1, 'none', L), 'Wrack'); eq(spellOn(1, 'LT', D), 'Amplify Curse')
+  eq(spellOn(1, 'RT', L), 'Curse of the Elements'); eq(spellOn(2, 'RT', X), 'Curse of Weakness'); eq(spellOn(2, 'RT', Y), 'Curse of Tongues')
+  eq(spellOn(2, 'LT', R), 'Subjugate Demon', 'renamed spell fills'); eq(spellOn(2, 'LTRT', R), 'Health Funnel'); eq(spellOn(2, 'LTRT', L), 'Drain Mana')
+  for s = 181, 264 do local a = W.slots[s]; ok(not (a and SPELL_NAMES[a[2]] == 'Shadow Ward'), 'Shadow Ward placed on ' .. s) end
+end
+
+tests['warlock v10 -> v11: only the add-on\'s buttons move, his stay'] = function()
+  local hf, mine, his = slotOf(1, 'none', L), slotOf(1, 'RT', X), slotOf(1, 'RT', Y)
+  local acct = { mine = { [hf] = 'spell:Health Funnel', [mine] = 'spell:Corruption' }, his = { [his] = 'spell:Fireball' }, rulesV = 1, layoutV = 10 }
+  load('WARLOCK', 'Bujuju', acct, nil)
+  learn({ 'Health Funnel', 'Corruption', 'Fireball', 'Wrack' })
+  W.slots[hf] = { 'spell', spellId('Health Funnel') }; W.slots[mine] = { 'spell', spellId('Corruption') }; W.slots[his] = { 'spell', spellId('Fireball') }
+  pad()
+  eq(OmaPadCharDB.layoutV, 11)
+  eq(spellOn(1, 'none', L), 'Wrack', 'Health Funnel slot now Wrack'); eq(spellOn(2, 'LTRT', R), 'Health Funnel', 'Funnel moved to set 2')
+  eq(spellOn(1, 'RT', X), 'Corruption', 'Corruption re-placed'); eq(spellOn(1, 'RT', Y), 'Fireball', 'his button kept')
 end
 
 tests['other classes: only the Meters macro, no buttons'] = function()
