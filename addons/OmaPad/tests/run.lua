@@ -141,7 +141,7 @@ tests['paladin v3: Mastercraft and Polestar on/off on set 1 LT+RT left and right
   local function macroOn(set, mod, b) local a = W.slots[slotOf(set, mod, b)]; return a and a[1] == 'macro' and W.macros[a[2]] and W.macros[a[2]].name end
   eq(macroOn(1, 'LTRT', L), 'Mastercraft'); eq(macroOn(1, 'LTRT', R), 'Polestar')
   local body; for _, m in pairs(W.macros) do if m.name == 'Polestar' then body = m.body end end
-  ok(body and body:find('ui.shown', 1, true), 'toggles the guide window')
+  ok(body == '/run Polestar.ToggleHidden()', 'hides and shows all of Polestar')
   local mc; for _, m in pairs(W.macros) do if m.name == 'Mastercraft' then mc = m.body end end
   ok(mc == '/mc', 'Mastercraft opens its window')
 end

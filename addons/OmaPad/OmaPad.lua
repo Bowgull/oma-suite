@@ -50,7 +50,8 @@ MACROS_BY_CLASS.WARLOCK = {                    -- Joshua's two demon buttons (hi
 -- Mastercraft's window is mouse-only: the phone's trackpad (remote sheet 19) works it. (The game's own controller
 -- pointer, SetGamePadCursorControl, did nothing in Forever: tried 2026-11-26.)
 local MASTERCRAFT_MACRO = { 'Mastercraft', '/mc', 'Trade_BlackSmithing' }
-local POLESTAR_MACRO = { 'Polestar', '/run Polestar.Set("ui.shown",not Polestar.Get("ui.shown"))', 'INV_Misc_Map_01' }
+-- all of Polestar (guide window, arrow, map pins) off and back on: its own hide switch (Joshua: the arrow stayed)
+local POLESTAR_MACRO = { 'Polestar', '/run Polestar.ToggleHidden()', 'INV_Misc_Map_01' }
 MACROS_BY_CLASS.PALADIN = { METERS_MACRO, MASTERCRAFT_MACRO, POLESTAR_MACRO }
 local function classMacros() return MACROS_BY_CLASS[playerClass()] or { METERS_MACRO } end
 -- the warlock's retired macros (character macros, so only ever on the warlock)
