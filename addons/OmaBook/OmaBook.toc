@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: OmaBook
+## Notes: Saves your level, talents, spells, weapon, bags and class quests for the Paladin Book on the phone remote. Read-only.
+## Author: Omashu
+## Version: 1
+## SavedVariablesPerCharacter: OmaBookDB
+
+OmaBook.lua
