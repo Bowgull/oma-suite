@@ -50,7 +50,8 @@ MACROS_BY_CLASS.WARLOCK = {                    -- Joshua's two demon buttons (hi
 -- Mastercraft's window is mouse-only: the phone's trackpad (remote sheet 19) works it. (The game's own controller
 -- pointer, SetGamePadCursorControl, did nothing in Forever: tried 2026-11-26.)
 local MASTERCRAFT_MACRO = { 'Mastercraft', '/mc', 'Trade_BlackSmithing' }
-local POLESTAR_MACRO = { 'Polestar', '/run Polestar.Set("ui.shown",not Polestar.Get("ui.shown"))', 'INV_Misc_Map_01' }
+-- all of Polestar (guide window, arrow, map pins) off and back on: its own hide switch (Joshua: the arrow stayed)
+local POLESTAR_MACRO = { 'Polestar', '/run Polestar.ToggleHidden()', 'INV_Misc_Map_01' }
 MACROS_BY_CLASS.PALADIN = { METERS_MACRO, MASTERCRAFT_MACRO, POLESTAR_MACRO }
 local function classMacros() return MACROS_BY_CLASS[playerClass()] or { METERS_MACRO } end
 -- the warlock's retired macros (character macros, so only ever on the warlock)
@@ -703,6 +704,9 @@ local function moveBreathBar()
   local f = rawget(_G, 'MirrorTimerContainer') or rawget(_G, 'MirrorTimer1')
   if not f or InCombatLockdown() then return end
   f:ClearAllPoints(); f:SetPoint('TOP', UIParent, 'TOP', 0, -150)
+  -- quest progress ("Half-Eaten Fish: 6/7") and the game's red errors: under the breath bar too (was TOP -122)
+  local e = rawget(_G, 'UIErrorsFrame')
+  if e then e:ClearAllPoints(); e:SetPoint('TOP', UIParent, 'TOP', 0, -190) end
 end
 local busy
 local function later() if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply() end) end
