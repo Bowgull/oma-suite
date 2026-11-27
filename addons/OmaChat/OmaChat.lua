@@ -6,7 +6,8 @@
 -- The strip (version 2, 2026-11-11): ONE row of 1x1 screen pixels on the bottom edge. Pixel 1 magenta, pixel 2 cyan,
 -- pixel 3 = (2, 79, 77) ("v2"), then 3 bytes per pixel in red, green, blue (every level 0-255 arrives exactly: the
 -- /omachat ramp test, 768 of 768). The bytes:
---   flags (1: chat box open, 2: aux's search box is on screen, 4: aux's search box has the keyboard) | how many lines (1) |
+--   flags (1: chat box open, 2: the auction house is open, 4: its search box has the keyboard, 8: the game's own auction
+--   window is the one showing, not ImprovedForever's) | how many lines (1) |
 --   each line: number (2) + length (2) + speaker's class (1: 0 unknown, else WoW's class ID) + UTF-8 |
 --   check (2: CRC-16/CCITT of every byte before it)
 -- It always shows the NEWEST lines that fit (300 bytes, about 105 pixels), so a line stays on the strip for several
@@ -90,15 +91,34 @@ ourBox:SetScript("OnEnterPressed", function(b)
   B.main, B.sub, B.subsub, B.search = 0, 1, 1, text
   pcall(B.Query)
 end)
+-- The game's own auction window is the one on screen: ImprovedForever's is closed (the phone's lever, 2026-11-27).
+-- ImprovedForever only makes the game's window see-through while its own is up, so "shown" alone isn't enough.
+local function gameWindow()
+  local w, native = rawget(_G, "ImprovedForeverAuctionBuy"), rawget(_G, "AuctionHouseFrame")
+  return ahOpen and native and native:IsShown() and not (w and w:IsShown()) and true or false
+end
+-- The game's own search box. Couch Mode types straight into it and presses Enter, so the game runs its own search
+-- from a real key press; this add-on only puts the keyboard there and selects what's in it (never sets its text,
+-- which would mark the game's auction code as touched by an add-on).
+local function gameBox()
+  local bar = AuctionHouseFrame and AuctionHouseFrame.SearchBar
+  return bar and bar.SearchBox
+end
 local function searchBox()
+  if gameWindow() then return gameBox() end
   if improved() and loaded("ImprovedForever_Auction") then return ourBox end
   return findAuxBox()
 end
 local focusBtn = CreateFrame("Button", "OmashuAuxSearchFocus", UIParent)
 focusBtn:SetScript("OnClick", function()
   local b = ahOpen and searchBox()
-  if b then b:Show() end
-  if b and b:IsVisible() then b:SetFocus(); b:SetText(""); b:SetCursorPosition(0) end
+  if not b then return end
+  if b == gameBox() then
+    if b:IsVisible() then b:SetFocus(); b:HighlightText() end   -- what's typed replaces the old search
+    return
+  end
+  b:Show()
+  if b:IsVisible() then b:SetFocus(); b:SetText(""); b:SetCursorPosition(0) end
 end)
 -- The phone's "Switch window" button (Joshua 2026-11-26): ImprovedForever's controller window <-> the game's own auction
 -- window underneath it (ImprovedForever only makes that one invisible), for the phone trackpad. The auction house stays open.
@@ -123,8 +143,8 @@ end)
 local function auxFlags()
   if not ahOpen then return 0 end
   local b = searchBox()
-  if not (b and b:IsVisible()) then return 0 end
-  return 2 + (b:HasFocus() and 4 or 0)
+  -- 2 = the auction house is open (the lever works in either window); typing waits for 4 anyway
+  return 2 + (b and b:IsVisible() and b:HasFocus() and 4 or 0) + (gameWindow() and 8 or 0)
 end
 
 -- The newest lines that fit, oldest first.
