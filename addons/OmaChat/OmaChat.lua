@@ -100,6 +100,15 @@ focusBtn:SetScript("OnClick", function()
   if b then b:Show() end
   if b and b:IsVisible() then b:SetFocus(); b:SetText(""); b:SetCursorPosition(0) end
 end)
+-- The phone's "Switch window" button (Joshua 2026-11-26): ImprovedForever's controller window <-> the game's own auction
+-- window underneath it (ImprovedForever only makes that one invisible), for the phone trackpad. The auction house stays open.
+local swapBtn = CreateFrame("Button", "OmashuAhSwap", UIParent)
+swapBtn:SetScript("OnClick", function()
+  local B, w = improved(), rawget(_G, "ImprovedForeverAuctionBuy")
+  if not (ahOpen and B and w) or InCombatLockdown() then return end
+  if w:IsShown() then w:Hide() elseif B.Show then B.Show() end
+end)
+local SWAP = "CTRL-SHIFT-F10"
 local KEY = "CTRL-SHIFT-F11"
 local ahEv = CreateFrame("Frame")
 ahEv:RegisterEvent("AUCTION_HOUSE_SHOW"); ahEv:RegisterEvent("AUCTION_HOUSE_CLOSED")
@@ -109,6 +118,7 @@ ahEv:SetScript("OnEvent", function(_, e)
   if InCombatLockdown() then ahEv:RegisterEvent("PLAYER_REGEN_ENABLED"); return end   -- set (or cleared) once combat ends
   ahEv:UnregisterEvent("PLAYER_REGEN_ENABLED")
   if ahOpen then SetOverrideBindingClick(focusBtn, true, KEY, "OmashuAuxSearchFocus") else ClearOverrideBindings(focusBtn) end
+  if ahOpen then SetOverrideBindingClick(swapBtn, true, SWAP, "OmashuAhSwap") else ClearOverrideBindings(swapBtn) end
 end)
 local function auxFlags()
   if not ahOpen then return 0 end
