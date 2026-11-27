@@ -425,7 +425,7 @@ tests['auction house: the Equipped boxes go on top under the bags, right-aligned
   local p = c1.pts[1]
   ok(p[1] == 'TOPRIGHT' and p[3] == 'TOPLEFT', 'first compare box right-aligned')
   ok(math.abs(p[4] - r / PXT / 0.9) < 0.01, 'right edge on the bag window\'s right edge')
-  ok(math.abs(p[5] + (btm + 8 + 28) / PXT / 0.9) < 0.01, '8 px under the bags, pushed down by the 28 px tab (no header)')
+  ok(math.abs(p[5] + (btm + 34 + 28) / PXT / 0.9) < 0.01, '8 px under the bags, pushed down by the 28 px tab (no header)')
   ok(c2.pts[1][1] == 'TOPRIGHT' and c2.pts[1][3] == 'BOTTOMLEFT', 'second box under the first, right-aligned')
   local m = w.tip.pts[1]
   ok(m[1] == 'TOPRIGHT' and m[3] == 'BOTTOMLEFT', 'item tooltip under the last compare box')
@@ -436,7 +436,7 @@ tests['auction house: no compare box, the item tooltip sits under the bags, righ
   OmaPadPutTipsForTest()
   local r, btm = bagEdge(w)
   local m = w.tip.pts[1]
-  ok(m[1] == 'TOPRIGHT' and math.abs(m[4] - r / PXT / 0.9) < 0.01 and math.abs(m[5] + (btm + 8) / PXT / 0.9) < 0.01, 'under the bags, right edges level')
+  ok(m[1] == 'TOPRIGHT' and math.abs(m[4] - r / PXT / 0.9) < 0.01 and math.abs(m[5] + (btm + 34) / PXT / 0.9) < 0.01, 'under the bags, right edges level')
   ok(c1.pts[1][1] == 'CENTER', 'compare boxes untouched')
 end
 tests['compare tab: measured from the box header when it has one'] = function()
@@ -446,7 +446,7 @@ tests['compare tab: measured from the box header when it has one'] = function()
   OmaPadPutTipsForTest()
   local tab = 30 * 0.9 * PXT
   local _, btm = bagEdge(w)
-  ok(math.abs(c1.pts[1][5] + (btm + 8 + tab) / PXT / 0.9) < 0.01, 'pushed down by the header height: ' .. tostring(c1.pts[1][5]))
+  ok(math.abs(c1.pts[1][5] + (btm + 34 + tab) / PXT / 0.9) < 0.01, 'pushed down by the header height: ' .. tostring(c1.pts[1][5]))
   -- the bags use the same math
   local w2 = layoutWorld(); w2.merchant.shown = false; w2.tip.GetOwner = function() return w2.bags end
   local b1 = win('ShoppingTooltip1', 600, 600, 250, 100); b1.CompareHeader = h; win('ShoppingTooltip2', 0, 0, 1, 1).shown = false

@@ -1204,7 +1204,7 @@ local function placeTips()
   local side, bags = 'LEFT', rawget(_G, 'KroGamepadBagsFrame')
   if ahLayoutOn and bags and bags:IsShown() and bags:GetLeft() then
     local _, _, bRight, bBottom = px(bags)
-    if bRight then side, x, y = 'RIGHT', bRight, bBottom + 8 end
+    if bRight then side, x, y = 'RIGHT', bRight, bBottom + 34 end   -- (the bag window's footer hangs ~26 px below its edge)
   end
   local anchor = side == 'RIGHT' and 'TOPRIGHT' or 'TOPLEFT'
   local main
