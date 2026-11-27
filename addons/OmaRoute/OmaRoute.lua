@@ -46,6 +46,7 @@ local function db()
   t.ran = t.ran or {}
   t.log = t.log or {}
   if t.keepHearth == nil then t.keepHearth = true end
+  if t.peopleOnly == nil then t.peopleOnly = true end
   return t
 end
 local function note(msg)
@@ -217,6 +218,39 @@ local function keepHearth()
     end
   end
 end
+-- Polestar's target list (the names beside its target button), people only (Joshua 2026-11-27: "only target quest
+-- people, quest givers... I don't need it to target random trash mobs"). Polestar has no setting for it. Its list is
+-- built by QoL.Buttons.TargetNames(view, raw, npcs, here, cap, info), called with info = true only for the list
+-- (Buttons.lua:3643); with no kill/loot goal to name it falls back to the step's NPC goals (accept, turn in, talk,
+-- train...). So for that call the step's kill/collect/loot goals are shown to it as nothing to name, the pinned
+-- "Along the way" goals and the While you're here rows (mobs) are left out, and Polestar names the people.
+-- The step key and the target button's own targeting (other calls) are untouched.
+local MOB = { kill = true, collect = true }
+local function hidePeopleless(goals)
+  if type(goals) ~= 'table' then return goals end
+  local out = {}
+  for i, g in ipairs(goals) do
+    if type(g) == 'table' and (MOB[g.t] or (g.t == 'use' and type(g.fromNpcs) == 'table')) then out[i] = { t = 'omaroute-hidden' } else out[i] = g end
+  end
+  return out
+end
+local function peopleOnlyHook()
+  local P = PS(); local B = P and P.QoL and P.QoL.Buttons
+  if not (B and type(B.TargetNames) == 'function') or B.omaroutePeople then return end
+  local orig = B.TargetNames
+  B.omaroutePeople = true
+  B.TargetNames = function(view, raw, npcs, here, cap, info)
+    if not (info and db().peopleOnly and type(view) == 'table') then return orig(view, raw, npcs, here, cap, info) end
+    local v = {}; for k, val in pairs(view) do v[k] = val end
+    v.goals = hidePeopleless(view.goals)
+    local e = E(); local along = e and e.GetAlong
+    if along then e.GetAlong = function() return {} end end
+    local ok, a, b, c, d = pcall(orig, v, hidePeopleless(raw), true, false, cap, info)
+    if along then e.GetAlong = along end
+    if ok then return a, b, c, d end
+    return orig(view, raw, npcs, here, cap, info)
+  end
+end
 -- Polestar hands out STEP_CHANGED (a new open step, or another tab made active) while it evaluates: the tick
 -- waits for the next frame so it never re-enters that evaluation.
 local function keepHearthSoon() C_Timer.After(0, keepHearth) end
@@ -226,6 +260,7 @@ do
     P.On('STEP_CHANGED', keepHearthSoon)
     P.On('GUIDE_CHANGED', keepHearthSoon)
   end
+  peopleOnlyHook()
 end
 
 local f = CreateFrame('Frame')
@@ -244,7 +279,7 @@ f:SetScript('OnEvent', function(_, ev)
   end
   checkInside()
   local wait = ev == 'PLAYER_ENTERING_WORLD' and 8 or 2 -- Polestar builds its tabs after login
-  C_Timer.After(wait, function() checkInside(); step(ev); keepHearth() end)
+  C_Timer.After(wait, function() checkInside(); step(ev); keepHearth(); peopleOnlyHook() end)
 end)
 
 SLASH_OMAROUTE1 = '/omroute'
@@ -263,6 +298,9 @@ SlashCmdList.OMAROUTE = function(msg)
     if t.keepHearth then keepHearth() end
   elseif msg == 'hearth' then
     say('keep hearth is ' .. (t.keepHearth and 'on' or 'off') .. ' (/omroute hearth on|off).')
+  elseif msg == 'targets people' or msg == 'targets all' then
+    t.peopleOnly = msg == 'targets people'
+    say(t.peopleOnly and "Polestar's target list: people you need only (quest givers, hand-ins, talk)." or "Polestar's target list: everything, mobs too.")
   elseif msg == 'back' then t.i = math.max(1, t.i - 1); t.announced = nil; step('back')
   else
     local cur, i, n = current()

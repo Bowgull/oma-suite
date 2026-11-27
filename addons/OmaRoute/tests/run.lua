@@ -50,7 +50,11 @@ local function world(level)
       end,
     },
     On = function(msg, fn) W.bus[msg] = W.bus[msg] or {}; table.insert(W.bus[msg], fn) end,
+    QoL = { Buttons = { TargetNames = function(view, raw, npcs, here, cap, info)
+      W.tn = { view = view, raw = raw, npcs = npcs, here = here, cap = cap, info = info, along = #_G.Polestar.Engine.GetAlong() }
+      return { 'x' }, {}, {}, {} end } },
   }
+  _G.Polestar.Engine.GetAlong = function() return { { goals = { { t = 'kill' } } } } end
   W.bus, W.manual, W.toggles, W.step = {}, {}, 0, 1
   W.guide = nil -- no guide open unless a test opens one (hills())
   dofile('OmaRoute.lua')
@@ -189,6 +193,21 @@ tests['keep hearth: off by /omroute hearth off, back on with on; default on'] = 
   world(30); hills(); bus('STEP_CHANGED', 1); eq(OmaRouteDB.keepHearth, true, 'default on'); eq(W.manual['1:2'], 'tick')
 end
 
+tests['target list: people only (kill/loot goals, along and While you\'re here left out); other callers untouched'] = function()
+  world(10)
+  local B = _G.Polestar.QoL.Buttons
+  local view = { index = 3, goals = { { t = 'kill', npc = 1 }, { t = 'turnin', npc = 2 }, { t = 'collect' }, { t = 'use', fromNpcs = {} } } }
+  B.TargetNames(view, view.goals, true, true, 5, true)
+  local g = W.tn.view.goals
+  eq(g[1].t, 'omaroute-hidden', 'kill hidden'); eq(g[2].t, 'turnin', 'turn-in kept'); eq(g[3].t, 'omaroute-hidden', 'collect hidden'); eq(g[4].t, 'omaroute-hidden', 'loot-from-mob hidden')
+  eq(W.tn.raw[1].t, 'omaroute-hidden', 'raw aligned'); eq(W.tn.npcs, true); eq(W.tn.here, false, 'no While you\'re here mobs'); eq(W.tn.along, 0, 'no Along the way goals during the call')
+  eq(#_G.Polestar.Engine.GetAlong(), 1, 'Along the way restored after'); eq(view.goals[1].t, 'kill', 'Polestar\'s own view untouched')
+  B.TargetNames(view, view.goals)
+  eq(W.tn.view.goals[1].t, 'kill', 'the step key and target button calls untouched')
+  _G.SlashCmdList.OMAROUTE('targets all')
+  B.TargetNames(view, view.goals, true, true, 5, true)
+  eq(W.tn.view.goals[1].t, 'kill', 'off: everything as before'); eq(W.tn.here, true)
+end
 tests['keep hearth: no error without Polestar, or with an old Polestar lacking the calls'] = function()
   world(30); hills()
   _G.Polestar = nil
