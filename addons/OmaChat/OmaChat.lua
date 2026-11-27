@@ -58,12 +58,13 @@ local function boxOpen() return ChatEdit_GetActiveWindow and ChatEdit_GetActiveW
 -- While it's on screen, Ctrl+Shift+F11 (a binding only while the auction house is open) puts the keyboard in it,
 -- empty, so Couch Mode can type the search and press Enter (aux's own search). Couch Mode types only after the strip
 -- says the box has the keyboard (flag 4), so letters never reach the game's key bindings.
+local loaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or rawget(_G, "IsAddOnLoaded") or function() return false end
 local auxBox, lookedAt = nil, 0
 local function findAuxBox()
   if auxBox then return auxBox end
   if GetTime() - lookedAt < 1 then return nil end   -- the scan walks every frame: at most once a second
   lookedAt = GetTime()
-  if not (AuctionFrame or AuctionHouseFrame or IsAddOnLoaded and IsAddOnLoaded("auxForever")) then return nil end
+  if not loaded("auxForever") then return nil end   -- no aux: never walk every frame for nothing
   local f = EnumerateFrames()
   while f do
     if f.IsObjectType and f:IsObjectType("EditBox") and type(f.enter) == "function" and type(f.complete) == "function"
@@ -90,7 +91,7 @@ ourBox:SetScript("OnEnterPressed", function(b)
   pcall(B.Query)
 end)
 local function searchBox()
-  if improved() and IsAddOnLoaded and IsAddOnLoaded("ImprovedForever_Auction") then return ourBox end
+  if improved() and loaded("ImprovedForever_Auction") then return ourBox end
   return findAuxBox()
 end
 local focusBtn = CreateFrame("Button", "OmashuAuxSearchFocus", UIParent)
@@ -103,9 +104,10 @@ local KEY = "CTRL-SHIFT-F11"
 local ahEv = CreateFrame("Frame")
 ahEv:RegisterEvent("AUCTION_HOUSE_SHOW"); ahEv:RegisterEvent("AUCTION_HOUSE_CLOSED")
 ahEv:SetScript("OnEvent", function(_, e)
-  ahOpen = (e == "AUCTION_HOUSE_SHOW")
+  if e ~= "PLAYER_REGEN_ENABLED" then ahOpen = (e == "AUCTION_HOUSE_SHOW") end
   if ahOpen and improved() then ourBox:Show() else ourBox:ClearFocus(); ourBox:Hide() end
-  if InCombatLockdown() then return end
+  if InCombatLockdown() then ahEv:RegisterEvent("PLAYER_REGEN_ENABLED"); return end   -- set (or cleared) once combat ends
+  ahEv:UnregisterEvent("PLAYER_REGEN_ENABLED")
   if ahOpen then SetOverrideBindingClick(focusBtn, true, KEY, "OmashuAuxSearchFocus") else ClearOverrideBindings(focusBtn) end
 end)
 local function auxFlags()
@@ -193,14 +195,18 @@ end
 -- players nearby; Joshua 2026-11-26: keep the network, hide the noise): hidden in game chat and on the phone. A name
 -- he whispered himself in the last 30 s still shows, so he still learns his friend is offline.
 local mine = {}
-if hooksecurefunc then hooksecurefunc("SendChatMessage", function(_, kind, _, target)
-  if kind == "WHISPER" and type(target) == "string" then mine[target:lower()] = GetTime() end end) end
+local function short(n) n = n:gsub("%-.*$", ""); return n:lower() end   -- "Bob-Realm" and "Bob" are the same friend
+local function sent(_, kind, _, target) if kind == "WHISPER" and type(target) == "string" then mine[short(target)] = GetTime() end end
+if hooksecurefunc then
+  hooksecurefunc("SendChatMessage", sent)                                  -- older chat code
+  if C_ChatInfo and C_ChatInfo.SendChatMessage then hooksecurefunc(C_ChatInfo, "SendChatMessage", sent) end   -- newer
+end
 local NOT_FOUND = (ERR_CHAT_PLAYER_NOT_FOUND_S or "No player named '%s' is currently playing."):gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%s", "(.+)")
 local function noise(text)
   if type(text) ~= "string" then return false end
   local name = text:match("^" .. NOT_FOUND .. "$")
   if not name then return false end
-  local at = mine[name:lower()] or mine[(name:match("^(%S+)") or ""):lower()]
+  local at = mine[short(name)]
   return not (at and GetTime() - at < 30)
 end
 if ChatFrame_AddMessageEventFilter then
