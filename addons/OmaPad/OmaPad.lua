@@ -817,8 +817,9 @@ local function bagsAlone()
   if g and g:IsShown() and g.GetOwner and g:GetOwner() == b then return b, g end
   return nil
 end
--- a darker backing so the words read over the world and the quest list behind (not solid: Joshua 2026-11-27)
-local TIP_BACK = { 0.03, 0.03, 0.05, 0.9 }
+-- a solid backing so the words read over the world and the chat behind (Joshua 2026-11-27, later the same day:
+-- "an opaque background. Chat is cutting it off"; it was 90% before)
+local TIP_BACK = { 0.03, 0.03, 0.05, 1 }
 local function placeBagTip()
   local b, t = bagsAlone()
   if not b then return end
@@ -839,6 +840,7 @@ local function placeBagTip()
     local c = rawget(_G, n)
     if c and c:IsShown() then
       c:SetScale(s)
+      if c.NineSlice and c.NineSlice.SetCenterColor then pcall(c.NineSlice.SetCenterColor, c.NineSlice, unpack(TIP_BACK)) end
       if not prev then c:ClearAllPoints(); c:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top + 28, s)); prev = c
       elseif under(c, prev, U(28, s), 'RIGHT') then prev = c end
     end
@@ -933,6 +935,14 @@ do
   -- the game's default anchor only adds its corner, it never clears: if one of our spots is still on the tooltip (the
   -- vendor or bag spot), it stretches between the two. With no layout on, a tooltip with more than one point is reset.
   local fixing = false
+  -- the game puts each tooltip's own (see-through) background back whenever it fills it; in the bags ours goes back on
+  -- (Joshua 2026-11-27: chat still showed through the item tooltip)
+  local function solid(t)
+    if t and bagsAlone() and t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end
+  end
+  for _, fn in ipairs({ 'SharedTooltip_SetBackdropStyle', 'GameTooltip_SetBackdropStyle' }) do
+    if hooksecurefunc and rawget(_G, fn) then hooksecurefunc(fn, function(t) solid(t) end) end
+  end
   if hooksecurefunc then hooksecurefunc('GameTooltip_SetDefaultAnchor', function(t, parent)
     if ahLayoutOn or panelOn then C_Timer.After(0, putTips); return end
     if fixing or not t or not t.GetNumPoints or t:GetNumPoints() <= 1 or bagsAlone() then return end

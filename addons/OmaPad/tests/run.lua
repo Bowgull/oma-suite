@@ -357,7 +357,7 @@ tests['bags alone: the game tooltip moves when the bag window owns it, not other
   w.owner = w.bags; OmaPadPutTipsForTest()
   local p = w.tip.pts[1]
   ok(p and p[1] == 'TOPRIGHT' and p[3] == 'TOPLEFT', 'the bag item tooltip goes left of the bags')
-  ok(back and back > 0.8 and back < 1, 'darker backing, not solid')
+  ok(back == 1, 'solid backing (Joshua 2026-11-27: opaque, chat showed through at 90%)')
 end
 tests['bags alone: a vendor layout left on with no vendor window open lets go, the bag tooltip goes left of the bags'] = function()
   local w = layoutWorld()
