@@ -1120,7 +1120,10 @@ local PX = 1080 / 768
 -- v3 (looked at on the TV): the auction house's own tab icons stick out 65 px past its right edge (they covered the
 -- bags), so the auction house is 105% (15-1423 across), bags 65% at the top of the right column (1433-1818, 54-472),
 -- tooltips 90% under them; the "Equipped" compare gets 28 px so its tab doesn't sit on the item tooltip.
-local AHL = { ah = { 2, 67, 1.05 }, bags = { 1429, 113, 0.65 }, tip = 0.90, tipAt = { 1433, 480 } }
+-- 2026-11-27 (Joshua: the bags look small with space to spare): bags 79%, filling the column from just right of the
+-- auction window's tab icons (they end at ~1430 px) to 10 px from the screen's right edge (1440-1910 = 470 px; the bag
+-- window is ~595 px wide unscaled). The item tooltip goes under them, right edges level (placeTips).
+local AHL = { ah = { 2, 67, 1.05 }, bags = { 1440, 113, 0.79 }, tip = 0.90, tipAt = { 1433, 480 } }
 local ahLayoutOn, saved = false, {}
 local TIPS = {}   -- the tooltip frames we move (filled as they're hooked)
 -- TV pixels -> a frame's own SetPoint units at scale s (also right when the game's UI scale is not 1)
@@ -1182,6 +1185,10 @@ local function tabPx(c)
   end
   return TAB_PX
 end
+-- a solid backing so the words read over the world and the chat behind (Joshua 2026-11-27, later the same day:
+-- "an opaque background. Chat is cutting it off"; it was 90% before)
+local TIP_BACK = { 0.03, 0.03, 0.05, 1 }
+local function solidTip(t) if t and t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end end
 local function placeTips()
   local x, y, limit, s = AHL.tipAt[1], AHL.tipAt[2], 1910, AHL.tip
   local panel = panelOn and openPanel()
@@ -1192,13 +1199,22 @@ local function placeTips()
     local bags = rawget(_G, 'KroGamepadBagsFrame')
     if bags and bags:IsShown() and bags:GetLeft() then limit = (px(bags)) - 12 end
   end
+  -- At the auction house (Joshua 2026-11-27: a wide tooltip ran into the screen's edge and the game shoved it left):
+  -- the stack's right edge lines up with the bag window's right edge, just under it, so a wide one grows left.
+  local side, bags = 'LEFT', rawget(_G, 'KroGamepadBagsFrame')
+  if ahLayoutOn and bags and bags:IsShown() and bags:GetLeft() then
+    local _, _, bRight, bBottom = px(bags)
+    if bRight then side, x, y = 'RIGHT', bRight, bBottom + 8 end
+  end
+  local anchor = side == 'RIGHT' and 'TOPRIGHT' or 'TOPLEFT'
   local main
   for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip' }) do
     local t = rawget(_G, n)
     if t and t:IsShown() then
       if panel and not ahLayoutOn then s = math.max(0.6, math.min(1.0, (limit - x) / (math.max(1, t:GetWidth()) * PX))) end
       keep(t); t:SetScale(s); t:ClearAllPoints()
-      t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', U(x, s), -U(y, s))
+      t:SetPoint(anchor, UIParent, 'TOPLEFT', U(x, s), -U(y, s))
+      if ahLayoutOn then solidTip(t) end
       main = main or t
     end
   end
@@ -1212,11 +1228,12 @@ local function placeTips()
     if t and t:IsShown() then
       keep(t); t:SetScale(main:GetScale())
       local ms = main:GetScale()
-      if not prev then t:ClearAllPoints(); t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', U(x, ms), -U(y + tabPx(t), ms)); prev = t
-      elseif under(t, prev, U(tabPx(t), ms), 'LEFT') then prev = t end
+      if ahLayoutOn then solidTip(t) end
+      if not prev then t:ClearAllPoints(); t:SetPoint(anchor, UIParent, 'TOPLEFT', U(x, ms), -U(y + tabPx(t), ms)); prev = t
+      elseif under(t, prev, U(tabPx(t), ms), side) then prev = t end
     end
   end
-  if prev then under(main, prev, U(12, main:GetScale()), 'LEFT') end
+  if prev then under(main, prev, U(12, main:GetScale()), side) end
 end
 -- Bags open on their own (Joshua 2026-11-26: "when I'm in my bags the tooltip is in a terrible spot", it sat on the bag
 -- window's items): the bag add-on's item tooltip goes just left of the bag window, tops level, the "Equipped" compare under
@@ -1232,9 +1249,6 @@ local function bagsAlone()
   if g and g:IsShown() and g.GetOwner and g:GetOwner() == b then return b, g end
   return nil
 end
--- a solid backing so the words read over the world and the chat behind (Joshua 2026-11-27, later the same day:
--- "an opaque background. Chat is cutting it off"; it was 90% before)
-local TIP_BACK = { 0.03, 0.03, 0.05, 1 }
 local function placeBagTip()
   local b, t = bagsAlone()
   if not b then return end
@@ -1353,7 +1367,7 @@ do
   -- the game puts each tooltip's own (see-through) background back whenever it fills it; in the bags ours goes back on
   -- (Joshua 2026-11-27: chat still showed through the item tooltip)
   local function solid(t)
-    if t and bagsAlone() and t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end
+    if t and (bagsAlone() or ahLayoutOn) and t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end
   end
   for _, fn in ipairs({ 'SharedTooltip_SetBackdropStyle', 'GameTooltip_SetBackdropStyle' }) do
     if hooksecurefunc and rawget(_G, fn) then hooksecurefunc(fn, function(t) solid(t) end) end

@@ -341,7 +341,7 @@ tests['layouts: the auction house closing hands back to a vendor window still op
   local w = layoutWorld()
   w.merchant.shown = false
   w.fire('AUCTION_HOUSE_SHOW')
-  ok(w.ah.scale == 1.05 and w.bags.scale == 0.65, 'auction house layout')
+  ok(w.ah.scale == 1.05 and w.bags.scale == 0.79, 'auction house layout')
   w.merchant.shown = true                       -- the auctioneer's own window is still up
   w.fire('AUCTION_HOUSE_CLOSED')
   ok(w.ah.scale == 1 and w.ah.pts[1][1] == 'CENTER', 'auction house put back')
@@ -413,23 +413,30 @@ local function ahTips(header)
   if header then c1.CompareHeader = header end
   return w, c1, c2
 end
-tests['auction house: the Equipped boxes go on top at the spot, the item under the last one'] = function()
+-- the bag window's right edge and bottom in TV px (the AH stack lines up under it, right-aligned, 8 px down)
+local function bagEdge(w)
+  local b = w.bags; local e = (b.GetEffectiveScale and b:GetEffectiveScale() or 1) * PXT
+  return b:GetRight() * e, 1080 - b:GetBottom() * e
+end
+tests['auction house: the Equipped boxes go on top under the bags, right-aligned, the item under the last one'] = function()
   local w, c1, c2 = ahTips()
   OmaPadPutTipsForTest()
+  local r, btm = bagEdge(w)
   local p = c1.pts[1]
-  ok(p[1] == 'TOPLEFT' and p[3] == 'TOPLEFT', 'first compare box at the spot')
-  ok(math.abs(p[4] - 1433 / PXT / 0.9) < 0.01, 'left edge at 1433 px')
-  ok(math.abs(p[5] + (480 + 28) / PXT / 0.9) < 0.01, 'pushed down by the 28 px tab (no header)')
-  ok(c2.pts[1][1] == 'TOPLEFT' and c2.pts[1][3] == 'BOTTOMLEFT', 'second box under the first, left-aligned')
+  ok(p[1] == 'TOPRIGHT' and p[3] == 'TOPLEFT', 'first compare box right-aligned')
+  ok(math.abs(p[4] - r / PXT / 0.9) < 0.01, 'right edge on the bag window\'s right edge')
+  ok(math.abs(p[5] + (btm + 8 + 28) / PXT / 0.9) < 0.01, '8 px under the bags, pushed down by the 28 px tab (no header)')
+  ok(c2.pts[1][1] == 'TOPRIGHT' and c2.pts[1][3] == 'BOTTOMLEFT', 'second box under the first, right-aligned')
   local m = w.tip.pts[1]
-  ok(m[1] == 'TOPLEFT' and m[3] == 'BOTTOMLEFT', 'item tooltip under the last compare box')
-  ok(math.abs(m[4] - c2.l) < 0.01 and math.abs(m[5] - (c2.t - c2.h - 12 / PXT / 0.9)) < 0.01, 'left-aligned, 12 px under it')
+  ok(m[1] == 'TOPRIGHT' and m[3] == 'BOTTOMLEFT', 'item tooltip under the last compare box')
+  ok(math.abs(m[4] - (c2.l + c2.w)) < 0.01 and math.abs(m[5] - (c2.t - c2.h - 12 / PXT / 0.9)) < 0.01, 'right-aligned, 12 px under it')
 end
-tests['auction house: no compare box, the item tooltip stays at the spot'] = function()
+tests['auction house: no compare box, the item tooltip sits under the bags, right-aligned'] = function()
   local w, c1, c2 = ahTips(); c1.shown = false; c2.shown = false
   OmaPadPutTipsForTest()
+  local r, btm = bagEdge(w)
   local m = w.tip.pts[1]
-  ok(m[1] == 'TOPLEFT' and m[3] == 'TOPLEFT' and math.abs(m[5] + 480 / PXT / 0.9) < 0.01, 'at the spot, as before')
+  ok(m[1] == 'TOPRIGHT' and math.abs(m[4] - r / PXT / 0.9) < 0.01 and math.abs(m[5] + (btm + 8) / PXT / 0.9) < 0.01, 'under the bags, right edges level')
   ok(c1.pts[1][1] == 'CENTER', 'compare boxes untouched')
 end
 tests['compare tab: measured from the box header when it has one'] = function()
@@ -438,7 +445,8 @@ tests['compare tab: measured from the box header when it has one'] = function()
   local w, c1 = ahTips(h)
   OmaPadPutTipsForTest()
   local tab = 30 * 0.9 * PXT
-  ok(math.abs(c1.pts[1][5] + (480 + tab) / PXT / 0.9) < 0.01, 'pushed down by the header height: ' .. tostring(c1.pts[1][5]))
+  local _, btm = bagEdge(w)
+  ok(math.abs(c1.pts[1][5] + (btm + 8 + tab) / PXT / 0.9) < 0.01, 'pushed down by the header height: ' .. tostring(c1.pts[1][5]))
   -- the bags use the same math
   local w2 = layoutWorld(); w2.merchant.shown = false; w2.tip.GetOwner = function() return w2.bags end
   local b1 = win('ShoppingTooltip1', 600, 600, 250, 100); b1.CompareHeader = h; win('ShoppingTooltip2', 0, 0, 1, 1).shown = false
