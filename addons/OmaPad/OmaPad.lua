@@ -708,6 +708,83 @@ local function moveBreathBar()
   local e = rawget(_G, 'UIErrorsFrame')
   if e then e:ClearAllPoints(); e:SetPoint('TOP', UIParent, 'TOP', 0, -190) end
 end
+-- The auction house layout (Joshua 2026-11-26, sheet omashu/remote/20): while the auction house is open, the bags
+-- (KroGamepadBags) and ImprovedForever's auction house are one row at 85%, same top, just under the player frame,
+-- bags left; the item tooltip and its "Equipped" compare stack at 70% in the column under the minimap, growing up from
+-- just above the XP bar. Everything goes back the way it was when the auction house closes. TV pixels / 1.40625 =
+-- UI units (1080p, UI scale 1); an offset is in the frame's own scaled units, so it is divided by the scale.
+local PX = 1080 / 768
+-- measured on the TV 2026-11-26: the bag window draws 77 px above its anchor and is 503 px wide at 85%; the auction
+-- house draws 11 px right of and 10 px above its anchor and is 1085 px wide. Both now show from y 230, bags 54-557,
+-- 12 px gap, auction house 569-1654. The minimap doesn't matter at the auction house (Joshua): tooltips go bottom-right.
+local AHL = { scale = 0.85, ah = { 558, 240 }, bags = { 50, 307 }, tip = 0.70, tipAt = { 1910, 1045 } }
+local ahLayoutOn, saved = false, {}
+local function keep(f)
+  if not f or saved[f] then return end
+  local pts = {}
+  for i = 1, f:GetNumPoints() do pts[i] = { f:GetPoint(i) } end
+  saved[f] = { scale = f:GetScale(), pts = pts }
+end
+local function putTopLeft(f, x, y, s)
+  if not f or InCombatLockdown() then return end
+  keep(f); f:SetScale(s); f:ClearAllPoints()
+  f:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', x / PX / s, -y / PX / s)
+end
+local function putTips()
+  if not ahLayoutOn then return end
+  local s = AHL.tip
+  local main
+  for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip' }) do
+    local t = rawget(_G, n)
+    if t and t:IsShown() then
+      keep(t); t:SetScale(s); t:ClearAllPoints()
+      t:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMLEFT', AHL.tipAt[1] / PX / s, (1080 - AHL.tipAt[2]) / PX / s)
+      main = main or t
+    end
+  end
+  local prev = main
+  for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
+    local t = rawget(_G, n)
+    if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('BOTTOMRIGHT', prev, 'TOPRIGHT', 0, 6); prev = t end
+  end
+end
+local function ahLayout(on)
+  if InCombatLockdown() then return end
+  ahLayoutOn = on
+  if on then
+    putTopLeft(rawget(_G, 'ImprovedForeverAuctionBuy'), AHL.ah[1], AHL.ah[2], AHL.scale)
+    putTopLeft(rawget(_G, 'KroGamepadBagsFrame'), AHL.bags[1], AHL.bags[2], AHL.scale)
+  else
+    for f, v in pairs(saved) do
+      f:SetScale(v.scale); f:ClearAllPoints()
+      for _, p in ipairs(v.pts) do f:SetPoint(unpack(p)) end
+    end
+    wipe(saved)
+  end
+end
+do
+  local hooked = {}
+  local function hookTip(n)
+    local t = rawget(_G, n)
+    if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, putTips) end end) end
+  end
+  local function hookAll()
+    for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip', 'ShoppingTooltip1', 'ShoppingTooltip2' }) do hookTip(n) end
+    for _, n in ipairs({ 'ImprovedForeverAuctionBuy', 'KroGamepadBagsFrame' }) do
+      local f = rawget(_G, n)
+      if f and not hooked[n] then hooked[n] = true; f:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, function() ahLayout(true) end) end end) end
+    end
+  end
+  local ev = CreateFrame('Frame')
+  ev:RegisterEvent('AUCTION_HOUSE_SHOW'); ev:RegisterEvent('AUCTION_HOUSE_CLOSED')
+  ev:SetScript('OnEvent', function(_, e)
+    if e == 'AUCTION_HOUSE_SHOW' then C_Timer.After(0.3, function() hookAll(); ahLayout(true) end)
+    else ahLayout(false) end
+  end)
+  if hooksecurefunc then hooksecurefunc('GameTooltip_SetDefaultAnchor', function() if ahLayoutOn then C_Timer.After(0, putTips) end end) end
+end
+_G.OmaPadAhLayout = ahLayout   -- for a /run to try it again
+
 local busy
 local function later() if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply() end) end
 
