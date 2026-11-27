@@ -717,7 +717,8 @@ local PX = 1080 / 768
 -- measured on the TV 2026-11-26: the bag window draws 77 px above its anchor and is 503 px wide at 85%; the auction
 -- house draws 11 px right of and 10 px above its anchor and is 1085 px wide. Both now show from y 230, bags 54-557,
 -- 12 px gap, auction house 569-1654. The minimap doesn't matter at the auction house (Joshua): tooltips go bottom-right.
-local AHL = { scale = 0.85, ah = { 558, 240 }, bags = { 50, 307 }, tip = 0.70, tipAt = { 1910, 1045 } }
+-- tooltips in the free space under the bags (bottom-left), growing up (Joshua: they hid the Sell panel's profit)
+local AHL = { scale = 0.85, ah = { 558, 240 }, bags = { 50, 307 }, tip = 0.70, tipAt = { 54, 1045 } }
 local ahLayoutOn, saved = false, {}
 local function keep(f)
   if not f or saved[f] then return end
@@ -738,14 +739,14 @@ local function putTips()
     local t = rawget(_G, n)
     if t and t:IsShown() then
       keep(t); t:SetScale(s); t:ClearAllPoints()
-      t:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMLEFT', AHL.tipAt[1] / PX / s, (1080 - AHL.tipAt[2]) / PX / s)
+      t:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', AHL.tipAt[1] / PX / s, (1080 - AHL.tipAt[2]) / PX / s)
       main = main or t
     end
   end
   local prev = main
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local t = rawget(_G, n)
-    if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('BOTTOMRIGHT', prev, 'TOPRIGHT', 0, 6); prev = t end
+    if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('BOTTOMLEFT', prev, 'TOPLEFT', 0, 6); prev = t end
   end
 end
 local function ahLayout(on)
