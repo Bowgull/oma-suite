@@ -439,6 +439,17 @@ tests['auction house: no compare box, the item tooltip sits under the bags, righ
   ok(m[1] == 'TOPLEFT' and math.abs(m[4] - r / PXT / 0.9) < 0.01 and math.abs(m[5] + (btm + 34) / PXT / 0.9) < 0.01, 'under the bags, left edges level')
   ok(c1.pts[1][1] == 'CENTER', 'compare boxes untouched')
 end
+tests['auction house: a two-hander shows one Equipped box (the first sums both hands)'] = function()
+  local w, c1, c2 = ahTips()
+  local hidden = false; c2.Hide = function() hidden = true; c2.shown = false end
+  w.tip.GetItem = function() return 'Fishing Pole', 'item:6256' end
+  local was = _G.GetItemInfoInstant; _G.GetItemInfoInstant = function() return 6256, 'Weapon', 'Fishing Poles', 'INVTYPE_2HWEAPON' end
+  OmaPadPutTipsForTest()
+  _G.GetItemInfoInstant = was
+  ok(hidden, 'second Equipped box hidden')
+  local m = w.tip.pts[1]
+  ok(m[3] == 'BOTTOMLEFT' and math.abs(m[4] - c1.l) < 0.01, 'item tooltip straight under the first box')
+end
 tests['compare tab: measured from the box header when it has one'] = function()
   local h = { GetTop = function() return nil end, GetHeight = function() return 30 end, GetEffectiveScale = function() return 0.9 end,
               IsShown = function() return true end }

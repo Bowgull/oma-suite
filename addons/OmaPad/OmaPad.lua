@@ -1189,6 +1189,13 @@ end
 -- "an opaque background. Chat is cutting it off"; it was 90% before)
 local TIP_BACK = { 0.03, 0.03, 0.05, 1 }
 local function solidTip(t) if t and t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end end
+-- A two-hander compared with a main hand and an off hand shows two "Equipped" boxes; the first one's "if you replace
+-- these items" already sums both (Joshua 2026-11-27: three boxes ran off the screen), so the second is hidden.
+local function twoHander(t)
+  local link = t and t.GetItem and select(2, t:GetItem())
+  local loc = link and GetItemInfoInstant and select(4, GetItemInfoInstant(link))
+  return loc == 'INVTYPE_2HWEAPON'
+end
 local function placeTips()
   local x, y, limit, s = AHL.tipAt[1], AHL.tipAt[2], 1910, AHL.tip
   local panel = panelOn and openPanel()
@@ -1232,8 +1239,10 @@ local function placeTips()
   -- No compare box: the item stays at the spot.
   if not main then return end
   local prev
+  local only1 = twoHander(main)
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local t = rawget(_G, n)
+    if t and t:IsShown() and only1 and n == 'ShoppingTooltip2' then t:Hide(); t = nil end
     if t and t:IsShown() then
       keep(t); t:SetScale(main:GetScale())
       local ms = main:GetScale()
@@ -1242,7 +1251,16 @@ local function placeTips()
       elseif under(t, prev, U(tabPx(t), ms), side) then prev = t end
     end
   end
-  if prev then under(main, prev, U(12, main:GetScale()), side) end
+  if prev then
+    under(main, prev, U(12, main:GetScale()), side)
+    -- still runs off the bottom: the item goes left of the Equipped box, tops level (Joshua: "options 2 and 3")
+    local mb = main:GetBottom() and (main:GetBottom() * main:GetEffectiveScale() * PX)
+    if mb and mb < 10 then
+      local first = rawget(_G, 'ShoppingTooltip1')
+      local fl, ft = first and px(first)
+      if fl then local ms = main:GetScale(); main:ClearAllPoints(); main:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(fl - 12, ms), -U(ft, ms)) end
+    end
+  end
 end
 -- Bags open on their own (Joshua 2026-11-26: "when I'm in my bags the tooltip is in a terrible spot", it sat on the bag
 -- window's items): the bag add-on's item tooltip goes just left of the bag window, tops level, the "Equipped" compare under
