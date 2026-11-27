@@ -9,7 +9,7 @@
 
 local V = 1
 -- the class quests whose completion the book checks (from Polestar's own Forever paladin guides)
-local QUESTS = { 1806, 78093, 1661, 8418, 7647 }   -- Verigan's Fist, Cloak of the Divine Storm, Tome of Nobility, Holy Mightstone, Charger
+local QUESTS = { 2998, 1806, 78093, 1661, 8418, 7647 }   -- Tome of Divinity (Redemption), Verigan's Fist, Cloak of the Divine Storm, Tome of Nobility, Holy Mightstone, Charger
 
 local function try(f) local ok, r = pcall(f); if ok then return r end end
 
@@ -20,7 +20,7 @@ local function esc(s) return (s:gsub('[%c"\\]', function(c)
 local function enc(v)
   local t = type(v)
   if t == 'string' then return '"' .. esc(v) .. '"' end
-  if t == 'number' then if v ~= v or v == math.huge or v == -math.huge then return 'null' end; return (v % 1 == 0) and string.format('%d', v) or string.format('%.4g', v) end
+  if t == 'number' then if v ~= v or v == math.huge or v == -math.huge then return 'null' end; return (v % 1 == 0) and string.format('%d', v) or string.format('%.14g', v) end
   if t == 'boolean' then return tostring(v) end
   if t ~= 'table' then return 'null' end
   local n = #v
@@ -58,9 +58,15 @@ local function talents()
 end
 
 -- known spells, plus the spellbook's "future" spells you're already high enough to learn (train) or will be soon
+local knownNames = {}
 local function spells()
-  local out, seen, train = {}, {}, {}
+  local out, seen, train, names = {}, {}, {}, {}
   local future = Enum.SpellBookItemType and Enum.SpellBookItemType.FutureSpell
+  local flyout = Enum.SpellBookItemType and Enum.SpellBookItemType.Flyout
+  local function known(n, passive)
+    names[n] = true   -- passives too (Parry), for the trainer list below
+    if not seen[n] and not passive then seen[n] = true; out[#out + 1] = n end
+  end
   local level = UnitLevel('player') or 0
   if C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines then
     for t = 1, C_SpellBook.GetNumSpellBookSkillLines() do
@@ -70,10 +76,21 @@ local function spells()
         if s and s.name and future and s.itemType == future then
           local lvl = s.spellID and C_Spell.GetSpellLevelLearned and C_Spell.GetSpellLevelLearned(s.spellID)
           if lvl and lvl > 0 and lvl <= level + 2 then train[#train + 1] = { name = s.name, lvl = lvl } end
-        elseif s and s.name and not seen[s.name] and not s.isPassive then seen[s.name] = true; out[#out + 1] = s.name end
+        elseif s and flyout and s.itemType == flyout then
+          -- a spellbook folder ("Auras", "Blessings") is not a spell: the spells inside it are
+          local fid = s.actionID
+          local slots
+          if fid and GetFlyoutInfo then slots = select(3, GetFlyoutInfo(fid)) end
+          for k = 1, slots or 0 do
+            local sid, _, isKnown, name = GetFlyoutSlotInfo(fid, k)
+            name = name or (sid and spellName(sid))
+            if isKnown and name then known(name) end
+          end
+        elseif s and s.name then known(s.name, s.isPassive) end
       end
     end
   end
+  if #out > 0 then knownNames = names end   -- a spellbook read empty (the game shutting down) keeps the last good list
   table.sort(out)
   table.sort(train, function(a, b) if a.lvl ~= b.lvl then return a.lvl < b.lvl end return a.name < b.name end)
   return out, train
@@ -93,7 +110,9 @@ local function trainable(level)
   for lvl = 1, level do
     for _, e in ipairs(S.NewAt(lvl) or {}) do
       local name = spellName(e.id)
-      if name then out[#out + 1] = { name = name, lvl = lvl, rank = e.rank or 0, cost = e.cost or 0, id = e.id } end
+      -- a first rank Polestar lists by another spell ID than the one in the spellbook (Forever's Judgement) is known
+      -- and a rank already bought (IsPlayerSpell on that rank's own ID) is never listed again
+      if name and not ((e.rank or 0) <= 1 and knownNames[name]) and not (IsPlayerSpell and IsPlayerSpell(e.id)) then out[#out + 1] = { name = name, lvl = lvl, rank = e.rank or 0, cost = e.cost or 0, id = e.id } end
     end
   end
   return out
@@ -162,11 +181,15 @@ end
 local function cheapUpgrades()
   local cu = rawget(_G, 'CheapUpgrades')
   if type(cu) ~= 'table' then return nil end
-  local list = {}
-  for i, r in ipairs(type(cu.results) == 'table' and cu.results or {}) do
-    if i > 10 then break end
+  local list, at = {}, {}
+  for _, r in ipairs(type(cu.results) == 'table' and cu.results or {}) do
     local id = type(r.link) == 'string' and tonumber(r.link:match('item:(%d+)'))
-    list[#list + 1] = { id = id, name = r.name, slot = r.slot, price = r.price, pct = r.pct }
+    local row = { id = id, name = r.name, slot = r.slot, price = r.price, pct = r.pct }
+    local k = r.name or id
+    if k and at[k] then   -- the same item from two sellers: keep the cheaper one
+      local old = list[at[k]]
+      if (row.price or math.huge) < (old.price or math.huge) then list[at[k]] = row end
+    elseif #list < 10 then list[#list + 1] = row; if k then at[k] = #list end end
   end
   local db = type(cu.db) == 'table' and cu.db or {}
   return { rich = db.richMode and true or false, max = db.maxPrice, list = list }
@@ -191,19 +214,16 @@ end
 -- the last good read: while the game shuts the interface down (a reload or logout) some lists come back empty, so
 -- an empty skills or spells list then keeps the one read a moment earlier
 local last = {}
-local fresh            -- spells new since the last reload or login: worked out once per session
+local base             -- the spells known when this session started (the first good read after a login or reload)
 local function save()
   local ok, d = pcall(gather)
   if not ok then return end
   OmaBookDB = OmaBookDB or {}
-  if not fresh and type(d.spells) == 'table' and #d.spells > 0 then
-    fresh = {}
-    local before = {}
-    for _, n in ipairs(type(OmaBookDB.loadSpells) == 'table' and OmaBookDB.loadSpells or {}) do before[n] = true end
-    if next(before) then for _, n in ipairs(d.spells) do if not before[n] then fresh[#fresh + 1] = n end end end
-    OmaBookDB.loadSpells = d.spells
-  end
-  d.fresh = fresh or {}
+  -- "fresh" = learned since this session began. The game writes this save at the next reload, so the phone shows
+  -- those spells as new from that reload until the one after it (Joshua: "new for that level, next reload it goes away").
+  if not base and type(d.spells) == 'table' and #d.spells > 0 then base = {}; for _, n in ipairs(d.spells) do base[n] = true end end
+  d.fresh = {}
+  if base then for _, n in ipairs(d.spells or {}) do if not base[n] then d.fresh[#d.fresh + 1] = n end end end
   for _, k in ipairs({ 'skills', 'spells' }) do
     if type(d[k]) == 'table' and next(d[k]) == nil and type(last[k]) == 'table' and next(last[k]) ~= nil then d[k] = last[k] end
   end

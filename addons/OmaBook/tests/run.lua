@@ -86,25 +86,63 @@ tests['Forever (no skill lines): weapon skills from known spells, First Aid from
 end
 tests['trainer list from Polestar: new spells and upgrades, with cost'] = function()
   world()
-  _G.Polestar = { QoL = { Spells = { NewAt = function(l) return ({ [4] = { { id = 10321, rank = 0, cost = 100 } }, [6] = { { id = 639, rank = 2, cost = 100 } } })[l] end } } }
+  _G.Polestar = { QoL = { Spells = { NewAt = function(l) return ({ [4] = { { id = 10321, rank = 0, cost = 100 }, { id = 3127, rank = 0, cost = 100 }, { id = 1152, rank = 0, cost = 100 } }, [6] = { { id = 639, rank = 2, cost = 100 } } })[l] end } } }
   local old = _G.C_Spell.GetSpellName
-  _G.C_Spell.GetSpellName = function(id) return ({ [10321] = 'Judgement', [639] = 'Holy Light' })[id] or old(id) end
+  _G.C_Spell.GetSpellName = function(id) return ({ [10321] = 'Judgement', [1152] = 'Purify', [3127] = 'Two-Handed Weapon Spec', [639] = 'Holy Light' })[id] or old(id) end
   OmaBook.save(); _G.Polestar = nil
   local j = OmaBookDB.json
-  ok(j:find('{"cost":100,"id":10321,"lvl":4,"name":"Judgement","rank":0}', 1, true), 'new spell'); ok(j:find('"name":"Holy Light","rank":2', 1, true), 'upgrade')
+  ok(j:find('{"cost":100,"id":1152,"lvl":4,"name":"Purify","rank":0}', 1, true), 'new spell'); ok(not j:find('"id":10321', 1, true), 'Judgement, already known, is not listed'); ok(not j:find('"id":3127', 1, true), 'a known passive is not listed'); ok(j:find('"name":"Holy Light","rank":2', 1, true), 'upgrade')
 end
 local function book4()
   _G.C_SpellBook.GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = 4 } end
   _G.C_SpellBook.GetSpellBookItemInfo = function(i) return ({ { name = 'Judgement' }, { name = 'Holy Strike' }, { name = 'Two-Handed Weapon Spec', isPassive = true }, { name = 'Purify' } })[i] end
 end
-tests['new since the last reload: none the first time, then what was learned, for the whole session'] = function()
-  world(); OmaBook.save(); ok(OmaBookDB.json:find('"fresh":[]', 1, true), 'first load: nothing new')
-  local saved = OmaBookDB
-  world(); _G.OmaBookDB = saved; book4()
-  OmaBook.save(); ok(OmaBookDB.json:find('"fresh":["Purify"]', 1, true), 'learned since the last load'); OmaBook.save()
-  ok(OmaBookDB.json:find('"fresh":["Purify"]', 1, true), 'kept all session')
-  local saved2 = OmaBookDB; world(); _G.OmaBookDB = saved2; book4()
-  OmaBook.save(); ok(OmaBookDB.json:find('"fresh":[]', 1, true), 'next reload: gone')
+tests['new = learned this session, so the save written at the reload carries it, and the reload after clears it'] = function()
+  world(); OmaBook.save(); ok(OmaBookDB.json:find('"fresh":[]', 1, true), 'login: nothing new')
+  book4(); OmaBook.save(); ok(OmaBookDB.json:find('"fresh":["Purify"]', 1, true), 'learned mid-session: in the save the reload writes')
+  local saved = OmaBookDB; world(); _G.OmaBookDB = saved; book4()
+  OmaBook.save(); ok(OmaBookDB.json:find('"fresh":[]', 1, true), 'the session after: nothing new until he learns more')
+end
+tests['logout: an empty spellbook read keeps known spells off the trainer list'] = function()
+  world()
+  _G.Polestar = { QoL = { Spells = { NewAt = function(l) return ({ [4] = { { id = 10321, rank = 0, cost = 100 } } })[l] end } } }
+  local old = _G.C_Spell.GetSpellName
+  _G.C_Spell.GetSpellName = function(id) return id == 10321 and 'Judgement' or old(id) end
+  OmaBook.save(); ok(not OmaBookDB.json:find('"id":10321', 1, true), 'known while playing')
+  _G.C_SpellBook.GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = 0 } end
+  OmaBook.save(); _G.Polestar = nil
+  ok(not OmaBookDB.json:find('"id":10321', 1, true), 'still known in the logout save')
+end
+tests['a rank already bought is not listed again'] = function()
+  world()
+  _G.Polestar = { QoL = { Spells = { NewAt = function(l) return ({ [6] = { { id = 639, rank = 2, cost = 100 } }, [12] = { { id = 647, rank = 3, cost = 300 } } })[l] end } } }
+  local old = _G.C_Spell.GetSpellName
+  _G.C_Spell.GetSpellName = function(id) return (id == 639 or id == 647) and 'Holy Light' or old(id) end
+  _G.UnitLevel = function() return 12 end
+  local ip = _G.IsPlayerSpell; _G.IsPlayerSpell = function(id) return id == 639 or ip(id) end
+  OmaBook.save(); _G.Polestar = nil
+  local j = OmaBookDB.json
+  ok(not j:find('"id":639', 1, true), 'rank 2 bought: gone'); ok(j:find('"id":647', 1, true), 'rank 3 still to buy')
+end
+tests['spellbook folders (Auras) are not spells; the spells inside them are'] = function()
+  world()
+  _G.Enum.SpellBookItemType.Flyout = 3
+  _G.GetFlyoutInfo = function() return 'Auras', '', 2, true end
+  _G.GetFlyoutSlotInfo = function(_, k) return ({ 465, 7294 })[k], nil, k == 1, ({ 'Devotion Aura', 'Retribution Aura' })[k] end
+  _G.C_SpellBook.GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = 2 } end
+  _G.C_SpellBook.GetSpellBookItemInfo = function(i) return ({ { name = 'Judgement' }, { name = 'Auras', itemType = 3, actionID = 9 } })[i] end
+  OmaBook.save()
+  local j = OmaBookDB.json
+  ok(not j:find('"Auras"', 1, true), 'no folder'); ok(j:find('"Devotion Aura"', 1, true), 'known spell inside'); ok(not j:find('"Retribution Aura"', 1, true), 'not the unknown one')
+end
+tests['Cheap Upgrades: the same item from two sellers is one row, the cheaper'] = function()
+  world()
+  _G.CheapUpgrades.results = { { link = '|Hitem:4564::|h', name = 'Spiked Club of Spirit', slot = 16, price = 614, pct = 252 },
+    { link = '|Hitem:4564::|h', name = 'Spiked Club of Spirit', slot = 16, price = 610, pct = 252 },
+    { link = '|Hitem:4564::|h', name = 'Spiked Club of the Wolf', slot = 16, price = 620, pct = 250 } }
+  OmaBook.save()
+  local j = OmaBookDB.json
+  local _, n = j:gsub('Spiked Club of Spirit', ''); eq(n, 1); ok(j:find('"price":610', 1, true), 'cheaper kept'); ok(j:find('of the Wolf', 1, true))
 end
 tests['JSON escapes quotes and control characters'] = function()
   world(); eq(OmaBook.enc({ a = 'x"y\n' }), '{"a":"x\\"y\\n"}')
