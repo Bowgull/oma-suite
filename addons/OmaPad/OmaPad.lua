@@ -831,12 +831,20 @@ local function placeBagTip()
     if f and f.IsVisible and f:IsVisible() and f:GetLeft() then local l = px(f); if l and l < left then left = l end end
   end
   local s = t:GetScale()
-  t:ClearAllPoints(); t:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top, s))
   if t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end
-  local prev = t
+  -- What you're wearing on top, the item you're on under it (Joshua 2026-11-27: "flip it so that equipped sat on the
+  -- top"; the "Equipped" tab sits at the top-left corner of its box, 28 px above it, so the stack starts that much lower).
+  local prev
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local c = rawget(_G, n)
-    if c and c:IsShown() then c:SetScale(s); if under(c, prev, U(28, s), 'RIGHT') then prev = c end end
+    if c and c:IsShown() then
+      c:SetScale(s)
+      if not prev then c:ClearAllPoints(); c:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top + 28, s)); prev = c
+      elseif under(c, prev, U(28, s), 'RIGHT') then prev = c end
+    end
+  end
+  if not (prev and under(t, prev, U(12, s), 'RIGHT')) then
+    t:ClearAllPoints(); t:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top, s))
   end
 end
 local restoreLater = false
