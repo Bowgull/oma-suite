@@ -1401,6 +1401,22 @@ do
   end
   if hooksecurefunc then hooksecurefunc('GameTooltip_SetDefaultAnchor', function(t, parent)
     if ahLayoutOn or panelOn then C_Timer.After(0, putTips); return end
+    -- The world's tooltip (people, mobs) opens just above Polestar's target list, right edges level, instead of on it
+    -- (Joshua 2026-11-27: "the tooltip is covering everything" in the bottom-right corner where the list sits).
+    if not fixing and t == GameTooltip and not bagsAlone() then
+      local top, right, ue = nil, nil, UIParent:GetEffectiveScale()
+      for i = 1, 8 do
+        local r = rawget(_G, 'PolestarTargetRow' .. i)
+        if r and r.IsVisible and r:IsVisible() and r:GetTop() then
+          local e = r:GetEffectiveScale() / ue
+          top = math.max(top or 0, r:GetTop() * e); right = math.max(right or 0, r:GetRight() * e)
+        end
+      end
+      if top then
+        fixing = true; t:ClearAllPoints(); t:SetPoint('BOTTOMRIGHT', UIParent, 'BOTTOMLEFT', right, top + 8); fixing = false
+        return
+      end
+    end
     if fixing or not t or not t.GetNumPoints or t:GetNumPoints() <= 1 or bagsAlone() then return end
     fixing = true; t:ClearAllPoints(); pcall(GameTooltip_SetDefaultAnchor, t, parent); fixing = false
   end) end
