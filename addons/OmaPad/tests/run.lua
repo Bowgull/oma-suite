@@ -115,6 +115,7 @@ local function layoutWorld()
   _G.wipe = function(t) for k in pairs(t) do t[k] = nil end end
   _G.unpack = unpack
   _G.NotGameTooltipKroGamepadBags = nil; _G.KroGamepadBagsDoll = nil     -- left over from another test
+  _G.ShoppingTooltip1 = nil; _G.ShoppingTooltip2 = nil
   w.merchant = win('MerchantFrame', 20, 700, 340, 440)
   w.bags = win('KroGamepadBagsFrame', 900, 500, 300, 400)
   w.tip = win('GameTooltip', 500, 400, 250, 120)
@@ -402,6 +403,47 @@ tests['bags alone: with the character panel open, the tooltip goes left of it, n
   OmaPadPutTipsForTest()
   local p = w.tip.pts[1]
   ok(p and math.abs(p[4] - (600 * (1080 / 768) - 12) / (1080 / 768)) < 0.01, 'right edge 12 px left of the character panel')
+end
+local PXT = 1080 / 768
+local function ahTips(header)
+  local w = layoutWorld()
+  w.merchant.shown = false
+  w.fire('AUCTION_HOUSE_SHOW')
+  local c1 = win('ShoppingTooltip1', 600, 600, 250, 100); local c2 = win('ShoppingTooltip2', 600, 480, 250, 100)
+  if header then c1.CompareHeader = header end
+  return w, c1, c2
+end
+tests['auction house: the Equipped boxes go on top at the spot, the item under the last one'] = function()
+  local w, c1, c2 = ahTips()
+  OmaPadPutTipsForTest()
+  local p = c1.pts[1]
+  ok(p[1] == 'TOPLEFT' and p[3] == 'TOPLEFT', 'first compare box at the spot')
+  ok(math.abs(p[4] - 1433 / PXT / 0.9) < 0.01, 'left edge at 1433 px')
+  ok(math.abs(p[5] + (480 + 28) / PXT / 0.9) < 0.01, 'pushed down by the 28 px tab (no header)')
+  ok(c2.pts[1][1] == 'TOPLEFT' and c2.pts[1][3] == 'BOTTOMLEFT', 'second box under the first, left-aligned')
+  local m = w.tip.pts[1]
+  ok(m[1] == 'TOPLEFT' and m[3] == 'BOTTOMLEFT', 'item tooltip under the last compare box')
+  ok(math.abs(m[4] - c2.l) < 0.01 and math.abs(m[5] - (c2.t - c2.h - 12 / PXT / 0.9)) < 0.01, 'left-aligned, 12 px under it')
+end
+tests['auction house: no compare box, the item tooltip stays at the spot'] = function()
+  local w, c1, c2 = ahTips(); c1.shown = false; c2.shown = false
+  OmaPadPutTipsForTest()
+  local m = w.tip.pts[1]
+  ok(m[1] == 'TOPLEFT' and m[3] == 'TOPLEFT' and math.abs(m[5] + 480 / PXT / 0.9) < 0.01, 'at the spot, as before')
+  ok(c1.pts[1][1] == 'CENTER', 'compare boxes untouched')
+end
+tests['compare tab: measured from the box header when it has one'] = function()
+  local h = { GetTop = function() return nil end, GetHeight = function() return 30 end, GetEffectiveScale = function() return 0.9 end,
+              IsShown = function() return true end }
+  local w, c1 = ahTips(h)
+  OmaPadPutTipsForTest()
+  local tab = 30 * 0.9 * PXT
+  ok(math.abs(c1.pts[1][5] + (480 + tab) / PXT / 0.9) < 0.01, 'pushed down by the header height: ' .. tostring(c1.pts[1][5]))
+  -- the bags use the same math
+  local w2 = layoutWorld(); w2.merchant.shown = false; w2.tip.GetOwner = function() return w2.bags end
+  local b1 = win('ShoppingTooltip1', 600, 600, 250, 100); b1.CompareHeader = h; win('ShoppingTooltip2', 0, 0, 1, 1).shown = false
+  w2.fire('PLAYER_ENTERING_WORLD'); OmaPadPutTipsForTest()
+  ok(math.abs(b1.pts[1][5] + (1080 - 500 * PXT + tab) / PXT) < 0.01, 'bags: first box pushed down by the same tab')
 end
 tests['apply waits while he drags something'] = function()
   local w = load('PALADIN', 'Bunji'); w.cursor = { 'item', 6948 }

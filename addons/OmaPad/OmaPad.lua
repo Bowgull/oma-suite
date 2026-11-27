@@ -1167,6 +1167,21 @@ local function under(c, prev, gap, side)
   c:SetPoint(side == 'RIGHT' and 'TOPRIGHT' or 'TOPLEFT', UIParent, 'BOTTOMLEFT', x * e / ce, b * e / ce - gap)
   return true
 end
+-- How far a compare box's "Equipped" tab sticks out above its top, in TV px: measured from the box's own header
+-- (CompareHeader: its top against the box's top, or failing that its height), else 28 px (measured 2026-11-27).
+local TAB_PX = 28
+local function tabPx(c)
+  local h = c and rawget(c, 'CompareHeader')
+  if h and (not h.IsShown or h:IsShown()) then
+    local ok, v = pcall(function()
+      local ht, ct = h:GetTop(), c:GetTop()
+      if ht and ct and ht * h:GetEffectiveScale() > ct * c:GetEffectiveScale() then return (ht * h:GetEffectiveScale() - ct * c:GetEffectiveScale()) * PX end
+      local hh = h:GetHeight(); if hh and hh > 0 then return hh * h:GetEffectiveScale() * PX end
+    end)
+    if ok and v and v > 0 and v < 200 then return v end
+  end
+  return TAB_PX
+end
 local function placeTips()
   local x, y, limit, s = AHL.tipAt[1], AHL.tipAt[2], 1910, AHL.tip
   local panel = panelOn and openPanel()
@@ -1187,11 +1202,21 @@ local function placeTips()
       main = main or t
     end
   end
-  local prev = main
+  -- What you're wearing on top, the item under it (Joshua 2026-11-27, as in the bags): the "Equipped" boxes take the
+  -- spot, pushed down by their tab so it sits flush at the stack's top-left; the item goes under the last one.
+  -- No compare box: the item stays at the spot.
+  if not main then return end
+  local prev
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local t = rawget(_G, n)
-    if prev and t and t:IsShown() then keep(t); t:SetScale(prev:GetScale()); if under(t, prev, U(28, prev:GetScale()), 'LEFT') then prev = t end end
+    if t and t:IsShown() then
+      keep(t); t:SetScale(main:GetScale())
+      local ms = main:GetScale()
+      if not prev then t:ClearAllPoints(); t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', U(x, ms), -U(y + tabPx(t), ms)); prev = t
+      elseif under(t, prev, U(tabPx(t), ms), 'LEFT') then prev = t end
+    end
   end
+  if prev then under(main, prev, U(12, main:GetScale()), 'LEFT') end
 end
 -- Bags open on their own (Joshua 2026-11-26: "when I'm in my bags the tooltip is in a terrible spot", it sat on the bag
 -- window's items): the bag add-on's item tooltip goes just left of the bag window, tops level, the "Equipped" compare under
@@ -1224,15 +1249,15 @@ local function placeBagTip()
   local s = t:GetScale()
   if t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end
   -- What you're wearing on top, the item you're on under it (Joshua 2026-11-27: "flip it so that equipped sat on the
-  -- top"; the "Equipped" tab sits at the top-left corner of its box, 28 px above it, so the stack starts that much lower).
+  -- top"; the "Equipped" tab sits at the top-left corner of its box, tabPx above it, so the stack starts that much lower).
   local prev
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local c = rawget(_G, n)
     if c and c:IsShown() then
       c:SetScale(s)
       if c.NineSlice and c.NineSlice.SetCenterColor then pcall(c.NineSlice.SetCenterColor, c.NineSlice, unpack(TIP_BACK)) end
-      if not prev then c:ClearAllPoints(); c:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top + 28, s)); prev = c
-      elseif under(c, prev, U(28, s), 'RIGHT') then prev = c end
+      if not prev then c:ClearAllPoints(); c:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top + tabPx(c), s)); prev = c
+      elseif under(c, prev, U(tabPx(c), s), 'RIGHT') then prev = c end
     end
   end
   if not (prev and under(t, prev, U(12, s), 'RIGHT')) then
