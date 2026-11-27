@@ -5,14 +5,28 @@ local pattern = arg and arg[1]
 
 local SPELL_IDS, nextId = {}, 1000
 local function spellId(name) if not SPELL_IDS[name] then nextId = nextId + 1; SPELL_IDS[name] = nextId end; return SPELL_IDS[name] end
-local SPELL_NAMES = setmetatable({}, { __index = function(_, id) for n, i in pairs(SPELL_IDS) do if i == id then return n end end end })
+local RANKS = {}                                     -- higher-rank ids: id -> name (a rank upgrade keeps the name)
+local SPELL_NAMES = setmetatable({}, { __index = function(_, id) if RANKS[id] then return RANKS[id] end
+  for n, i in pairs(SPELL_IDS) do if i == id then return n end end end })
+-- a widget that takes any call (the drawing code's textures and animations); Create* hand back more of them
+local function tolerant()
+  return setmetatable({}, { __index = function(_, k)
+    if type(k) == 'string' and k:match('^Create') then return function() return tolerant() end end
+    if k == 'IsShown' or k == 'IsVisible' then return function() return false end end
+    return function() return nil end
+  end })
+end
 
 local W -- the current fake world
 local function newWorld(class, name)
-  W = { class = class, name = name, known = {}, slots = {}, macros = {}, bags = {}, cursor = nil, said = {} }
+  W = { class = class, name = name, known = {}, slots = {}, macros = {}, bags = {}, cursor = nil, said = {}, rank = {}, sounds = {} }
+  _G.GetActionTexture = function(s) if W.slots[s] then return 'icon' .. s end end
+  _G.PlaySound = function(k, ch) W.sounds[#W.sounds + 1] = tostring(k) .. '/' .. tostring(ch) end
+  _G.SOUNDKIT = { IG_QUEST_LIST_COMPLETE = 618 }
+  _G.EnumerateFrames = nil; _G.UIParent = nil; _G.UnitAffectingCombat = nil
   W.frames = {}
   local function frame()
-    local f = { ev = {} }
+    local f = setmetatable({ ev = {} }, getmetatable(tolerant()))
     function f:RegisterEvent(e) self.ev[e] = true end
     function f:SetScript(k, fn) self[k] = fn end
     function f:HookScript() end
@@ -20,7 +34,7 @@ local function newWorld(class, name)
     return f
   end
   -- fire an event at every add-on frame that asked for it
-  W.fire = function(e) for _, f in ipairs(W.frames) do if f.ev[e] and f.OnEvent then f:OnEvent(e) end end end
+  W.fire = function(e, ...) for _, f in ipairs(W.frames) do if f.ev[e] and f.OnEvent then f:OnEvent(e, ...) end end end
   _G.CreateFrame = frame
   _G.UnitClass = function() return class:sub(1, 1) .. class:sub(2):lower(), class end
   _G.UnitName = function() return W.name end
@@ -32,7 +46,7 @@ local function newWorld(class, name)
   _G.SlashCmdList = {}
   _G.C_Timer = { After = function() end }
   _G.C_Spell = {
-    GetSpellInfo = function(n) return { spellID = spellId(n) } end,
+    GetSpellInfo = function(n) return { spellID = W.rank[n] or spellId(n) } end,
     GetSpellName = function(id) return SPELL_NAMES[id] end,
     PickupSpell = function(id) W.cursor = { 'spell', id } end,
   }
@@ -393,6 +407,109 @@ tests['apply waits while he drags something'] = function()
   local w = load('PALADIN', 'Bunji'); w.cursor = { 'item', 6948 }
   local later = 0; _G.C_Timer = { After = function() later = later + 1 end }
   pad(''); ok(w.cursor and w.cursor[2] == 6948, 'what he holds stays on the cursor')
+end
+
+-- ---------- a spell lands on the pad (sheet 26) ----------
+-- a clock for C_Timer: run(ms) moves time on and runs what came due, in order
+local function clockWorld(class)
+  local w = load(class or 'PALADIN', 'Bunji', {}, nil)
+  local q, now = {}, 0
+  _G.C_Timer = { After = function(d, fn) q[#q + 1] = { t = now + d * 1000, fn = fn, n = #q } end }
+  w.run = function(ms)
+    local stop = now + (ms or 60000)
+    while true do
+      table.sort(q, function(a, b) if a.t ~= b.t then return a.t < b.t end return a.n < b.n end)
+      local nx = q[1]; if not nx or nx.t > stop then break end
+      table.remove(q, 1); now = nx.t; nx.fn()
+    end
+    now = stop
+  end
+  local combat = false
+  w.combat = function(v) combat = v end
+  _G.InCombatLockdown = function() return combat end
+  w.log = function() return table.concat(OmaPadLand.log, ' ') end
+  return w
+end
+local function lvl6(w) learn({ 'Seal of Righteousness', 'Holy Light', 'Judgement', 'Devotion Aura', 'Divine Protection' }); pad(); w.run() end
+
+tests['landing: spells learned at a trainer wait until the trainer window closes'] = function()
+  local w = clockWorld(); lvl6(w)
+  eq(w.log(), '', 'the first look only takes notes')
+  w.fire('TRAINER_SHOW')
+  learn({ 'Hammer of Justice' }); pad(); w.run(10000)
+  eq(w.log(), '', 'nothing while the trainer is open')
+  learn({ 'Lay on Hands' })                                  -- learned just before closing: not looked at yet
+  w.fire('TRAINER_CLOSED'); w.run()
+  local s1, s2 = slotOf(1, 'RT', U), slotOf(1, 'LT', R)
+  eq(w.log(), 'start layer:11 new:' .. s1 .. ' layer:12 new:' .. s2 .. ' end', 'both play once the window closes, RT before LT')
+end
+
+tests['landing: a spell from a quest or tome plays right away'] = function()
+  local w = clockWorld(); lvl6(w)
+  learn({ 'Hammer of Justice' }); pad(); w.run(1000)
+  ok(w.log():find('new:' .. slotOf(1, 'RT', U), 1, true), 'played within a second: ' .. w.log())
+  w.run(); ok(w.log():find('end', 1, true), 'and ends')
+  eq(#w.sounds, 1, 'one chime'); eq(w.sounds[1], '618/SFX', 'default kit on the SFX channel')
+end
+
+tests['landing: order bare pad, RT, LT, LT+RT, set 2; upgrades of a layer together, left to right'] = function()
+  local w = clockWorld()
+  local S = function(set, bar, b) return slotOf(set, bar, b) end
+  local steps = OmaPadLand.plan({ { kind = 'new', slot = S(2, 'none', U) }, { kind = 'up', slot = S(1, 'RT', B) },
+    { kind = 'new', slot = S(1, 'LTRT', X) }, { kind = 'new', slot = S(1, 'LT', A) }, { kind = 'up', slot = S(1, 'RT', X) },
+    { kind = 'new', slot = S(1, 'RT', Y) }, { kind = 'new', slot = S(1, 'none', D) } })
+  local out = {}
+  for _, st in ipairs(steps) do out[#out + 1] = st.kind == 'new' and ('n' .. st.slot) or ('u' .. table.concat(st.slots, ',')) end
+  eq(table.concat(out, ' '), table.concat({ 'n' .. S(1, 'none', D), 'n' .. S(1, 'RT', Y), 'u' .. S(1, 'RT', X) .. ',' .. S(1, 'RT', B),
+    'n' .. S(1, 'LT', A), 'n' .. S(1, 'LTRT', X), 'n' .. S(2, 'none', U) }, ' '))
+end
+
+tests['landing: new spell vs rank upgrade; a spell only moving buttons does not play'] = function()
+  local w = clockWorld(); lvl6(w)
+  W.rank['Holy Light'] = 5001; RANKS[5001] = 'Holy Light'      -- Holy Light rank 2
+  learn({ 'Seal of Command' }); pad(); w.run()                 -- Command takes RT Y; Righteousness moves to RT R
+  local cmd, hl = slotOf(1, 'RT', Y), slotOf(1, 'LT', X)
+  eq(spellOn(1, 'RT', R), 'Seal of Righteousness')
+  eq(w.log(), 'start layer:11 new:' .. cmd .. ' layer:12 up:' .. hl .. ' end')
+  eq(#w.sounds, 1, 'chime for the new spell only')
+  w.fire('LEARNED_SPELL_IN_TAB', spellId('Judgement')); pad(); w.run()   -- the game says a known spell got a rank
+  ok(w.log():find('up:' .. slotOf(1, 'RT', X), 1, true), 'learned event counts as an upgrade: ' .. w.log())
+end
+
+tests['landing: never in a fight; it waits for the fight to end, and a fight or a button ends one playing'] = function()
+  local w = clockWorld(); lvl6(w)
+  learn({ 'Hammer of Justice' }); pad(); w.combat(true); w.run()
+  eq(w.log(), '', 'waits in combat')
+  w.combat(false); w.fire('PLAYER_REGEN_ENABLED'); w.run()
+  ok(w.log():find('new:', 1, true), 'played after the fight: ' .. w.log())
+  OmaPadLand.log = {}
+  learn({ 'Lay on Hands', 'Blessing of Protection' }); pad(); w.run(800)
+  w.fire('PLAYER_STARTED_MOVING')
+  eq(OmaPadLand.running, false); ok(w.log():find('stop:button', 1, true), 'moving ends it: ' .. w.log())
+  w.run(); ok(not w.log():find('end', 1, true), 'nothing left playing')
+end
+
+tests['landing: /omapad landtest plays a sample landing and upgrade, /omapad sound sets the chime'] = function()
+  local w = clockWorld(); lvl6(w)
+  eq(SLASH_OMASHUPAD2, '/omapad')
+  -- a pad the drawing can find: the game's buttons show their action and place
+  _G.UIParent = tolerant(); getmetatable(UIParent).__index = function(_, k) if k == 'GetEffectiveScale' then return function() return 1 end end return function() end end
+  local btns = {}
+  for b = 0, 7 do
+    local f = tolerant(); local mt = getmetatable(f)
+    local fx, fy = 300 + b * 60, 200
+    rawset(f, 'action', b < 4 and 181 + b or 193 + b)
+    rawset(f, 'GetCenter', function() return fx, fy end); rawset(f, 'GetEffectiveScale', function() return 1 end)
+    rawset(f, 'GetWidth', function() return 50 end); rawset(f, 'IsVisible', function() return true end)
+    btns[#btns + 1] = f
+  end
+  _G.EnumerateFrames = function(prev) if not prev then return btns[1] end; for i, f in ipairs(btns) do if f == prev then return btns[i + 1] end end end
+  pad('landtest'); w.run()
+  local L = w.log()
+  ok(L:find('new:', 1, true) and L:find('up:', 1, true) and L:find('end', 1, true), 'sample played: ' .. L)
+  eq(OmaPadDB.landCheck.found, 8, 'found the pad buttons'); eq(OmaPadDB.landCheck.err, nil, 'drawing ran clean')
+  pad('sound 3337'); eq(OmaPadDB.landSound, 3337); eq(w.sounds[#w.sounds], '3337/SFX', 'played to hear it')
+  pad('sound default'); eq(OmaPadDB.landSound, nil)
 end
 local names = {}; for n in pairs(tests) do names[#names + 1] = n end; table.sort(names)
 local pass, fail = 0, 0

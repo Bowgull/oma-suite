@@ -421,6 +421,394 @@ local function duplicates(board, mine)
   table.sort(dups); return dups
 end
 
+-- ---------- A spell lands on the pad (sheet omashu/pad/26 v2, Joshua 2026-11-27) ----------
+-- A NEW spell the add-on puts on a button: on that button the old face drops away (140 ms), the icon springs in
+-- (420 ms, overshoot), a gold ring opens and fades (600 ms), six gold sparks fly out and a warm glow breathes, then
+-- stops. A RANK UPGRADE: the icon stays; one gold light sweeps across it (520 ms) and a soft glow comes and goes
+-- (900 ms), no sound. Several at once play one at a time: bare pad, RT, LT, LT+RT, then set 2 (and 3). A layer behind
+-- a trigger is shown by lighting that trigger and laying that layer's icons over the pad buttons for the moment.
+-- WHEN (Joshua: "This is paramount"): spells learned at a trainer play only once the trainer window closes; spells
+-- gained any other way (quest reward, tome) right after he gets them; never in combat (they wait for it to end).
+-- Any button press, moving or a fight starting ends it at once. Only plain frames of our own: no Blizzard frame is
+-- touched (their places are only read), nothing secure, nothing in combat.
+local Land = { queue = {}, log = {}, gen = 0, running = false, trainer = false }
+_G.OmaPadLand = Land                                       -- for /run checks and the offline tests
+local GOLD, EMPTY = { 1, 0.83, 0.42 }, { 0.03, 0.03, 0.03 }   -- #ffd36b, the dark empty face
+local TEX = {                                             -- first one that loads wins (check in game: see landCheck)
+  ring  = { 'Interface\\Cooldown\\ping4', 'Interface\\Buttons\\UI-ActionButton-Border' },
+  spark = { 'Interface\\Cooldown\\star4', 'Interface\\Buttons\\UI-ActionButton-Border' },
+  glow  = { 'Interface\\SpellActivationOverlay\\IconAlert', 'Interface\\Buttons\\UI-ActionButton-Border' },
+  white = { 'Interface\\Buttons\\WHITE8X8' },
+}
+local ROUND_MASK = 'Interface\\CharacterFrame\\TempPortraitAlphaMask'
+local BAR_ORDER = { none = 0, RT = 1, LT = 2, LTRT = 3 }  -- Joshua's order: bare pad, RT, LT, LT+RT (then the next set)
+local SCREEN_X = { [0] = 0, [1] = 1, [3] = 1, [2] = 2, [4] = 3, [5] = 4, [7] = 4, [6] = 5 }   -- left to right on the TV
+local function layerOf(slot)                              -- slot -> set, bar, button (0-7: D-pad L U R D, then X Y B A)
+  local off = (slot - PAD_FIRST) % 28
+  local bar = off < 4 and 'none' or off < 12 and 'LT' or off < 20 and 'RT' or 'LTRT'
+  return math.floor((slot - PAD_FIRST) / 28) + 1, bar, off < 4 and off or (off - 4) % 8
+end
+local function layerKey(slot) local set, bar = layerOf(slot); return set * 10 + BAR_ORDER[bar] end
+local function inCombat() return InCombatLockdown() or (UnitAffectingCombat and UnitAffectingCombat('player')) or false end
+local function note(k, v) if type(OmaPadDB) == 'table' then OmaPadDB.landCheck = OmaPadDB.landCheck or {}; OmaPadDB.landCheck[k] = v end end
+
+-- the chime: new spells only, once each, on the SFX channel so it sits under the music. One setting, picked by ear on
+-- the TV (/omapad sound <id>); the default is the new-recipe chime if this client has it, else quest complete.
+local function landSound()
+  local k = type(OmaPadDB) == 'table' and tonumber(OmaPadDB.landSound)
+  if k then return k end
+  local S = rawget(_G, 'SOUNDKIT') or {}
+  return S.UI_PROFESSIONS_NEW_RECIPE_LEARNED_TOAST or S.IG_QUEST_LIST_COMPLETE
+end
+local function chime() local k = landSound(); if k and PlaySound then pcall(PlaySound, k, 'SFX') end end
+
+-- The order to play a batch in: layer by layer; in each, the new spells one at a time left to right, then all of the
+-- layer's upgrades together.
+function Land.plan(items)
+  local layers, keys = {}, {}
+  for _, it in ipairs(items) do
+    local k = layerKey(it.slot)
+    if not layers[k] then layers[k] = { new = {}, up = {} }; keys[#keys + 1] = k end
+    table.insert(layers[k][it.kind], it.slot)
+  end
+  table.sort(keys)
+  local function lr(a, b)
+    local _, _, ba = layerOf(a); local _, _, bb = layerOf(b)
+    if SCREEN_X[ba] ~= SCREEN_X[bb] then return SCREEN_X[ba] < SCREEN_X[bb] end
+    return ba < bb
+  end
+  local steps = {}
+  for _, k in ipairs(keys) do
+    table.sort(layers[k].new, lr); table.sort(layers[k].up, lr)
+    for _, s in ipairs(layers[k].new) do steps[#steps + 1] = { layer = k, kind = 'new', slot = s } end
+    if #layers[k].up > 0 then steps[#steps + 1] = { layer = k, kind = 'up', slots = layers[k].up } end
+  end
+  return steps
+end
+
+-- ----- drawing (plain frames on UIParent, placed over the game's pad buttons by reading where those are) -----
+local R
+local function setTex(t, list) for _, p in ipairs(list) do local ok, r = pcall(t.SetTexture, t, p); if ok and r ~= false then return p end end end
+local function anim(g, kind, order, ms, smooth)
+  local a = g:CreateAnimation(kind); a:SetOrder(order); a:SetDuration(ms / 1000); if smooth then a:SetSmoothing(smooth) end; return a
+end
+local function fade(g, from, to, ms, order, smooth)
+  local a = anim(g, 'Alpha', order or 1, ms, smooth); a:SetFromAlpha(from); a:SetToAlpha(to); return a
+end
+local function grow(g, from, to, ms, order, smooth)
+  local a = anim(g, 'Scale', order or 1, ms, smooth)
+  if a.SetScaleFrom then a:SetScaleFrom(from, from); a:SetScaleTo(to, to)
+  elseif a.SetFromScale then a:SetFromScale(from, from); a:SetToScale(to, to)
+  else a:SetScale(to / from, to / from) end
+  return a
+end
+local function group(obj, final)
+  local g = obj:CreateAnimationGroup()
+  if g.SetToFinalAlpha then g:SetToFinalAlpha(true) end
+  if final then g:SetScript('OnFinished', function() obj:SetAlpha(final) end) end
+  return g
+end
+local function newFace(round)
+  local f = CreateFrame('Frame', nil, UIParent)
+  f:SetFrameStrata('DIALOG'); f:EnableMouse(false); f:Hide()
+  local function tex(layer, sub, list, blend)
+    local t = f:CreateTexture(nil, layer, nil, sub); setTex(t, list); if blend then t:SetBlendMode(blend) end; t:SetAlpha(0); return t
+  end
+  f.halo = tex('BACKGROUND', 0, TEX.glow, 'ADD'); f.halo:SetVertexColor(unpack(GOLD))
+  f.back = tex('ARTWORK', 0, TEX.white)                    -- the layer's icon, or an empty face
+  f.old = tex('ARTWORK', 1, TEX.white); f.old:SetVertexColor(unpack(EMPTY))
+  f.icon = tex('ARTWORK', 2, TEX.white)
+  f.ring = tex('OVERLAY', 1, TEX.ring, 'ADD'); f.ring:SetVertexColor(unpack(GOLD))
+  f.glow = tex('OVERLAY', 2, TEX.glow, 'ADD'); f.glow:SetVertexColor(unpack(GOLD))
+  if round and f.CreateMaskTexture then
+    pcall(function()
+      local m = f:CreateMaskTexture(); m:SetTexture(ROUND_MASK, 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(f)
+      for _, t in ipairs({ f.back, f.old, f.icon }) do t:AddMaskTexture(m) end
+    end)
+  end
+  f.sparks = {}
+  for i = 1, 6 do local s = tex('OVERLAY', 3, TEX.spark, 'ADD'); s:SetVertexColor(unpack(GOLD)); f.sparks[i] = { t = s } end
+  -- the upgrade's sweep: a soft gold band moved across the icon, clipped to the button
+  local clip = CreateFrame('Frame', nil, f); clip:SetAllPoints(f); if clip.SetClipsChildren then pcall(clip.SetClipsChildren, clip, true) end
+  f.band = clip:CreateTexture(nil, 'OVERLAY'); setTex(f.band, TEX.white); f.band:SetBlendMode('ADD'); f.band:SetAlpha(0)
+  f.band:SetVertexColor(1, 0.95, 0.75)
+  if f.band.SetRotation then pcall(f.band.SetRotation, f.band, math.rad(-18)) end
+  -- the animations (numbers from the sheet's CSS; cubic-bezier(.32,.72,0,1) = OUT)
+  f.aOld = group(f.old, 0); fade(f.aOld, 1, 0, 140, 1, 'IN'); grow(f.aOld, 1, 0.8, 140, 1, 'IN')
+  f.aPop = group(f.icon, 1); fade(f.aPop, 0, 1, 200, 1, 'OUT'); grow(f.aPop, 0.6, 1.1, 260, 1, 'OUT'); grow(f.aPop, 1.1, 1, 160, 2, 'IN_OUT')
+  f.aRing = group(f.ring, 0); fade(f.aRing, 0.95, 0, 600, 1, 'OUT'); grow(f.aRing, 0.9, 1.5, 600, 1, 'OUT')
+  f.aHaloLong = group(f.halo, 0)                           -- breathes twice (2.8 s each) and stops
+  for i = 0, 1 do fade(f.aHaloLong, 0, 1, 1400, i * 2 + 1, 'IN_OUT'); fade(f.aHaloLong, 1, 0, 1400, i * 2 + 2, 'IN_OUT') end
+  f.aHaloShort = group(f.halo, 0); fade(f.aHaloShort, 0, 1, 700, 1, 'IN_OUT'); fade(f.aHaloShort, 1, 0, 700, 2, 'IN_OUT')
+  for _, s in ipairs(f.sparks) do
+    s.g = group(s.t, 0); fade(s.g, 1, 0, 520, 1, 'OUT'); grow(s.g, 1.4, 0.6, 520, 1, 'OUT')
+    s.move = anim(s.g, 'Translation', 1, 520, 'OUT')
+  end
+  f.aBand = group(f.band, 0); f.bandMove = anim(f.aBand, 'Translation', 1, 520, 'OUT')
+  f.aGlow = group(f.glow, 0); fade(f.aGlow, 0, 1, 315, 1, 'IN_OUT'); fade(f.aGlow, 1, 0, 585, 2, 'IN_OUT')
+  f.aIn = f:CreateAnimationGroup(); fade(f.aIn, 0, 1, 220, 1, 'OUT')
+  return f
+end
+local function placeFace(f, p)
+  local s = p.size
+  f:SetSize(s, s); f:ClearAllPoints(); f:SetPoint('CENTER', UIParent, 'BOTTOMLEFT', p.x, p.y)
+  for _, t in ipairs({ f.back, f.old, f.icon }) do t:ClearAllPoints(); t:SetAllPoints(f) end
+  f.ring:ClearAllPoints(); f.ring:SetPoint('CENTER', f); f.ring:SetSize(s + 8, s + 8)
+  f.halo:ClearAllPoints(); f.halo:SetPoint('CENTER', f); f.halo:SetSize(s * 1.7, s * 1.7)
+  f.glow:ClearAllPoints(); f.glow:SetPoint('CENTER', f); f.glow:SetSize(s * 1.35, s * 1.35)
+  for i, sp in ipairs(f.sparks) do
+    local a, d = (i - 1) / 6 * math.pi * 2 + 0.3, s * (0.6 + (i % 2) * 0.13)
+    sp.t:ClearAllPoints(); sp.t:SetPoint('CENTER', f); sp.t:SetSize(s * 0.22, s * 0.22)
+    sp.move:SetOffset(math.cos(a) * d, math.sin(a) * d)
+  end
+  f.band:ClearAllPoints(); f.band:SetSize(s * 0.45, s * 1.4); f.band:SetPoint('CENTER', f, 'LEFT', -s * 0.3, 0)
+  f.bandMove:SetOffset(s * 1.6, 0)
+end
+local function actionOf(b)
+  local a = b.action
+  if type(a) ~= 'number' and b.GetAttribute then local ok, v = pcall(b.GetAttribute, b, 'action'); a = ok and tonumber(v) or nil end
+  if type(a) ~= 'number' and b.CalculateAction then local ok, v = pcall(b.CalculateAction, b); a = ok and tonumber(v) or nil end
+  return type(a) == 'number' and a or nil
+end
+-- where the game's pad buttons are: every action button whose action is a pad slot, by button (shown ones first)
+local function locate()
+  local found, ui = {}, (UIParent and UIParent:GetEffectiveScale() or 1)
+  if not EnumerateFrames then return found end
+  local f, n = EnumerateFrames(), 0
+  while f and n < 30000 do
+    n = n + 1
+    local ok, a = pcall(actionOf, f)
+    if ok and a and a >= PAD_FIRST and a <= PAD_LAST then
+      local okc, x, y = pcall(f.GetCenter, f)
+      if okc and x and y then
+        local _, _, btn = layerOf(a)
+        local vis = (f.IsVisible and f:IsVisible()) and 1 or 0
+        if not found[btn] or vis > found[btn].vis then
+          local e = f:GetEffectiveScale() or 1
+          found[btn] = { x = x * e / ui, y = y * e / ui, size = (f:GetWidth() or 40) * e / ui, vis = vis, name = f.GetName and f:GetName() or '?' }
+        end
+      end
+    end
+    f = EnumerateFrames(f)
+  end
+  return found
+end
+local function makeR()
+  local r = { faces = {}, dots = {} }
+  for b = 0, 7 do r.faces[b] = newFace(b >= 4) end        -- D-pad buttons are square, face buttons round
+  local function lamp()
+    local f = CreateFrame('Frame', nil, UIParent); f:SetFrameStrata('DIALOG'); f:EnableMouse(false); f:Hide()
+    f.t = f:CreateTexture(nil, 'OVERLAY'); setTex(f.t, TEX.glow); f.t:SetBlendMode('ADD'); f.t:SetVertexColor(unpack(GOLD)); f.t:SetAllPoints(f)
+    f.g = f:CreateAnimationGroup(); if f.g.SetLooping then f.g:SetLooping('BOUNCE') end; fade(f.g, 0.55, 1, 700, 1, 'IN_OUT')
+    return f
+  end
+  r.lamps = { LT = lamp(), RT = lamp(), set = lamp() }
+  return r
+end
+local function dot(i)
+  local d = R.dots[i]
+  if not d then
+    d = CreateFrame('Frame', nil, UIParent); d:SetFrameStrata('DIALOG'); d:EnableMouse(false)
+    d.t = d:CreateTexture(nil, 'OVERLAY'); setTex(d.t, TEX.white); d.t:SetAllPoints(d)
+    if d.CreateMaskTexture then pcall(function() local m = d:CreateMaskTexture(); m:SetTexture(ROUND_MASK, 'CLAMPTOBLACKADDITIVE', 'CLAMPTOBLACKADDITIVE'); m:SetAllPoints(d); d.t:AddMaskTexture(m) end) end
+    R.dots[i] = d
+  end
+  return d
+end
+local Draw = {}
+function Draw.start(nSteps)
+  if not R then R = makeR() end
+  R.at = locate()
+  local minX, maxX, top, bottom, size, n = nil, nil, nil, nil, 40, 0
+  for _, p in pairs(R.at) do
+    n = n + 1; size = p.size
+    minX = math.min(minX or p.x, p.x); maxX = math.max(maxX or p.x, p.x)
+    top = math.max(top or p.y, p.y); bottom = math.min(bottom or p.y, p.y)
+  end
+  local names = {}; for b, p in pairs(R.at) do names[#names + 1] = b .. '=' .. tostring(p.name) end; table.sort(names)
+  note('buttons', table.concat(names, ' ')); note('found', n)
+  R.box = n > 0 and { minX = minX, maxX = maxX, top = top, bottom = bottom, size = size } or nil
+  if not R.box then return end
+  local s, B = size, R.box
+  local function put(f, x, y, w, h) f:SetSize(w, h); f:ClearAllPoints(); f:SetPoint('CENTER', UIParent, 'BOTTOMLEFT', x, y) end
+  put(R.lamps.LT, B.minX - s * 1.1, B.top + s * 0.7, s * 1.15, s * 0.85)   -- first guesses from the sheet: tune on the TV
+  put(R.lamps.RT, B.maxX + s * 1.1, B.top + s * 0.7, s * 1.15, s * 0.85)
+  put(R.lamps.set, (B.minX + B.maxX) / 2, B.top + s * 0.9, s * 1.15, s * 0.85)
+  for i = 1, nSteps do local d = dot(i); put(d, (B.minX + B.maxX) / 2 + (i - (nSteps + 1) / 2) * s * 0.2, B.bottom - s * 0.95, s * 0.12, s * 0.12) end
+  for i = nSteps + 1, #R.dots do R.dots[i]:Hide() end
+end
+function Draw.dots(n, cur)
+  if not R or not R.box then return end
+  for i = 1, n do
+    local d = R.dots[i]; d:Show()
+    if i < cur then d.t:SetVertexColor(0.54, 0.42, 0.16) elseif i == cur then d.t:SetVertexColor(unpack(GOLD)) else d.t:SetVertexColor(0.23, 0.16, 0.08) end
+  end
+end
+local function faceIcon(f, slot)
+  local icon = GetActionTexture and GetActionTexture(slot)
+  if icon then f.back:SetTexture(icon); f.back:SetVertexColor(1, 1, 1) else setTex(f.back, TEX.white); f.back:SetVertexColor(unpack(EMPTY)) end
+end
+-- show a layer: the bare pad needs nothing; any other layer lights its trigger (or set switch) and lays its icons on
+-- the pad buttons. New spells not yet landed show an empty face until their turn.
+function Draw.layer(key, pending)
+  if not R or not R.box then return end
+  for _, l in pairs(R.lamps) do l.g:Stop(); l:Hide() end
+  for b, f in pairs(R.faces) do f.aIn:Stop(); f:Hide(); f.back:SetAlpha(0); f.icon:SetAlpha(0) end
+  if not key or key == 10 then return end
+  local set, bar = math.floor(key / 10), nil
+  for name, o in pairs(BAR_ORDER) do if o == key % 10 then bar = name end end
+  local lamps = bar == 'LT' and { 'LT' } or bar == 'RT' and { 'RT' } or bar == 'LTRT' and { 'LT', 'RT' } or {}
+  if set ~= 1 then lamps[#lamps + 1] = 'set' end
+  for _, n in ipairs(lamps) do R.lamps[n]:Show(); R.lamps[n].g:Play() end
+  for b = 0, bar == 'none' and 3 or 7 do
+    local f, p = R.faces[b], R.at[b]
+    if p then
+      local slot = 181 + (set - 1) * 28 + ({ none = 0, LT = 4, RT = 12, LTRT = 20 })[bar] + b
+      placeFace(f, p)
+      if pending[slot] then setTex(f.back, TEX.white); f.back:SetVertexColor(unpack(EMPTY)) else faceIcon(f, slot) end
+      f.back:SetAlpha(1); f:Show(); f.aIn:Play()
+    end
+  end
+end
+local function faceFor(slot)
+  if not R or not R.box then return nil end
+  local _, _, b = layerOf(slot); local f, p = R.faces[b], R.at[b]
+  if not p then return nil end
+  if not f:IsShown() then placeFace(f, p); f.back:SetAlpha(0); f:SetAlpha(1); f:Show() end
+  return f
+end
+function Draw.pop(slot, alone, at)
+  local f = faceFor(slot); if not f then return end
+  f.icon:SetTexture((GetActionTexture and GetActionTexture(slot)) or 'Interface\\Icons\\INV_Misc_QuestionMark')
+  f.icon:SetAlpha(0); f.old:SetAlpha(1); f.aOld:Play()                       -- 0: the old face drops away
+  at(120, function() f.aPop:Play() end)                                     -- 120: the icon springs in
+  at(160, function() f.aRing:Play() end)                                    -- 160: the gold ring
+  at(220, function() for _, s in ipairs(f.sparks) do s.g:Play() end end)    -- 220: the sparks
+  if alone then at(600, function() f.aHaloLong:Play() end) else at(300, function() f.aHaloShort:Play() end) end
+end
+function Draw.glint(slot)
+  local f = faceFor(slot); if not f then return end
+  f.aBand:Stop(); f.aGlow:Stop(); f.aBand:Play(); f.aGlow:Play()
+end
+function Draw.clear()
+  if not R then return end
+  for _, f in pairs(R.faces) do
+    for _, g in ipairs({ f.aOld, f.aPop, f.aRing, f.aHaloLong, f.aHaloShort, f.aBand, f.aGlow, f.aIn }) do g:Stop() end
+    for _, s in ipairs(f.sparks) do s.g:Stop(); s.t:SetAlpha(0) end
+    for _, t in ipairs({ f.back, f.old, f.icon, f.ring, f.halo, f.glow, f.band }) do t:SetAlpha(0) end
+    f:Hide()
+  end
+  for _, l in pairs(R.lamps) do l.g:Stop(); l:Hide() end
+  for _, d in ipairs(R.dots) do d:Hide() end
+end
+local function draw(name, ...)                              -- drawing never stops the add-on; the first error is kept
+  local ok, err = pcall(Draw[name], ...)
+  if not ok then note('err', name .. ': ' .. tostring(err)) end
+end
+
+-- ----- playing a batch -----
+function Land.stop(why)
+  if not Land.running then return end
+  Land.gen = Land.gen + 1; Land.running = false; Land.queue = {}
+  Land.log[#Land.log + 1] = 'stop:' .. tostring(why)
+  draw('clear')
+end
+function Land.run(items)
+  local steps = Land.plan(items)
+  if #steps == 0 then return end
+  Land.gen = Land.gen + 1; Land.running = true
+  local gen = Land.gen
+  local function at(ms, fn) C_Timer.After(ms / 1000, function() if Land.gen == gen then fn() end end) end
+  local alone = #steps == 1 and steps[1].kind == 'new'
+  local pending = {}; for _, s in ipairs(steps) do if s.kind == 'new' then pending[s.slot] = true end end
+  Land.log[#Land.log + 1] = 'start'
+  draw('start', #steps)
+  local t, cur = 0, nil
+  for i, s in ipairs(steps) do
+    if s.layer ~= cur then
+      local k = s.layer
+      at(t, function() Land.log[#Land.log + 1] = 'layer:' .. k; draw('layer', k, pending) end)
+      t = t + (k == 10 and 250 or 450); cur = k
+    end
+    at(t, function() draw('dots', #steps, i) end)
+    if s.kind == 'new' then
+      at(t, function() pending[s.slot] = nil; Land.log[#Land.log + 1] = 'new:' .. s.slot; chime(); draw('pop', s.slot, alone, at) end)
+      t = t + (alone and 6200 or 1200)
+    else
+      for j, slot in ipairs(s.slots) do
+        at(t + (j - 1) * 80, function() Land.log[#Land.log + 1] = 'up:' .. slot; draw('glint', slot) end)
+      end
+      t = t + 900 + (#s.slots - 1) * 80
+    end
+  end
+  at(t, function() draw('layer', nil, pending); draw('dots', #steps, #steps + 1) end)
+  at(t + 300, function()
+    draw('clear'); Land.running = false; Land.log[#Land.log + 1] = 'end'
+    Land.kick()
+  end)
+end
+-- play what's waiting, if now is allowed: not while a trainer is open, not in combat, not on top of another batch
+function Land.kick()
+  if Land.running or #Land.queue == 0 or Land.trainer then return end
+  if inCombat() then Land.afterCombat = true; return end
+  local items = Land.queue; Land.queue = {}
+  Land.run(items)
+end
+function Land.add(items)
+  if #items == 0 then return end
+  local at = {}; for i, it in ipairs(Land.queue) do at[it.slot] = i end
+  for _, it in ipairs(items) do
+    local i = at[it.slot]
+    if not i then Land.queue[#Land.queue + 1] = it; at[it.slot] = #Land.queue
+    elseif it.kind == 'new' then Land.queue[i] = it end                          -- a new spell beats an upgrade
+  end
+  C_Timer.After(0.2, Land.kick)                                                  -- "right after I acquire them"
+end
+
+-- What changed: a pad button the add-on just filled with a spell he didn't know at the last look = new; a spell on a
+-- pad button whose rank went up (its spell id changed, or the game said it was learned) = upgrade. The first look of
+-- a session only takes notes, so logging in, a layout change or a fresh character never set anything off.
+local landSeen, landLearned = nil, {}
+local function rankOf(n) return knownId(n) or false end
+function Land.learned(id) local n = id and spellName(id); if n then landLearned[n] = true end end
+function Land.detect(before, mine)
+  local now, names = {}, {}
+  for s = PAD_FIRST, PAD_LAST do now[s] = sigOf(s) end
+  for _, e in ipairs(classLayout()) do
+    if e[4] == 'spell' then for _, n in ipairs(type(e[5]) == 'table' and e[5] or { e[5] }) do names[n] = true end end
+  end
+  for _, sig in pairs(now) do local n = sig:match('^spell:(.*)$'); if n then names[n] = true end end
+  if landSeen then
+    local found = {}
+    for s = PAD_FIRST, PAD_LAST do
+      local sig = now[s]; local n = sig and sig:match('^spell:(.*)$')
+      if n then
+        if sig ~= before[s] and mine[s] == sig and not landSeen[n] then
+          found[#found + 1] = { kind = 'new', slot = s }
+        elseif sig == before[s] and landSeen[n] and (landSeen[n] ~= rankOf(n) or landLearned[n]) then
+          found[#found + 1] = { kind = 'up', slot = s }
+        end
+      end
+    end
+    Land.add(found)
+  end
+  landSeen = {}; for n in pairs(names) do landSeen[n] = rankOf(n) end
+  landLearned = {}
+end
+-- /omapad landtest: one sample new spell (the first filled bare D-pad button) and one upgrade (the first filled RT
+-- button) on the pad as it is now, to look at it and pick the sound on the TV
+function Land.test()
+  if inCombat() then say('landtest: not in a fight'); return end
+  local new, up = 182, nil
+  for s = 181, 184 do if HasAction(s) then new = s; break end end
+  for s = 193, 200 do if HasAction(s) then up = s; break end end
+  if not up then for s = 185, 192 do if HasAction(s) then up = s; break end end end
+  Land.stop('test'); Land.queue = {}
+  local items = { { kind = 'new', slot = new } }
+  if up then items[2] = { kind = 'up', slot = up } end
+  Land.run(items)
+end
+
 local function apply()
   if InCombatLockdown() then return end
   if GetCursorInfo and GetCursorInfo() then C_Timer.After(2, apply); return end   -- he is dragging something: not now
@@ -449,7 +837,9 @@ local function apply()
     for s in pairs(db.mine) do if HasAction(s) then PickupAction(s); ClearCursor(); moved = moved + 1 end; db.mine[s] = nil end
     db.layoutV = V
   end
+  local before = {}; for s = PAD_FIRST, PAD_LAST do before[s] = sigOf(s) end      -- for the landing (sheet 26)
   local placed, upgraded, cleared, waiting, blocked = runRules(realBoard, db)
+  do local okL, errL = pcall(Land.detect, before, db.mine); if not okL then note('err', 'detect: ' .. tostring(errL)) end end
   db.waiting, db.blocked = waiting, blocked
   local dups = duplicates(realBoard, db.mine)
   db.check = { at = date('%Y-%m-%d %H:%M:%S'), dups = dups }
@@ -962,7 +1352,8 @@ local ev = CreateFrame('Frame')
 for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'SPELLS_CHANGED', 'LEARNED_SPELL_IN_SKILL_LINE', 'LEARNED_SPELL_IN_TAB', 'BAG_UPDATE_DELAYED', 'PLAYER_REGEN_ENABLED', 'UNIT_PET', 'PET_BAR_UPDATE' }) do
   pcall(ev.RegisterEvent, ev, e)                -- event names differ between WoW versions
 end
-ev:SetScript('OnEvent', function(_, e)
+ev:SetScript('OnEvent', function(_, e, a1)
+  if e == 'LEARNED_SPELL_IN_TAB' or e == 'LEARNED_SPELL_IN_SKILL_LINE' then pcall(Land.learned, tonumber(a1)) end
   if e == 'PLAYER_ENTERING_WORLD' then
     C_Timer.After(3, function()
       pcall(keepRxpProfile); pcall(settings); pcall(moveBreathBar); pcall(hideTracker); pcall(meterButtonOnly); pcall(setMeters, false)
@@ -971,10 +1362,44 @@ ev:SetScript('OnEvent', function(_, e)
     end)
   else later() end
 end)
+-- The landing's moments (sheet 26): a trainer holds everything until its window closes; a fight holds it until the
+-- fight ends; any button, moving, or a fight starting ends one that is playing.
+local landEv = CreateFrame('Frame')
+for _, e in ipairs({ 'TRAINER_SHOW', 'TRAINER_CLOSED', 'PLAYER_REGEN_ENABLED', 'PLAYER_REGEN_DISABLED', 'PLAYER_STARTED_MOVING',
+  'MODIFIER_STATE_CHANGED', 'UNIT_SPELLCAST_SENT', 'PLAYER_TARGET_CHANGED', 'PLAYER_ENTERING_WORLD' }) do pcall(landEv.RegisterEvent, landEv, e) end
+landEv:SetScript('OnEvent', function(_, e, a1, a2)
+  if e == 'TRAINER_SHOW' then Land.trainer = true; Land.stop('trainer')
+  elseif e == 'TRAINER_CLOSED' then
+    if not Land.trainer then return end                       -- the game can send it twice
+    Land.trainer = false
+    C_Timer.After(0.3, function() apply(); Land.kick() end)   -- the last spell learned may not be looked at yet
+  elseif e == 'PLAYER_REGEN_ENABLED' then if Land.afterCombat then Land.afterCombat = false; C_Timer.After(0.5, Land.kick) end
+  elseif e == 'PLAYER_ENTERING_WORLD' then Land.trainer = false; Land.stop('loading')
+  elseif e == 'PLAYER_REGEN_DISABLED' then Land.stop('combat')
+  elseif e == 'MODIFIER_STATE_CHANGED' then if a2 == 1 then Land.stop('button') end   -- a trigger pressed, not released
+  elseif e == 'UNIT_SPELLCAST_SENT' then if a1 == 'player' then Land.stop('button') end
+  else Land.stop('button') end
+end)
+if hooksecurefunc then                                        -- after-hooks only: nothing of the game's is changed
+  for _, fn in ipairs({ 'UseAction', 'JumpOrAscendStart', 'ToggleGameMenu', 'CastSpellByName' }) do
+    if rawget(_G, fn) then hooksecurefunc(fn, function() Land.stop('button') end) end
+  end
+end
+
 -- /ompad: re-check now.  /ompad sim: replay levelling on a copy and check the rules.  /ompad mine: hand every pad button back to the add-on (forgets which were his).
+-- /omapad landtest: one sample landing and one upgrade on the pad.  /omapad sound <id>: the chime (a sound kit id),
+-- played once to hear it; /omapad sound default: back to the default; /omapad sound: says which one is set.
 SLASH_OMASHUPAD1 = '/ompad'
+SLASH_OMASHUPAD2 = '/omapad'
 SlashCmdList.OMASHUPAD = function(m)
+  m = m or ''
   if m == 'sim' then simulate(); return end
+  if m == 'landtest' then Land.test(); return end
+  if m:match('^sound') then
+    local arg = m:match('^sound%s+(%S+)')
+    if arg == 'default' then OmaPadDB.landSound = nil elseif tonumber(arg) then OmaPadDB.landSound = tonumber(arg) end
+    say('landing sound: ' .. tostring(landSound()) .. (OmaPadDB.landSound and '' or ' (default)')); chime(); return
+  end
   if m == 'keys' then   -- every gamepad button (and LB/RB/LT/RT/View combos) -> what it's bound to, saved for Claude to read
     local names = { 'PADA', 'PADB', 'PADX', 'PADY', 'PADLSHOULDER', 'PADRSHOULDER', 'PADLTRIGGER', 'PADRTRIGGER',
       'PADLSTICK', 'PADRSTICK', 'PADBACK', 'PADFORWARD', 'PADSYSTEM', 'PADSOCIAL', 'PADDUP', 'PADDDOWN', 'PADDLEFT', 'PADDRIGHT',
