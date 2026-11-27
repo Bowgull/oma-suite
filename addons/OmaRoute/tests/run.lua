@@ -208,6 +208,16 @@ tests['target list: people only (kill/loot goals, along and While you\'re here l
   B.TargetNames(view, view.goals, true, true, 5, true)
   eq(W.tn.view.goals[1].t, 'kill', 'off: everything as before'); eq(W.tn.here, true)
 end
+tests['/omq asks Polestar for a quest guide and says what happened'] = function()
+  world(10)
+  local asked; _G.Polestar.Lookup = { Guide = function(kind, id) asked = kind .. ':' .. id; if id == 1 then return nil, 'tabs' end; return 'lookup/quest/' .. id end }
+  _G.C_QuestLog = { GetTitleForQuestID = function(id) return id == 99156 and 'Rear Guard Patrol' or nil end }
+  _G.SlashCmdList.OMQ('99156')
+  eq(asked, 'quest:99156'); ok(saidHas('added to Polestar: Rear Guard Patrol (new tab).'), 'success line')
+  _G.SlashCmdList.OMQ('1'); ok(saidHas('too many tabs'), 'says why')
+  asked = nil; _G.SlashCmdList.OMQ('abc'); eq(asked, nil, 'no number, nothing asked'); ok(saidHas('needs a quest number'))
+  _G.InCombatLockdown = function() return true end; _G.SlashCmdList.OMQ('99156'); ok(saidHas('in a fight'))
+end
 tests['keep hearth: no error without Polestar, or with an old Polestar lacking the calls'] = function()
   world(30); hills()
   _G.Polestar = nil

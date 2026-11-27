@@ -282,6 +282,27 @@ f:SetScript('OnEvent', function(_, ev)
   C_Timer.After(wait, function() checkInside(); step(ev); keepHearth(); peopleOnlyHook() end)
 end)
 
+-- "Add to Polestar" from the phone (sheet omashu/remote/27, 2026-11-27): /omq <questId> asks Polestar to build its
+-- own guide to that quest in a new tab (Polestar.Lookup.Guide, Lookup/Guide.lua: quests needed first, the giver,
+-- accept, objectives, hand in). The main route stays as it is. Says why when Polestar can't.
+local OMQ_WHY = { tabs = 'Polestar has too many tabs open: close one and tap again.', disabled = 'Polestar\'s Lookup is off.',
+  missing = 'Polestar\'s quest data isn\'t loaded.', combat = 'in a fight: tap again after it.', noguide = 'Polestar has no route to that quest.' }
+SLASH_OMQ1 = '/omq'
+SlashCmdList.OMQ = function(msg)
+  local id = tonumber((msg or ''):match('^%s*(%d+)%s*$'))
+  local P = PS(); local L = P and P.Lookup
+  if not id then say('/omq needs a quest number.'); return end
+  if not (L and L.Guide) then say('Polestar isn\'t ready.'); return end
+  if InCombatLockdown() then say(OMQ_WHY.combat); return end
+  local ok, gid, why = pcall(L.Guide, 'quest', id)
+  if ok and gid then
+    local name = C_QuestLog and C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(id)
+    say(('added to Polestar: %s (new tab).'):format(name or ('quest ' .. id)))
+  else
+    say(OMQ_WHY[ok and why or ''] or ('Polestar couldn\'t add quest ' .. id .. (ok and why and (': ' .. tostring(why)) or '') .. '.'))
+  end
+end
+
 SLASH_OMAROUTE1 = '/omroute'
 SlashCmdList.OMAROUTE = function(msg)
   msg = (msg or ''):lower()
