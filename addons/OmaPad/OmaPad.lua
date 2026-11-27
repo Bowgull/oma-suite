@@ -21,7 +21,7 @@
 --   4. A new layout version moves only the add-on's own buttons.
 --   5. Nothing it places appears twice (LAYOUT order is priority). Checked after every pass; /ompad sim replays 7-41.
 --   New spell ranks: WoW swaps them on the bars itself (buttons are compared by spell name, so that's not "his change").
-local VERSIONS = { WARLOCK = 16, PALADIN = 3 } -- layout version per class: bump a class's number when its LAYOUT changes
+local VERSIONS = { WARLOCK = 16, PALADIN = 4 } -- layout version per class: bump a class's number when its LAYOUT changes
 local function playerClass() return select(2, UnitClass('player')) end
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
 local BAR = { none = 0, LT = 4, RT = 12, LTRT = 20 }
@@ -60,6 +60,9 @@ local OLD_MACROS = { WARLOCK = { 'Bolt', 'PetGo', 'PetBack', 'PetMove', 'PetOne'
 local BANDAGES = { 14530, 14529, 8545, 8544, 6451, 6450, 3531, 3530, 2581, 1251 } -- Heavy Runecloth .. Linen, best first
 local SOULSTONES = { 16896, 16895, 16893, 16892, 5232 }             -- Major .. Minor Soulstone, best first
 local POTIONS = { 13446, 3928, 1710, 929, 858, 118 }               -- Major .. Minor Healing Potion, best first
+-- Throwables, best first (paladin v4, 2026-11-27): Engineering's bombs and grenades, and Forever's SAF-T ones anyone can
+-- throw (their ids not known yet: add them when seen in game). Icy Veins: grenades are "incredibly potent" for paladins.
+local BOMBS = { 10646, 15993, 16005, 10562, 18641, 10507, 4394, 4390, 4380, 6714, 4374, 4370, 4365, 4360, 4358 }
 local STONES = { 9421, 5510, 5509, 5511, 5512 }                    -- Major .. Minor Healthstone, best first
 local WATERS = { 8766, 1645, 1708, 1205, 1179, 159 }                -- vendor water, best first
 local FOODS  = { 8948, 4608, 4607, 4606, 4605, 4604 }               -- vendor mushrooms (Undercity), best first
@@ -144,44 +147,46 @@ LAYOUTS.WARLOCK = {
 -- Righteousness drops to down (the Unsealed Wrath swap at 40). The same for Holy Light (LT X -> LT Y at 20).
 -- Racials are listed for both paladin races, so the button is right whichever one he plays.
 LAYOUTS.PALADIN = {
-  -- RT + face: the pull                                                    (warlock: Corruption, Bane, wand, PetFight)
-  { 1, 'RT', X, 'spell', 'Judgement' },                                    -- 4
-  { 1, 'RT', Y, 'spell', 'Holy Strike' },                                  -- 6
-  { 1, 'RT', B, 'spell', 'Consecration' },                                 -- 20
-  { 1, 'RT', A, 'spell', 'Exorcism' },                                     -- 20
-  -- LT + face: keeping it going                                            (warlock: Life Tap, Drain Life, Immolate, Fear)
+  -- v4 (Joshua 2026-11-27, Undead Horde paladin, mockup omashu/pad/23): each trigger is one job. RT is the whole attack:
+  -- seal and Judgement side by side ("I hate having to press up for the seal I'm using to judge off a right trigger"),
+  -- the strikes, and Hammer of Justice, which starts the double-damage Judgement of Command. LT gets you out of trouble.
+  -- The D-pad alone is upkeep. No seal he doesn't use on the attack section: Crusader (bosses only) goes to set 2.
+  -- RT + face: the attack
+  { 1, 'RT', X, 'spell', 'Judgement' },                                    -- 4: on cooldown, off the global cooldown
+  { 1, 'RT', Y, 'spell', { 'Seal of Command', 'Seal of Righteousness' } }, -- main seal: Command from 22
+  { 1, 'RT', B, 'spell', 'Holy Strike' },                                  -- 6
+  { 1, 'RT', A, 'spell', 'Exorcism' },                                     -- 20: undead and demons, a 30 yd pull
+  -- RT + D-pad: the rest of the attack
+  { 1, 'RT', U, 'spell', 'Hammer of Justice' },                            -- 8: stun, then Judge Command for double
+  { 1, 'RT', R, 'spell', 'Seal of Righteousness' },                        -- the second seal for Unsealed Wrath's swap (40); fills once Command is known
+  { 1, 'RT', L, 'spell', 'Consecration' },                                 -- 20: 3+ mobs
+  { 1, 'RT', D, 'spell', 'Hammer of Wrath' },                              -- 44: under 20% health
+  -- LT + face: heal and protect
   { 1, 'LT', X, 'spell', { 'Flash of Light', 'Holy Light' } },             -- Holy Light until 20
   { 1, 'LT', Y, 'spell', 'Holy Light' },                                   -- fills at 20
   { 1, 'LT', B, 'spell', 'Repentance' },                                   -- talent, 33
-  { 1, 'LT', A, 'spell', 'Hammer of Justice' },                            -- 8: the paladin's Fear
-  -- bare D-pad: support = the Seals                                        (warlock: PetHome, Healthstone, Funnel, Bolt)
-  { 1, 'none', U, 'spell', { 'Seal of Command', 'Seal of Righteousness' } }, -- main seal: Command from 20
-  { 1, 'none', R, 'item', POTIONS },                                       -- Healing Potion (the Healthstone button)
-  { 1, 'none', L, 'spell', 'Seal of the Crusader' },                       -- 6
-  { 1, 'none', D, 'spell', 'Seal of Righteousness' },                      -- fills at 20 (Unsealed Wrath swap)
-  -- RT + D-pad                                                             (warlock: Siphon, curses, racial, Meters)
-  { 1, 'RT', U, 'spell', 'Hammer of Wrath' },                              -- 44
-  { 1, 'RT', L, 'spell', 'Holy Wrath' },                                   -- 50
-  { 1, 'RT', D, 'spell', { 'Will to Survive', 'Will of the Forsaken' } },  -- stun break racial, Human or Undead
-  { 1, 'RT', R, 'macro', 'Meters' },
-  -- LT + D-pad: emergencies                                                (warlock: Cannibalize, Coil, Howl, Ward)
-  { 1, 'LT', U, 'spell', { 'Cannibalize', 'Perception' } },                -- the other racial
+  { 1, 'LT', A, 'spell', { 'Divine Shield', 'Divine Protection' } },       -- Protection from 6 (6 s immunity), Shield from 34
+  -- LT + D-pad: escape
+  { 1, 'LT', U, 'spell', { 'Cannibalize', 'Perception' } },                -- racial: 35% health and mana
   { 1, 'LT', R, 'spell', 'Lay on Hands' },                                 -- 10
   { 1, 'LT', L, 'spell', 'Blessing of Freedom' },                          -- 18
-  { 1, 'LT', D, 'spell', { 'Divine Shield', 'Divine Protection' } },       -- Shield from 34
-  -- LT + RT: out of the fight                                              (same slots as the warlock's)
+  { 1, 'LT', D, 'spell', { 'Will of the Forsaken', 'Will to Survive' } },  -- racial: after the fear lands
+  -- bare D-pad: upkeep
+  { 1, 'none', U, 'spell', { 'Blessing of Kings', 'Blessing of Might' } }, -- Kings from 20
+  { 1, 'none', R, 'item', POTIONS },                                       -- best healing potion in the bags
+  { 1, 'none', L, 'item', BANDAGES },                                      -- best bandage in the bags
+  { 1, 'none', D, 'item', BOMBS },                                         -- best throwable in the bags
+  -- LT + RT: out of the fight
   { 1, 'LTRT', U, 'item', 6948 },                                          -- Hearthstone
-  { 1, 'LTRT', R, 'macro', 'Polestar' },                                 -- v3: guide on/off
-  { 1, 'LTRT', L, 'macro', 'Mastercraft' },                              -- v3: professions window
-  { 1, 'LTRT', D, 'spell', { 'Retribution Aura', 'Devotion Aura' } },      -- the "always out" button (warlock: demon)
-  { 1, 'LTRT', X, 'food', FOODS },
+  { 1, 'LTRT', R, 'macro', 'Polestar' },                                   -- guide on/off
+  { 1, 'LTRT', L, 'macro', 'Mastercraft' },                                -- professions window
+  { 1, 'LTRT', X, 'food', FOODS },                                         -- +5% kill XP (Well Fed)
   { 1, 'LTRT', Y, 'drink', WATERS },
-  { 1, 'LTRT', B, 'spell', 'Blessing of Might' },                          -- self-buff (warlock: Demon Armor)
-  { 1, 'LTRT', A, 'spell', 'Blessing of Kings' },                          -- 20 (warlock: Create Healthstone)
-  -- SET 2 (LB+RB, D-pad right): travel and utility, same places as the warlock's.
-  { 2, 'none', U, 'spell', { 'Summon Charger', 'Summon Warhorse' } },     -- mount (40), the Felsteed slot
-  { 2, 'none', R, 'spell', 'Redemption' },                                 -- 12, the Soulstone slot
-  { 2, 'none', L, 'spell', 'Divine Intervention' },                        -- 30, the Ritual of Summoning slot
+  { 1, 'LTRT', B, 'spell', { 'Retribution Aura', 'Devotion Aura' } },      -- the aura
+  -- SET 2 (LB+RB, D-pad right): travel and utility, same places as before.
+  { 2, 'none', U, 'spell', { 'Summon Charger', 'Summon Warhorse' } },     -- mount (40)
+  { 2, 'none', R, 'spell', 'Redemption' },                                 -- 12
+  { 2, 'none', L, 'spell', 'Divine Intervention' },                        -- 30
   { 2, 'none', D, 'spell', 'Sense Undead' },
   { 2, 'LT', X, 'spell', 'Blessing of Wisdom' },                           -- 14
   { 2, 'LT', Y, 'spell', 'Blessing of Protection' },                       -- 10
@@ -191,14 +196,13 @@ LAYOUTS.PALADIN = {
   { 2, 'RT', U, 'spell', 'Shadow Resistance Aura' },                       -- 28
   { 2, 'RT', R, 'spell', 'Frost Resistance Aura' },                        -- 32
   { 2, 'RT', D, 'spell', 'Fire Resistance Aura' },                         -- 36
-  { 2, 'LTRT', X, 'spell', 'Righteous Fury' },                             -- 10, tanking only
-  { 2, 'LTRT', Y, 'spell', 'Seal of Fury' },                               -- 10, tanking only
-  { 2, 'LTRT', A, 'spell', 'Smelting' },                                   -- Mining
-  { 2, 'LTRT', D, 'spell', 'First Aid' },                                  -- paladin v2 (Joshua 2026-11-26): the secondary
-  { 2, 'LTRT', R, 'spell', 'Cooking' },                                    -- professions, First Aid in the warlock's spot
+  { 2, 'LTRT', X, 'spell', 'Righteous Fury' },                             -- tanking only
+  { 2, 'LTRT', Y, 'spell', 'Seal of Fury' },                               -- tanking only
+  { 2, 'LTRT', B, 'spell', 'Seal of the Crusader' },                       -- bosses and elites only (sources disagree on normal mobs)
+  { 2, 'LTRT', A, 'spell', 'Find Herbs' },                                 -- Herbalism (was Smelting: Bujuju mines)
+  { 2, 'LTRT', D, 'spell', 'First Aid' },
+  { 2, 'LTRT', R, 'spell', 'Cooking' },
   { 2, 'LTRT', L, 'spell', 'Fishing' },
-  { 2, 'LTRT', B, 'item', BANDAGES },                                      -- best bandage in the bags
-  -- SET 3 free (a Holy or Protection dual spec at 40).
 }
 local function classLayout() return LAYOUTS[playerClass()] or {} end
 

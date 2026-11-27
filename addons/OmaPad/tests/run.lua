@@ -155,14 +155,15 @@ tests['paladin: level 6 fills the pull, the seal and Holy Light once'] = functio
   learn({ 'Seal of Righteousness', 'Holy Light', 'Devotion Aura', 'Judgement', 'Blessing of Might', 'Holy Strike',
           'Seal of the Crusader', 'Divine Protection', 'Will to Survive', 'Perception' })
   pad()
-  eq(spellOn(1, 'RT', X), 'Judgement'); eq(spellOn(1, 'RT', Y), 'Holy Strike')
-  eq(spellOn(1, 'none', U), 'Seal of Righteousness', 'main seal'); eq(spellOn(1, 'none', D), nil, 'no second Righteousness yet')
-  eq(spellOn(1, 'none', L), 'Seal of the Crusader')
+  -- v4 (2026-11-27): RT is the whole attack, seal beside Judgement; Crusader on set 2
+  eq(spellOn(1, 'RT', X), 'Judgement'); eq(spellOn(1, 'RT', Y), 'Seal of Righteousness', 'main seal beside Judgement')
+  eq(spellOn(1, 'RT', B), 'Holy Strike'); eq(spellOn(1, 'RT', R), nil, 'no second Righteousness yet')
+  eq(spellOn(2, 'LTRT', B), 'Seal of the Crusader', 'Crusader off the attack section')
   eq(spellOn(1, 'LT', X), 'Holy Light'); eq(spellOn(1, 'LT', Y), nil, 'no second Holy Light yet')
-  eq(spellOn(1, 'LT', D), 'Divine Protection')
-  eq(spellOn(1, 'RT', D), 'Will to Survive', 'stun break racial on the warlock racial button')
+  eq(spellOn(1, 'LT', A), 'Divine Protection')
+  eq(spellOn(1, 'LT', D), 'Will to Survive', 'racial on LT (getting out of trouble)')
   eq(spellOn(1, 'LT', U), 'Perception')
-  eq(spellOn(1, 'LTRT', D), 'Devotion Aura'); eq(spellOn(1, 'LTRT', B), 'Blessing of Might')
+  eq(spellOn(1, 'LTRT', B), 'Devotion Aura'); eq(spellOn(1, 'none', U), 'Blessing of Might', 'blessing on the bare D-pad')
   ok(GetMacroIndexByName('Meters') > 0, 'Meters macro made')
   eq(GetMacroIndexByName('PetFight'), 0, 'no demon macros on a paladin'); eq(GetMacroIndexByName('PetHome'), 0)
 end
@@ -172,9 +173,9 @@ tests['paladin v2: First Aid, Cooking, Fishing and the best bandage on set 2 LT+
   W.bags[3530] = 5; W.bags[6450] = 3                                -- wool, silk bandages
   learn({ 'First Aid', 'Cooking', 'Fishing', 'Holy Light' }); pad()
   eq(spellOn(2, 'LTRT', D), 'First Aid'); eq(spellOn(2, 'LTRT', R), 'Cooking'); eq(spellOn(2, 'LTRT', L), 'Fishing')
-  local a = W.slots[slotOf(2, 'LTRT', B)]
-  ok(a and a[1] == 'item' and a[2] == 6450, 'silk bandage (the best) on set 2 LT+RT B')
-  eq(OmaPadCharDB.layoutV, 3, 'paladin layout v3')
+  local a = W.slots[slotOf(1, 'none', L)]
+  ok(a and a[1] == 'item' and a[2] == 6450, 'silk bandage (the best) on the bare D-pad left (v4)')
+  eq(OmaPadCharDB.layoutV, 4, 'paladin layout v4')
 end
 
 tests['paladin v3: Mastercraft and Polestar on/off on set 1 LT+RT left and right'] = function()
@@ -213,9 +214,10 @@ tests['new character: the game\'s own starting buttons are laid out by the add-o
   W.slots[slotOf(1, 'none', U)] = { 'spell', spellId('Will to Survive') }   -- the game put these here at creation
   W.slots[slotOf(1, 'none', D)] = { 'spell', spellId('Perception') }
   pad()
-  eq(spellOn(1, 'none', U), 'Seal of Righteousness', 'main seal button freed')
-  eq(spellOn(1, 'RT', D), 'Will to Survive', 'racial on its own button')
-  eq(spellOn(1, 'none', D), nil, 'starting extra cleared (Righteousness second copy waits for 20)')
+  eq(spellOn(1, 'RT', Y), 'Seal of Righteousness', 'main seal beside Judgement')
+  eq(spellOn(1, 'LT', D), 'Will to Survive', 'racial on its own button')
+  eq(spellOn(1, 'none', U), nil, 'starting extra cleared (no blessing known yet)')
+  eq(spellOn(1, 'none', D), nil, 'starting extra cleared (no bombs in the bags)')
   eq(#(OmaPadCharDB.check.dups), 0, 'no duplicates')
   eq(OmaPadCharDB.fresh, nil, 'one time only')
 end
@@ -226,12 +228,12 @@ tests['paladin: level 20 upgrades in place and the old spell drops to its second
   pad()
   learn({ 'Seal of Command', 'Flash of Light', 'Retribution Aura', 'Consecration', 'Exorcism', 'Blessing of Kings' })
   pad()
-  eq(spellOn(1, 'none', U), 'Seal of Command', 'main seal upgraded'); eq(spellOn(1, 'none', D), 'Seal of Righteousness', 'swap seal')
+  eq(spellOn(1, 'RT', Y), 'Seal of Command', 'main seal upgraded'); eq(spellOn(1, 'RT', R), 'Seal of Righteousness', 'swap seal')
   eq(spellOn(1, 'LT', X), 'Flash of Light'); eq(spellOn(1, 'LT', Y), 'Holy Light')
-  eq(spellOn(1, 'LTRT', D), 'Retribution Aura', 'aura upgraded')
-  eq(spellOn(1, 'RT', B), 'Consecration'); eq(spellOn(1, 'RT', A), 'Exorcism'); eq(spellOn(1, 'LTRT', A), 'Blessing of Kings')
+  eq(spellOn(1, 'LTRT', B), 'Retribution Aura', 'aura upgraded')
+  eq(spellOn(1, 'RT', L), 'Consecration'); eq(spellOn(1, 'RT', A), 'Exorcism'); eq(spellOn(1, 'none', U), 'Blessing of Kings', 'Might -> Kings')
   learn({ 'Divine Shield' }); pad()
-  eq(spellOn(1, 'LT', D), 'Divine Shield', 'Divine Protection -> Divine Shield')
+  eq(spellOn(1, 'LT', A), 'Divine Shield', 'Divine Protection -> Divine Shield')
 end
 
 tests['paladin: a button he changes is his for good'] = function()
