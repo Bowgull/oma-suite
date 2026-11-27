@@ -58,8 +58,10 @@ local function talents()
 end
 
 -- known spells, plus the spellbook's "future" spells you're already high enough to learn (train) or will be soon
+local knownNames = {}
 local function spells()
   local out, seen, train = {}, {}, {}
+  knownNames = {}
   local future = Enum.SpellBookItemType and Enum.SpellBookItemType.FutureSpell
   local level = UnitLevel('player') or 0
   if C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines then
@@ -70,7 +72,10 @@ local function spells()
         if s and s.name and future and s.itemType == future then
           local lvl = s.spellID and C_Spell.GetSpellLevelLearned and C_Spell.GetSpellLevelLearned(s.spellID)
           if lvl and lvl > 0 and lvl <= level + 2 then train[#train + 1] = { name = s.name, lvl = lvl } end
-        elseif s and s.name and not seen[s.name] and not s.isPassive then seen[s.name] = true; out[#out + 1] = s.name end
+        elseif s and s.name then
+          knownNames[s.name] = true   -- passives too (Parry), for the trainer list below
+          if not seen[s.name] and not s.isPassive then seen[s.name] = true; out[#out + 1] = s.name end
+        end
       end
     end
   end
@@ -93,7 +98,8 @@ local function trainable(level)
   for lvl = 1, level do
     for _, e in ipairs(S.NewAt(lvl) or {}) do
       local name = spellName(e.id)
-      if name then out[#out + 1] = { name = name, lvl = lvl, rank = e.rank or 0, cost = e.cost or 0, id = e.id } end
+      -- a first rank Polestar lists by another spell ID than the one in the spellbook (Forever's Judgement) is known
+      if name and not ((e.rank or 0) <= 1 and knownNames[name]) then out[#out + 1] = { name = name, lvl = lvl, rank = e.rank or 0, cost = e.cost or 0, id = e.id } end
     end
   end
   return out
