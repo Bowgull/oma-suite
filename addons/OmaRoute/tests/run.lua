@@ -13,6 +13,8 @@ local function world(level)
   _G.GetInstanceInfo = function() return 'x', W.inst[2], 0, '', 5, 0, false, W.inst[1] end
   _G.CreateFrame = function() local fr = {}; function fr:RegisterEvent() end; function fr:SetScript(_, fn) W.events = fn end; return fr end
   _G.SlashCmdList = {}
+  _G.GetBindLocation = function() return W.bind end
+  W.bind = 'Undercity'
   local list = {
     { key = 'excavation-site-wetlands', name = 'Excavation Site: Wetlands', minLevel = 26, maxLevel = 33, map = 2998 },
     { key = 'city-of-dalaran', name = 'City of Dalaran', minLevel = 28, maxLevel = 35, map = 2959 },
@@ -36,11 +38,32 @@ local function world(level)
       GetTabs = function() return W.tabs end,
       TabIds = function() local o = {}; for _, t in ipairs(W.tabs) do o[t.guideId] = true end; return o end,
       CloseTab = function(i) table.remove(W.tabs, i) end,
+      -- The open guide and step, and Polestar's check-off (a second toggle clears a tick, as Polestar's does).
+      GetGuide = function() return W.guide end,
+      GetStepIndex = function() return W.step end,
+      GoalDone = function(s, g) return W.manual[s .. ':' .. g] == 'tick' or (W.guide.steps[s].goals[g].done == true) end,
+      ToggleGoal = function(s, g)
+        local k = s .. ':' .. g
+        W.toggles = W.toggles + 1
+        if W.manual[k] then W.manual[k] = nil else W.manual[k] = 'tick' end
+        return true
+      end,
     },
+    On = function(msg, fn) W.bus[msg] = W.bus[msg] or {}; table.insert(W.bus[msg], fn) end,
   }
+  W.bus, W.manual, W.toggles, W.step = {}, {}, 0, 1
+  W.guide = nil -- no guide open unless a test opens one (hills())
   dofile('OmaRoute.lua')
 end
+local function hills()
+  W.guide = { id = 'h/hills30', steps = {
+    { goals = { { t = 'goto' }, { t = 'sethome', location = 'Tarren Mill', npcName = 'Innkeeper Shay' }, { t = 'accept', quest = 1 } } },
+    { goals = { { t = 'talk' }, { t = 'hearth', location = 'Tarren Mill' } } },
+  } }
+end
 local function fire(ev) W.events(nil, ev); local t = W.timers; W.timers = {}; for _, fn in ipairs(t) do fn() end end
+local function bus(msg, ...) for _, fn in ipairs(W.bus[msg] or {}) do fn(...) end; local t = W.timers; W.timers = {}; for _, fn in ipairs(t) do fn() end end
+local function saidHas(text) for _, m in ipairs(W.said) do if m:find(text, 1, true) then return true end end end
 local function has(id) for _, t in ipairs(W.tabs) do if t.guideId == id then return true end end end
 local function eq(a, b, m) if a ~= b then error((m or 'eq') .. ': expected ' .. tostring(b) .. ', got ' .. tostring(a), 2) end end
 local function ok(v, m) if not v then error(m or 'expected true', 2) end end
@@ -125,6 +148,55 @@ tests['/omroute next skips; a missing dungeon is noted, not guessed'] = function
   fire('PLAYER_ENTERING_WORLD')
   local missing = false; for _, l in ipairs(OmaRouteDB.log) do if l:find('not in Polestar: drowned city') then missing = true end end
   ok(missing, 'Drowned City (not in that list) noted')
+end
+
+tests['keep hearth: a sethome goal on the open step is ticked once, with a line; other goals untouched'] = function()
+  world(30); hills()
+  bus('STEP_CHANGED', 1)
+  eq(W.manual['1:2'], 'tick', 'sethome ticked'); eq(W.manual['1:1'], nil, 'goto untouched'); eq(W.manual['1:3'], nil, 'accept untouched')
+  eq(W.toggles, 1)
+  ok(saidHas('OmaRoute:|r skipped setting your hearth to Tarren Mill; it stays at Undercity.'), 'chat line')
+  bus('STEP_CHANGED', 1); bus('GUIDE_CHANGED', 'h/hills30'); fire('PLAYER_ENTERING_WORLD')
+  eq(W.toggles, 1, 'never toggled again (a second toggle would clear it)')
+  W.manual['1:2'] = nil; bus('STEP_CHANGED', 1)
+  eq(W.manual['1:2'], nil, 'un-ticked by the player: left un-ticked this session')
+  W.step = 2; bus('STEP_CHANGED', 2)
+  eq(W.manual['2:1'], nil); eq(W.manual['2:2'], nil, 'hearth goal untouched'); eq(W.toggles, 1)
+end
+
+tests['keep hearth: a sethome already done (bound there) is not toggled'] = function()
+  world(30); hills()
+  W.guide.steps[1].goals[2].done = true
+  bus('STEP_CHANGED', 1)
+  eq(W.toggles, 0); ok(not saidHas('skipped setting'), 'silent')
+end
+
+tests['keep hearth: also on a tab switch (GUIDE_CHANGED) and for Alliance characters'] = function()
+  world(10); W.faction = 'Alliance'
+  W.guide = { id = 'a/loch', steps = { { goals = { { t = 'sethome', location = 'Thelsamar' } } } } }
+  bus('GUIDE_CHANGED', 'a/loch')
+  eq(W.manual['1:1'], 'tick')
+end
+
+tests['keep hearth: off by /omroute hearth off, back on with on; default on'] = function()
+  world(30); hills()
+  SlashCmdList.OMAROUTE('hearth off')
+  eq(OmaRouteDB.keepHearth, false)
+  bus('STEP_CHANGED', 1); fire('PLAYER_ENTERING_WORLD')
+  eq(W.toggles, 0, 'off: nothing ticked')
+  SlashCmdList.OMAROUTE('hearth on')
+  eq(OmaRouteDB.keepHearth, true); eq(W.manual['1:2'], 'tick', 'on: ticked straight away')
+  world(30); hills(); bus('STEP_CHANGED', 1); eq(OmaRouteDB.keepHearth, true, 'default on'); eq(W.manual['1:2'], 'tick')
+end
+
+tests['keep hearth: no error without Polestar, or with an old Polestar lacking the calls'] = function()
+  world(30); hills()
+  _G.Polestar = nil
+  bus('STEP_CHANGED', 1); fire('PLAYER_ENTERING_WORLD'); SlashCmdList.OMAROUTE('hearth on')
+  world(30)
+  _G.Polestar = { Engine = { GetTabs = function() return {} end } }
+  dofile('OmaRoute.lua'); SlashCmdList.OMAROUTE('hearth on'); fire('PLAYER_ENTERING_WORLD')
+  world(30); W.guide = nil; bus('STEP_CHANGED', nil); eq(W.toggles, 0, 'no guide open')
 end
 
 local pass, fail = 0, 0

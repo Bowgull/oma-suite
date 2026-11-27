@@ -10,8 +10,11 @@
 --   /omroute          where the route stands
 --   /omroute next     skip the current dungeon
 --   /omroute back     go back one
+--   /omroute hearth on|off   keep the Hearthstone where it is (on by default): a "Set your home to" goal on
+--                     Polestar's open step is ticked done, once, with a chat line. Nothing is bound.
 -- Uses only Polestar's public tables: Polestar.Dungeons (List, PickUp, HandIn, HandinPlan) and Polestar.Engine
--- (GetTabs, TabIds, CloseTab). Without Polestar it says so once and does nothing.
+-- (GetTabs, TabIds, CloseTab, GetGuide, GetStepIndex, GoalDone, ToggleGoal) and its message bus (Polestar.On).
+-- Without Polestar it says so once and does nothing.
 
 local ADDON = ...
 
@@ -42,6 +45,7 @@ local function db()
   t.i = t.i or 1
   t.ran = t.ran or {}
   t.log = t.log or {}
+  if t.keepHearth == nil then t.keepHearth = true end
   return t
 end
 local function note(msg)
@@ -184,6 +188,46 @@ local function allianceDungeons()
   note('Polestar dungeons in route: on, run')
 end
 
+-- Keep the Hearthstone (Joshua 2026-11-27: bound to Undercity or Orgrimmar, never "Set your home to <inn>").
+-- Polestar has no setting for it, and its goal skip only takes optional goals, so a `sethome` goal on the open
+-- step of the active guide is ticked with Polestar's own check-off (Engine.ToggleGoal, saved in its manual
+-- ticks), once per goal per session: ToggleGoal on a ticked goal would clear it, so a goal already done (bound
+-- there, or ticked) is left alone, and one the player un-ticks stays un-ticked. Nothing else is ticked, no bind
+-- is made, no innkeeper is spoken to. Later `hearth` steps cope on their own: Polestar reads a Hearthstone bound
+-- elsewhere as "travel there yourself" (Own.hearthElsewhere / Own.hearthPlan).
+local hearthTicked = {}
+local function keepHearth()
+  if not db().keepHearth then return end
+  local e = E()
+  if not (e and e.GetGuide and e.GetStepIndex and e.GoalDone and e.ToggleGoal) then return end
+  local guide, s = e.GetGuide(), e.GetStepIndex()
+  local st = guide and s and guide.steps and guide.steps[s]
+  if not (st and st.goals) then return end
+  for g, goal in ipairs(st.goals) do
+    local key = tostring(guide.id) .. ':' .. s .. ':' .. g
+    if goal.t == 'sethome' and not hearthTicked[key] and not e.GoalDone(s, g) then
+      hearthTicked[key] = true
+      if e.ToggleGoal(s, g) then
+        local inn = goal.location or goal.npcName or 'the inn'
+        local bound = GetBindLocation and GetBindLocation()
+        if not bound or bound == '' then bound = 'where it is' end
+        say(('skipped setting your hearth to %s; it stays at %s.'):format(inn, bound))
+        note('kept hearth: ticked ' .. key)
+      end
+    end
+  end
+end
+-- Polestar hands out STEP_CHANGED (a new open step, or another tab made active) while it evaluates: the tick
+-- waits for the next frame so it never re-enters that evaluation.
+local function keepHearthSoon() C_Timer.After(0, keepHearth) end
+do
+  local P = PS()
+  if P and P.On then
+    P.On('STEP_CHANGED', keepHearthSoon)
+    P.On('GUIDE_CHANGED', keepHearthSoon)
+  end
+end
+
 local f = CreateFrame('Frame')
 f:RegisterEvent('PLAYER_LOGIN')
 f:RegisterEvent('PLAYER_ENTERING_WORLD')
@@ -200,7 +244,7 @@ f:SetScript('OnEvent', function(_, ev)
   end
   checkInside()
   local wait = ev == 'PLAYER_ENTERING_WORLD' and 8 or 2 -- Polestar builds its tabs after login
-  C_Timer.After(wait, function() checkInside(); step(ev) end)
+  C_Timer.After(wait, function() checkInside(); step(ev); keepHearth() end)
 end)
 
 SLASH_OMAROUTE1 = '/omroute'
@@ -213,6 +257,12 @@ SlashCmdList.OMAROUTE = function(msg)
       for _, id in ipairs({ 'lookup/handin/' .. cur.key, 'lookup/pickup/' .. cur.key }) do local ix = tabIndex(id); if ix then e.CloseTab(ix, true) end end
     end
     note('skipped ' .. (cur and cur.key or '?')); t.i = t.i + 1; t.announced = nil; step('skip')
+  elseif msg == 'hearth on' or msg == 'hearth off' then
+    t.keepHearth = msg == 'hearth on'
+    say(t.keepHearth and 'keeping your Hearthstone where it is: "Set your home" steps are ticked for you.' or 'Polestar\'s "Set your home" steps are left to you.')
+    if t.keepHearth then keepHearth() end
+  elseif msg == 'hearth' then
+    say('keep hearth is ' .. (t.keepHearth and 'on' or 'off') .. ' (/omroute hearth on|off).')
   elseif msg == 'back' then t.i = math.max(1, t.i - 1); t.announced = nil; step('back')
   else
     local cur, i, n = current()
