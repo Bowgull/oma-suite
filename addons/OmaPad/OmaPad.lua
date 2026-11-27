@@ -732,6 +732,7 @@ local PX = 1080 / 768
 -- tooltips 90% under them; the "Equipped" compare gets 28 px so its tab doesn't sit on the item tooltip.
 local AHL = { ah = { 2, 67, 1.05 }, bags = { 1429, 113, 0.65 }, tip = 0.90, tipAt = { 1433, 480 } }
 local ahLayoutOn, saved = false, {}
+local TIPS = {}   -- the tooltip frames we move (filled as they're hooked)
 -- TV pixels -> a frame's own SetPoint units at scale s (also right when the game's UI scale is not 1)
 local function U(p, s) return p / PX / s / UIParent:GetEffectiveScale() end
 local function keep(f)
@@ -846,7 +847,10 @@ function restore()   -- everything the layouts moved goes back, and tooltips are
   restoreLater = false; panelOn = false; ahLayoutOn = false
   for f, v in pairs(saved) do
     f:SetScale(v.scale); f:ClearAllPoints()
-    for _, p in ipairs(v.pts) do f:SetPoint(unpack(p)) end
+    -- tooltips get no old points back: the game anchors them fresh on every show, and a leftover point plus the game's
+    -- own made the tooltip stretch across the top of the screen after closing a vendor (Joshua 2026-11-27)
+    if TIPS[f] then if f.Hide and f:IsShown() then f:Hide() end
+    else for _, p in ipairs(v.pts) do f:SetPoint(unpack(p)) end end
   end
   wipe(saved)
 end
@@ -876,7 +880,7 @@ do
   local hooked = {}
   local function hookTip(n)
     local t = rawget(_G, n)
-    if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() C_Timer.After(0, putTips) end)
+    if t and not hooked[n] then hooked[n] = true; TIPS[t] = true; t:HookScript('OnShow', function() C_Timer.After(0, putTips) end)
       -- the auction house anchors the tooltip itself on every item change, after it shows: follow every SetPoint
       hooksecurefunc(t, 'SetPoint', function() if not placing then putTips() end end)
       -- the controller UI anchors item tooltips to the highlighted button (SetOwner with ANCHOR_RIGHT), which the game
@@ -904,7 +908,14 @@ do
     if e == 'AUCTION_HOUSE_SHOW' then C_Timer.After(0.3, function() hookAll(); ahLayout(true) end)
     else ahLayout(false) end
   end)
-  if hooksecurefunc then hooksecurefunc('GameTooltip_SetDefaultAnchor', function() if ahLayoutOn or panelOn then C_Timer.After(0, putTips) end end) end
+  -- the game's default anchor only adds its corner, it never clears: if one of our spots is still on the tooltip (the
+  -- vendor or bag spot), it stretches between the two. With no layout on, a tooltip with more than one point is reset.
+  local fixing = false
+  if hooksecurefunc then hooksecurefunc('GameTooltip_SetDefaultAnchor', function(t, parent)
+    if ahLayoutOn or panelOn then C_Timer.After(0, putTips); return end
+    if fixing or not t or not t.GetNumPoints or t:GetNumPoints() <= 1 or bagsAlone() then return end
+    fixing = true; t:ClearAllPoints(); pcall(GameTooltip_SetDefaultAnchor, t, parent); fixing = false
+  end) end
   -- a window that closed in combat is put back when combat ends; a logout or reload while one is open puts it back first
   local rev = CreateFrame('Frame'); rev:RegisterEvent('PLAYER_REGEN_ENABLED'); rev:RegisterEvent('PLAYER_LOGOUT')
   rev:SetScript('OnEvent', function(_, e) if restoreLater or e == 'PLAYER_LOGOUT' then restore(); if e ~= 'PLAYER_LOGOUT' then panelLayout() end end end)
