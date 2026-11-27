@@ -9,7 +9,7 @@
 
 local V = 1
 -- the class quests whose completion the book checks (from Polestar's own Forever paladin guides)
-local QUESTS = { 1806, 78093, 1661, 8418, 7647 }   -- Verigan's Fist, Cloak of the Divine Storm, Tome of Nobility, Holy Mightstone, Charger
+local QUESTS = { 2998, 1806, 78093, 1661, 8418, 7647 }   -- Tome of Divinity (Redemption), Verigan's Fist, Cloak of the Divine Storm, Tome of Nobility, Holy Mightstone, Charger
 
 local function try(f) local ok, r = pcall(f); if ok then return r end end
 
