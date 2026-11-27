@@ -58,12 +58,13 @@ local function boxOpen() return ChatEdit_GetActiveWindow and ChatEdit_GetActiveW
 -- While it's on screen, Ctrl+Shift+F11 (a binding only while the auction house is open) puts the keyboard in it,
 -- empty, so Couch Mode can type the search and press Enter (aux's own search). Couch Mode types only after the strip
 -- says the box has the keyboard (flag 4), so letters never reach the game's key bindings.
+local loaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or rawget(_G, "IsAddOnLoaded") or function() return false end
 local auxBox, lookedAt = nil, 0
 local function findAuxBox()
   if auxBox then return auxBox end
   if GetTime() - lookedAt < 1 then return nil end   -- the scan walks every frame: at most once a second
   lookedAt = GetTime()
-  if not (AuctionFrame or AuctionHouseFrame or IsAddOnLoaded and IsAddOnLoaded("auxForever")) then return nil end
+  if not loaded("auxForever") then return nil end   -- no aux: never walk every frame for nothing
   local f = EnumerateFrames()
   while f do
     if f.IsObjectType and f:IsObjectType("EditBox") and type(f.enter) == "function" and type(f.complete) == "function"
@@ -72,22 +73,56 @@ local function findAuxBox()
   end
 end
 local ahOpen = false
+-- ImprovedForever's auction house (Joshua 2026-11-26: the one auction house now, aux off). Its own search box only
+-- shows in mouse mode, so the phone types into a hidden box of ours; Enter searches every category in its Buy tab
+-- (ImprovedForever.AuctionBuy: main 0 = no category filter, search, Query). "name/exact" (aux's form) is cut to the name.
+local function improved() local IF = rawget(_G, "ImprovedForever"); return IF and IF.AuctionBuy end
+local ourBox = CreateFrame("EditBox", "OmashuAhSearchBox", UIParent)
+ourBox:SetSize(4, 4); ourBox:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0); ourBox:SetAlpha(0)
+ourBox:SetAutoFocus(false); ourBox:SetFontObject(ChatFontNormal); ourBox:SetMaxLetters(60); ourBox:Hide()
+ourBox:SetScript("OnEscapePressed", function(b) b:SetText(""); b:ClearFocus() end)
+ourBox:SetScript("OnEnterPressed", function(b)
+  local text = (b:GetText() or ""):gsub("/exact$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+  b:SetText(""); b:ClearFocus()
+  local B = improved()
+  if text == "" or not B then return end
+  if B.SetTab then pcall(B.SetTab, "buy") end
+  B.main, B.sub, B.subsub, B.search = 0, 1, 1, text
+  pcall(B.Query)
+end)
+local function searchBox()
+  if improved() and loaded("ImprovedForever_Auction") then return ourBox end
+  return findAuxBox()
+end
 local focusBtn = CreateFrame("Button", "OmashuAuxSearchFocus", UIParent)
 focusBtn:SetScript("OnClick", function()
-  local b = ahOpen and findAuxBox()
+  local b = ahOpen and searchBox()
+  if b then b:Show() end
   if b and b:IsVisible() then b:SetFocus(); b:SetText(""); b:SetCursorPosition(0) end
 end)
+-- The phone's "Switch window" button (Joshua 2026-11-26): ImprovedForever's controller window <-> the game's own auction
+-- window underneath it (ImprovedForever only makes that one invisible), for the phone trackpad. The auction house stays open.
+local swapBtn = CreateFrame("Button", "OmashuAhSwap", UIParent)
+swapBtn:SetScript("OnClick", function()
+  local B, w = improved(), rawget(_G, "ImprovedForeverAuctionBuy")
+  if not (ahOpen and B and w) or InCombatLockdown() then return end
+  if w:IsShown() then w:Hide() elseif B.Show then B.Show() end
+end)
+local SWAP = "CTRL-SHIFT-F10"
 local KEY = "CTRL-SHIFT-F11"
 local ahEv = CreateFrame("Frame")
 ahEv:RegisterEvent("AUCTION_HOUSE_SHOW"); ahEv:RegisterEvent("AUCTION_HOUSE_CLOSED")
 ahEv:SetScript("OnEvent", function(_, e)
-  ahOpen = (e == "AUCTION_HOUSE_SHOW")
-  if InCombatLockdown() then return end
+  if e ~= "PLAYER_REGEN_ENABLED" then ahOpen = (e == "AUCTION_HOUSE_SHOW") end
+  if ahOpen and improved() then ourBox:Show() else ourBox:ClearFocus(); ourBox:Hide() end
+  if InCombatLockdown() then ahEv:RegisterEvent("PLAYER_REGEN_ENABLED"); return end   -- set (or cleared) once combat ends
+  ahEv:UnregisterEvent("PLAYER_REGEN_ENABLED")
   if ahOpen then SetOverrideBindingClick(focusBtn, true, KEY, "OmashuAuxSearchFocus") else ClearOverrideBindings(focusBtn) end
+  if ahOpen then SetOverrideBindingClick(swapBtn, true, SWAP, "OmashuAhSwap") else ClearOverrideBindings(swapBtn) end
 end)
 local function auxFlags()
   if not ahOpen then return 0 end
-  local b = findAuxBox()
+  local b = searchBox()
   if not (b and b:IsVisible()) then return 0 end
   return 2 + (b:HasFocus() and 4 or 0)
 end
@@ -166,8 +201,30 @@ local function onLocked()
   if #recent > 40 then table.remove(recent, 1) end
   dirty = true
 end
+-- "No player named X is currently playing" from other add-ons' hidden messages (Mastercraft's crafter network asks
+-- players nearby; Joshua 2026-11-26: keep the network, hide the noise): hidden in game chat and on the phone. A name
+-- he whispered himself in the last 30 s still shows, so he still learns his friend is offline.
+local mine = {}
+local function short(n) n = n:gsub("%-.*$", ""); return n:lower() end   -- "Bob-Realm" and "Bob" are the same friend
+local function sent(_, kind, _, target) if kind == "WHISPER" and type(target) == "string" then mine[short(target)] = GetTime() end end
+if hooksecurefunc then
+  hooksecurefunc("SendChatMessage", sent)                                  -- older chat code
+  if C_ChatInfo and C_ChatInfo.SendChatMessage then hooksecurefunc(C_ChatInfo, "SendChatMessage", sent) end   -- newer
+end
+local NOT_FOUND = (ERR_CHAT_PLAYER_NOT_FOUND_S or "No player named '%s' is currently playing."):gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%s", "(.+)")
+local function noise(text)
+  if type(text) ~= "string" then return false end
+  local name = text:match("^" .. NOT_FOUND .. "$")
+  if not name then return false end
+  local at = mine[short(name)]
+  return not (at and GetTime() - at < 30)
+end
+if ChatFrame_AddMessageEventFilter then
+  ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, text) if noise(text) then return true end end)
+end
 f:SetScript("OnEvent", function(_, event, ...)
   if event:sub(1, 9) ~= "CHAT_MSG_" then dirty = true; return end   -- screen changed: redraw
+  if event == "CHAT_MSG_SYSTEM" and noise((...)) then return end
   local text0, who0, _, _, _, _, _, _, chan0 = ...
   if locked(text0) or locked(who0) or locked(chan0) then return onLocked() end
   local ok, b = pcall(body, event, ...)
