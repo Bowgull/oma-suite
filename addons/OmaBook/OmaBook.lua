@@ -10,6 +10,9 @@
 local V = 1
 -- the class quests whose completion the book checks (from Polestar's own Forever paladin guides)
 local QUESTS = { 2998, 1806, 78093, 1661, 8418, 7647 }   -- Tome of Divinity (Redemption), Verigan's Fist, Cloak of the Divine Storm, Tome of Nobility, Holy Mightstone, Charger
+-- the Forsaken (Horde) paladin's (2026-11-27, Polestar's Horde guides): Bandarion Keep start and end, A Lesson in
+-- Divinity start and end (Redemption), A Moon-Kissed Blade, Old Fire-Eye (Wolfsbane), A Paladin's Steed, Justice and Retribution
+for _, q in ipairs({ 99152, 95803, 94427, 94441, 95036, 95140, 94971, 97185 }) do QUESTS[#QUESTS + 1] = q end
 
 local function try(f) local ok, r = pcall(f); if ok then return r end end
 
