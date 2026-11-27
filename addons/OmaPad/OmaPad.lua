@@ -786,13 +786,19 @@ end
 -- Bags open on their own (Joshua 2026-11-26: "when I'm in my bags the tooltip is in a terrible spot", it sat on the bag
 -- window's items): the bag add-on's item tooltip goes just left of the bag window, tops level, the "Equipped" compare under
 -- it. Only the bags' own tooltip moves; the world's tooltip (GameTooltip) is left alone.
+-- 2026-11-27: KroGamepadBags 2.1 shows items in the game's own tooltip (GameTooltip, owned by the bag window) unless its
+-- "Tooltip type" is set to its own; that one is moved too, but only while the bag window owns it.
 local function bagsAlone()
   local b = rawget(_G, 'KroGamepadBagsFrame')
   if ahLayoutOn or panelOn or not (b and b:IsShown() and b:GetLeft()) then return nil end
   local t = rawget(_G, 'NotGameTooltipKroGamepadBags')
-  if not (t and t:IsShown()) then return nil end
-  return b, t
+  if t and t:IsShown() then return b, t end
+  local g = rawget(_G, 'GameTooltip')
+  if g and g:IsShown() and g.GetOwner and g:GetOwner() == b then return b, g end
+  return nil
 end
+-- a darker backing so the words read over the world and the quest list behind (not solid: Joshua 2026-11-27)
+local TIP_BACK = { 0.03, 0.03, 0.05, 0.9 }
 local function placeBagTip()
   local b, t = bagsAlone()
   if not b then return end
@@ -800,6 +806,7 @@ local function placeBagTip()
   if not left then return end
   local s = t:GetScale()
   t:ClearAllPoints(); t:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top, s))
+  if t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end
   local prev = t
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local c = rawget(_G, n)
@@ -853,7 +860,7 @@ do
       -- the controller UI anchors item tooltips to the highlighted button (SetOwner with ANCHOR_RIGHT), which the game
       -- keeps moving there on its own: while a layout is on, take the anchor off so our spot sticks
       if t.SetAnchorType then hooksecurefunc(t, 'SetOwner', function(self)
-        if ahLayoutOn or panelOn or (self ~= GameTooltip and bagsAlone()) then self:SetAnchorType('ANCHOR_NONE'); putTips() end end) end
+        if ahLayoutOn or panelOn or bagsAlone() then self:SetAnchorType('ANCHOR_NONE'); putTips() end end) end
     end
   end
   local hookAll

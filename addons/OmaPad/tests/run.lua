@@ -340,6 +340,20 @@ tests['bags alone: their tooltip goes left of the bag window, the world tooltip 
   ok(math.abs(p[4] - (900 * (1080 / 768) - 12) / (1080 / 768)) < 0.01, 'right edge 12 px left of the bags')
   ok(w.tip.pts[1][1] == 'CENTER', 'GameTooltip left alone')
 end
+tests['bags alone: the game tooltip moves when the bag window owns it, not otherwise'] = function()
+  local w = layoutWorld()
+  w.merchant.shown = false
+  local back
+  w.tip.NineSlice = { SetCenterColor = function(_, r, g, b, a) back = a end }
+  w.tip.GetOwner = function() return w.owner end
+  w.fire('PLAYER_ENTERING_WORLD')
+  w.owner = UIParent; OmaPadPutTipsForTest()
+  ok(w.tip.pts[1][1] == 'CENTER', 'a world tooltip stays put')
+  w.owner = w.bags; OmaPadPutTipsForTest()
+  local p = w.tip.pts[1]
+  ok(p and p[1] == 'TOPRIGHT' and p[3] == 'TOPLEFT', 'the bag item tooltip goes left of the bags')
+  ok(back and back > 0.8 and back < 1, 'darker backing, not solid')
+end
 tests['apply waits while he drags something'] = function()
   local w = load('PALADIN', 'Bunji'); w.cursor = { 'item', 6948 }
   local later = 0; _G.C_Timer = { After = function() later = later + 1 end }
