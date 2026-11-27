@@ -72,9 +72,31 @@ local function findAuxBox()
   end
 end
 local ahOpen = false
+-- ImprovedForever's auction house (Joshua 2026-11-26: the one auction house now, aux off). Its own search box only
+-- shows in mouse mode, so the phone types into a hidden box of ours; Enter searches every category in its Buy tab
+-- (ImprovedForever.AuctionBuy: main 0 = no category filter, search, Query). "name/exact" (aux's form) is cut to the name.
+local function improved() local IF = rawget(_G, "ImprovedForever"); return IF and IF.AuctionBuy end
+local ourBox = CreateFrame("EditBox", "OmashuAhSearchBox", UIParent)
+ourBox:SetSize(4, 4); ourBox:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0); ourBox:SetAlpha(0)
+ourBox:SetAutoFocus(false); ourBox:SetFontObject(ChatFontNormal); ourBox:SetMaxLetters(60); ourBox:Hide()
+ourBox:SetScript("OnEscapePressed", function(b) b:SetText(""); b:ClearFocus() end)
+ourBox:SetScript("OnEnterPressed", function(b)
+  local text = (b:GetText() or ""):gsub("/exact$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+  b:SetText(""); b:ClearFocus()
+  local B = improved()
+  if text == "" or not B then return end
+  if B.SetTab then pcall(B.SetTab, "buy") end
+  B.main, B.sub, B.subsub, B.search = 0, 1, 1, text
+  pcall(B.Query)
+end)
+local function searchBox()
+  if improved() and IsAddOnLoaded and IsAddOnLoaded("ImprovedForever_Auction") then return ourBox end
+  return findAuxBox()
+end
 local focusBtn = CreateFrame("Button", "OmashuAuxSearchFocus", UIParent)
 focusBtn:SetScript("OnClick", function()
-  local b = ahOpen and findAuxBox()
+  local b = ahOpen and searchBox()
+  if b then b:Show() end
   if b and b:IsVisible() then b:SetFocus(); b:SetText(""); b:SetCursorPosition(0) end
 end)
 local KEY = "CTRL-SHIFT-F11"
@@ -82,12 +104,13 @@ local ahEv = CreateFrame("Frame")
 ahEv:RegisterEvent("AUCTION_HOUSE_SHOW"); ahEv:RegisterEvent("AUCTION_HOUSE_CLOSED")
 ahEv:SetScript("OnEvent", function(_, e)
   ahOpen = (e == "AUCTION_HOUSE_SHOW")
+  if ahOpen and improved() then ourBox:Show() else ourBox:ClearFocus(); ourBox:Hide() end
   if InCombatLockdown() then return end
   if ahOpen then SetOverrideBindingClick(focusBtn, true, KEY, "OmashuAuxSearchFocus") else ClearOverrideBindings(focusBtn) end
 end)
 local function auxFlags()
   if not ahOpen then return 0 end
-  local b = findAuxBox()
+  local b = searchBox()
   if not (b and b:IsVisible()) then return 0 end
   return 2 + (b:HasFocus() and 4 or 0)
 end
