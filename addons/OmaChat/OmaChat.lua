@@ -7,7 +7,8 @@
 -- pixel 3 = (2, 79, 77) ("v2"), then 3 bytes per pixel in red, green, blue (every level 0-255 arrives exactly: the
 -- /omachat ramp test, 768 of 768). The bytes:
 --   flags (1: chat box open, 2: the auction house is open, 4: its search box has the keyboard, 8: the game's own auction
---   window is the one showing, not ImprovedForever's) | how many lines (1) |
+--   window is the one showing, not ImprovedForever's, 16: some other text box in the game has the keyboard: mail, trade
+--   money, bank search...) | how many lines (1) |
 --   each line: number (2) + length (2) + speaker's class (1: 0 unknown, else WoW's class ID) + UTF-8 |
 --   check (2: CRC-16/CCITT of every byte before it)
 -- It always shows the NEWEST lines that fit (300 bytes, about 105 pixels), so a line stays on the strip for several
@@ -147,6 +148,17 @@ local function auxFlags()
   return 2 + (b and b:IsVisible() and b:HasFocus() and 4 or 0) + (gameWindow() and 8 or 0)
 end
 
+-- Any other text box with the keyboard (sheet omashu/remote/24, Joshua 2026-11-27: "trade mail and bank"). Every
+-- Blizzard box (mail To/Subject/body, the gold/silver/copper boxes, bank search) is an EditBox, and the game says which
+-- one has the keyboard. The chat box (flag 1) and the auction search boxes (flag 4) have their own flags.
+local function typingFlag()
+  local f = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+  if not f or f == ourBox or not f.IsObjectType or not f:IsObjectType("EditBox") or not f:IsVisible() then return 0 end
+  if ChatEdit_GetActiveWindow and f == ChatEdit_GetActiveWindow() then return 0 end
+  if ahOpen and f == searchBox() then return 0 end
+  return 16
+end
+
 -- The newest lines that fit, oldest first.
 local function packet(flags)
   local pick, used = {}, 0
@@ -164,7 +176,7 @@ local function packet(flags)
 end
 
 strip:SetScript("OnUpdate", function()
-  local now, flags = GetTime(), boxOpen() + auxFlags()
+  local now, flags = GetTime(), boxOpen() + auxFlags() + typingFlag()
   if flags ~= lastFlags then dirty = true end
   if dirty and now - drawnAt >= GAP then draw(packet(flags)); drawnAt = now; dirty = false; lastFlags = flags end
 end)
