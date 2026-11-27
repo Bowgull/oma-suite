@@ -189,8 +189,26 @@ local function onLocked()
   if #recent > 40 then table.remove(recent, 1) end
   dirty = true
 end
+-- "No player named X is currently playing" from other add-ons' hidden messages (Mastercraft's crafter network asks
+-- players nearby; Joshua 2026-11-26: keep the network, hide the noise): hidden in game chat and on the phone. A name
+-- he whispered himself in the last 30 s still shows, so he still learns his friend is offline.
+local mine = {}
+if hooksecurefunc then hooksecurefunc("SendChatMessage", function(_, kind, _, target)
+  if kind == "WHISPER" and type(target) == "string" then mine[target:lower()] = GetTime() end end) end
+local NOT_FOUND = (ERR_CHAT_PLAYER_NOT_FOUND_S or "No player named '%s' is currently playing."):gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%s", "(.+)")
+local function noise(text)
+  if type(text) ~= "string" then return false end
+  local name = text:match("^" .. NOT_FOUND .. "$")
+  if not name then return false end
+  local at = mine[name:lower()] or mine[(name:match("^(%S+)") or ""):lower()]
+  return not (at and GetTime() - at < 30)
+end
+if ChatFrame_AddMessageEventFilter then
+  ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, text) if noise(text) then return true end end)
+end
 f:SetScript("OnEvent", function(_, event, ...)
   if event:sub(1, 9) ~= "CHAT_MSG_" then dirty = true; return end   -- screen changed: redraw
+  if event == "CHAT_MSG_SYSTEM" and noise((...)) then return end
   local text0, who0, _, _, _, _, _, _, chan0 = ...
   if locked(text0) or locked(who0) or locked(chan0) then return onLocked() end
   local ok, b = pcall(body, event, ...)
