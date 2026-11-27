@@ -822,7 +822,11 @@ do
     local t = rawget(_G, n)
     if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, putTips) end end)
       -- the auction house anchors the tooltip itself on every item change, after it shows: follow every SetPoint
-      hooksecurefunc(t, 'SetPoint', function() if ahLayoutOn and not placing then putTips() end end) end
+      hooksecurefunc(t, 'SetPoint', function() if (ahLayoutOn or panelOn) and not placing then putTips() end end)
+      -- the controller UI anchors item tooltips to the highlighted button (SetOwner with ANCHOR_RIGHT), which the game
+      -- keeps moving there on its own: while a layout is on, take the anchor off so our spot sticks
+      if t.SetAnchorType then hooksecurefunc(t, 'SetOwner', function(self) if ahLayoutOn or panelOn then self:SetAnchorType('ANCHOR_NONE'); putTips() end end) end
+    end
   end
   local function hookAll()
     for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip', 'ShoppingTooltip1', 'ShoppingTooltip2' }) do hookTip(n) end
