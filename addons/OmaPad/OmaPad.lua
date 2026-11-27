@@ -731,8 +731,10 @@ local function putTopLeft(f, x, y, s)
   keep(f); f:SetScale(s); f:ClearAllPoints()
   f:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', x / PX / s, -y / PX / s)
 end
+local placing = false
 local function putTips()
-  if not ahLayoutOn then return end
+  if not ahLayoutOn or placing then return end
+  placing = true
   local s = AHL.tip
   local main
   for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip' }) do
@@ -748,6 +750,7 @@ local function putTips()
     local t = rawget(_G, n)
     if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('BOTTOMLEFT', prev, 'TOPLEFT', 0, 6); prev = t end
   end
+  placing = false
 end
 local function ahLayout(on)
   if InCombatLockdown() then return end
@@ -767,7 +770,9 @@ do
   local hooked = {}
   local function hookTip(n)
     local t = rawget(_G, n)
-    if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, putTips) end end) end
+    if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, putTips) end end)
+      -- the auction house anchors the tooltip itself on every item change, after it shows: follow every SetPoint
+      hooksecurefunc(t, 'SetPoint', function() if ahLayoutOn and not placing then putTips() end end) end
   end
   local function hookAll()
     for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip', 'ShoppingTooltip1', 'ShoppingTooltip2' }) do hookTip(n) end
