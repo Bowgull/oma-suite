@@ -722,7 +722,10 @@ local PX = 1080 / 768
 -- 20-1487 across, 54-1026 down, text about 18-20 px tall); bags at 70% top-right (1496-1910, 54-504); tooltips at 85%
 -- under the bags, growing down. Anchors allow for where each window really draws (measured): bags 90 units above
 -- their anchor, the auction house 13 right / 12 up (both before scale).
-local AHL = { ah = { 5, 68, 1.15 }, bags = { 1492, 117, 0.70 }, tip = 0.85, tipAt = { 1500, 520 } }
+-- v3 (looked at on the TV): the auction house's own tab icons stick out 65 px past its right edge (they covered the
+-- bags), so the auction house is 105% (15-1423 across), bags 65% at the top of the right column (1433-1818, 54-472),
+-- tooltips 90% under them; the "Equipped" compare gets 28 px so its tab doesn't sit on the item tooltip.
+local AHL = { ah = { 2, 67, 1.05 }, bags = { 1429, 113, 0.65 }, tip = 0.90, tipAt = { 1433, 480 } }
 local ahLayoutOn, saved = false, {}
 local function keep(f)
   if not f or saved[f] then return end
@@ -752,7 +755,7 @@ local function putTips()
   local prev = main
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local t = rawget(_G, n)
-    if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -6); prev = t end
+    if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -28 / s); prev = t end
   end
   placing = false
 end
