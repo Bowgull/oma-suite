@@ -783,9 +783,33 @@ local function placeTips()
     if prev and t and t:IsShown() then keep(t); t:SetScale(prev:GetScale()); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -U(28, prev:GetScale())); prev = t end
   end
 end
+-- Bags open on their own (Joshua 2026-11-26: "when I'm in my bags the tooltip is in a terrible spot", it sat on the bag
+-- window's items): the bag add-on's item tooltip goes just left of the bag window, tops level, the "Equipped" compare under
+-- it. Only the bags' own tooltip moves; the world's tooltip (GameTooltip) is left alone.
+local function bagsAlone()
+  local b = rawget(_G, 'KroGamepadBagsFrame')
+  if ahLayoutOn or panelOn or not (b and b:IsShown() and b:GetLeft()) then return nil end
+  local t = rawget(_G, 'NotGameTooltipKroGamepadBags')
+  if not (t and t:IsShown()) then return nil end
+  return b, t
+end
+local function placeBagTip()
+  local b, t = bagsAlone()
+  if not b then return end
+  local left, top = px(b)
+  if not left then return end
+  local s = t:GetScale()
+  t:ClearAllPoints(); t:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top, s))
+  local prev = t
+  for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
+    local c = rawget(_G, n)
+    if c and c:IsShown() then c:SetScale(s); c:ClearAllPoints(); c:SetPoint('TOPRIGHT', prev, 'BOTTOMRIGHT', 0, -U(28, s)); prev = c end
+  end
+end
 local function putTips()
-  if not (ahLayoutOn or panelOn) or placing then return end
-  placing = true; pcall(placeTips); placing = false
+  if placing then return end
+  if ahLayoutOn or panelOn then placing = true; pcall(placeTips); placing = false
+  elseif bagsAlone() then placing = true; pcall(placeBagTip); placing = false end
 end
 local restoreLater = false
 local function restore()   -- everything the layouts moved goes back, and tooltips are free again
@@ -823,25 +847,27 @@ do
   local hooked = {}
   local function hookTip(n)
     local t = rawget(_G, n)
-    if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() if ahLayoutOn or panelOn then C_Timer.After(0, putTips) end end)
+    if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() C_Timer.After(0, putTips) end)
       -- the auction house anchors the tooltip itself on every item change, after it shows: follow every SetPoint
-      hooksecurefunc(t, 'SetPoint', function() if (ahLayoutOn or panelOn) and not placing then putTips() end end)
+      hooksecurefunc(t, 'SetPoint', function() if not placing then putTips() end end)
       -- the controller UI anchors item tooltips to the highlighted button (SetOwner with ANCHOR_RIGHT), which the game
       -- keeps moving there on its own: while a layout is on, take the anchor off so our spot sticks
-      if t.SetAnchorType then hooksecurefunc(t, 'SetOwner', function(self) if ahLayoutOn or panelOn then self:SetAnchorType('ANCHOR_NONE'); putTips() end end) end
+      if t.SetAnchorType then hooksecurefunc(t, 'SetOwner', function(self)
+        if ahLayoutOn or panelOn or (self ~= GameTooltip and bagsAlone()) then self:SetAnchorType('ANCHOR_NONE'); putTips() end end) end
     end
   end
-  local function hookAll()
+  local hookAll
+  function hookAll()
     for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip', 'ShoppingTooltip1', 'ShoppingTooltip2' }) do hookTip(n) end
     for _, n in ipairs({ 'ImprovedForeverAuctionBuy', 'KroGamepadBagsFrame' }) do
       local f = rawget(_G, n)
-      if f and not hooked[n] then hooked[n] = true; f:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, function() ahLayout(true) end) elseif openPanel() then C_Timer.After(0, panelLayout) end end) end
+      if f and not hooked[n] then hooked[n] = true; f:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, function() ahLayout(true) end) elseif openPanel() then C_Timer.After(0, panelLayout) else C_Timer.After(0, hookAll) end end) end
     end
   end
   local pev = CreateFrame('Frame')
   for _, e in ipairs({ 'MERCHANT_SHOW', 'MERCHANT_CLOSED', 'TRAINER_SHOW', 'TRAINER_CLOSED', 'BANKFRAME_OPENED', 'BANKFRAME_CLOSED',
     'MAIL_SHOW', 'MAIL_CLOSED', 'QUEST_DETAIL', 'QUEST_PROGRESS', 'QUEST_COMPLETE', 'QUEST_FINISHED', 'GOSSIP_SHOW', 'GOSSIP_CLOSED',
-    'TRADE_SKILL_SHOW', 'TRADE_SKILL_CLOSE' }) do pcall(pev.RegisterEvent, pev, e) end
+    'TRADE_SKILL_SHOW', 'TRADE_SKILL_CLOSE', 'PLAYER_ENTERING_WORLD' }) do pcall(pev.RegisterEvent, pev, e) end
   pev:SetScript('OnEvent', function() C_Timer.After(0.3, function() hookAll(); panelLayout() end) end)
   local ev = CreateFrame('Frame')
   ev:RegisterEvent('AUCTION_HOUSE_SHOW'); ev:RegisterEvent('AUCTION_HOUSE_CLOSED')
@@ -855,6 +881,7 @@ do
   rev:SetScript('OnEvent', function(_, e) if restoreLater or e == 'PLAYER_LOGOUT' then restore(); if e ~= 'PLAYER_LOGOUT' then panelLayout() end end end)
 end
 _G.OmaPadAhLayout = ahLayout   -- for a /run to try it again
+_G.OmaPadPutTipsForTest = putTips
 
 local busy
 local function later() if busy then return end; busy = true; C_Timer.After(2, function() busy = false; apply() end) end

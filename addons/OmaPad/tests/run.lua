@@ -329,6 +329,17 @@ tests['layouts: the auction house closing hands back to a vendor window still op
   w.merchant.shown = false; w.fire('MERCHANT_CLOSED')
   ok(w.bags.scale == 1 and w.bags.pts[1][1] == 'CENTER', 'all back to normal')
 end
+tests['bags alone: their tooltip goes left of the bag window, the world tooltip is not touched'] = function()
+  local w = layoutWorld()
+  w.merchant.shown = false
+  local kt = win('NotGameTooltipKroGamepadBags', 1100, 600, 250, 120)
+  w.fire('PLAYER_ENTERING_WORLD')
+  OmaPadPutTipsForTest()
+  local p = kt.pts[1]
+  ok(p and p[1] == 'TOPRIGHT' and p[3] == 'TOPLEFT', 'anchored by its right edge')
+  ok(math.abs(p[4] - (900 * (1080 / 768) - 12) / (1080 / 768)) < 0.01, 'right edge 12 px left of the bags')
+  ok(w.tip.pts[1][1] == 'CENTER', 'GameTooltip left alone')
+end
 tests['apply waits while he drags something'] = function()
   local w = load('PALADIN', 'Bunji'); w.cursor = { 'item', 6948 }
   local later = 0; _G.C_Timer = { After = function() later = later + 1 end }
