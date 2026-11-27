@@ -10,13 +10,17 @@ local SPELL_NAMES = setmetatable({}, { __index = function(_, id) for n, i in pai
 local W -- the current fake world
 local function newWorld(class, name)
   W = { class = class, name = name, known = {}, slots = {}, macros = {}, bags = {}, cursor = nil, said = {} }
+  W.frames = {}
   local function frame()
-    local f = {}
-    function f:RegisterEvent() end
-    function f:SetScript() end
+    local f = { ev = {} }
+    function f:RegisterEvent(e) self.ev[e] = true end
+    function f:SetScript(k, fn) self[k] = fn end
     function f:HookScript() end
+    W.frames[#W.frames + 1] = f
     return f
   end
+  -- fire an event at every add-on frame that asked for it
+  W.fire = function(e) for _, f in ipairs(W.frames) do if f.ev[e] and f.OnEvent then f:OnEvent(e) end end end
   _G.CreateFrame = frame
   _G.UnitClass = function() return class:sub(1, 1) .. class:sub(2):lower(), class end
   _G.UnitName = function() return W.name end
@@ -65,6 +69,41 @@ local function load(class, name, acct, char)
   return W
 end
 local function pad(m) SlashCmdList.OMASHUPAD(m or '') end
+
+-- a movable window for the layout tests: where it is, its scale, shown or not
+local function win(name, l, t, w, h)
+  local f = { pts = { { 'CENTER', nil, 'CENTER', 0, 0 } }, scale = 1, shown = true, l = l, t = t, w = w, h = h }
+  function f:GetNumPoints() return #self.pts end
+  function f:GetPoint(i) return unpack(self.pts[i]) end
+  function f:ClearAllPoints() self.pts = {} end
+  function f:SetPoint(...) self.pts[#self.pts + 1] = { ... } end
+  function f:SetScale(s) self.scale = s end
+  function f:GetScale() return self.scale end
+  function f:GetEffectiveScale() return self.scale end
+  function f:IsShown() return self.shown end
+  function f:GetLeft() return self.l end
+  function f:GetTop() return self.t end
+  function f:GetRight() return self.l and self.l + self.w end
+  function f:GetBottom() return self.t and self.t - self.h end
+  function f:GetWidth() return self.w end
+  function f:HookScript() end
+  function f:SetAnchorType(a) self.anchor = a end
+  _G[name] = f
+  return f
+end
+local function layoutWorld()
+  local w = load('PALADIN', 'Bunji')
+  _G.C_Timer = { After = function(_, fn) fn() end }
+  _G.hooksecurefunc = function() end
+  _G.UIParent = { GetEffectiveScale = function() return 1 end }
+  _G.wipe = function(t) for k in pairs(t) do t[k] = nil end end
+  _G.unpack = unpack
+  w.merchant = win('MerchantFrame', 20, 700, 340, 440)
+  w.bags = win('KroGamepadBagsFrame', 900, 500, 300, 400)
+  w.tip = win('GameTooltip', 500, 400, 250, 120)
+  w.ah = win('ImprovedForeverAuctionBuy', 100, 700, 800, 500)
+  return w
+end
 
 -- slot numbers, as in OmaPad.lua
 local L, U, R, D, X, Y, B, A = 0, 1, 2, 3, 4, 5, 6, 7
@@ -141,7 +180,7 @@ tests['paladin v3: Mastercraft and Polestar on/off on set 1 LT+RT left and right
   local function macroOn(set, mod, b) local a = W.slots[slotOf(set, mod, b)]; return a and a[1] == 'macro' and W.macros[a[2]] and W.macros[a[2]].name end
   eq(macroOn(1, 'LTRT', L), 'Mastercraft'); eq(macroOn(1, 'LTRT', R), 'Polestar')
   local body; for _, m in pairs(W.macros) do if m.name == 'Polestar' then body = m.body end end
-  ok(body == '/run Polestar.ToggleHidden()', 'hides and shows all of Polestar')
+  ok(body == '/run if Polestar and Polestar.ToggleHidden then Polestar.ToggleHidden() end', 'hides and shows all of Polestar')
   local mc; for _, m in pairs(W.macros) do if m.name == 'Mastercraft' then mc = m.body end end
   ok(mc == '/mc', 'Mastercraft opens its window')
 end
@@ -268,6 +307,33 @@ tests['other classes: only the Meters macro, no buttons'] = function()
   ok(not any, 'no buttons placed'); ok(GetMacroIndexByName('Meters') > 0)
 end
 
+tests['layouts: a vendor closed in combat is put back when combat ends; tooltips go free at once'] = function()
+  local w = layoutWorld()
+  w.fire('MERCHANT_SHOW')
+  ok(w.bags.scale == 0.9, 'bags at 90% beside the vendor')
+  local combat = true; _G.InCombatLockdown = function() return combat end
+  w.merchant.shown = false; w.fire('MERCHANT_CLOSED')
+  ok(w.bags.scale == 0.9, 'in combat nothing moves')
+  combat = false; w.fire('PLAYER_REGEN_ENABLED')
+  ok(w.bags.scale == 1 and w.bags.pts[1][1] == 'CENTER', 'combat over: bags back where they were')
+end
+tests['layouts: the auction house closing hands back to a vendor window still open, and ends cleanly'] = function()
+  local w = layoutWorld()
+  w.merchant.shown = false
+  w.fire('AUCTION_HOUSE_SHOW')
+  ok(w.ah.scale == 1.05 and w.bags.scale == 0.65, 'auction house layout')
+  w.merchant.shown = true                       -- the auctioneer's own window is still up
+  w.fire('AUCTION_HOUSE_CLOSED')
+  ok(w.ah.scale == 1 and w.ah.pts[1][1] == 'CENTER', 'auction house put back')
+  ok(w.bags.scale == 0.9, 'the open NPC window gets its layout')
+  w.merchant.shown = false; w.fire('MERCHANT_CLOSED')
+  ok(w.bags.scale == 1 and w.bags.pts[1][1] == 'CENTER', 'all back to normal')
+end
+tests['apply waits while he drags something'] = function()
+  local w = load('PALADIN', 'Bunji'); w.cursor = { 'item', 6948 }
+  local later = 0; _G.C_Timer = { After = function() later = later + 1 end }
+  pad(''); ok(w.cursor and w.cursor[2] == 6948, 'what he holds stays on the cursor')
+end
 local names = {}; for n in pairs(tests) do names[#names + 1] = n end; table.sort(names)
 local pass, fail = 0, 0
 for _, n in ipairs(names) do

@@ -51,7 +51,7 @@ MACROS_BY_CLASS.WARLOCK = {                    -- Joshua's two demon buttons (hi
 -- pointer, SetGamePadCursorControl, did nothing in Forever: tried 2026-11-26.)
 local MASTERCRAFT_MACRO = { 'Mastercraft', '/mc', 'Trade_BlackSmithing' }
 -- all of Polestar (guide window, arrow, map pins) off and back on: its own hide switch (Joshua: the arrow stayed)
-local POLESTAR_MACRO = { 'Polestar', '/run Polestar.ToggleHidden()', 'INV_Misc_Map_01' }
+local POLESTAR_MACRO = { 'Polestar', '/run if Polestar and Polestar.ToggleHidden then Polestar.ToggleHidden() end', 'INV_Misc_Map_01' }
 MACROS_BY_CLASS.PALADIN = { METERS_MACRO, MASTERCRAFT_MACRO, POLESTAR_MACRO }
 local function classMacros() return MACROS_BY_CLASS[playerClass()] or { METERS_MACRO } end
 -- the warlock's retired macros (character macros, so only ever on the warlock)
@@ -419,7 +419,8 @@ end
 
 local function apply()
   if InCombatLockdown() then return end
-  makeMacros()
+  if GetCursorInfo and GetCursorInfo() then C_Timer.After(2, apply); return end   -- he is dragging something: not now
+  pcall(makeMacros)                                                               -- a full macro list never stops the pad
   local db, V = charDB(), VERSIONS[playerClass()] or 0
   -- One-time: older versions stored names, and everything on 181-208 was the add-on's. Adopt it.
   if (db.rulesV or 0) < 1 then
@@ -727,6 +728,8 @@ local PX = 1080 / 768
 -- tooltips 90% under them; the "Equipped" compare gets 28 px so its tab doesn't sit on the item tooltip.
 local AHL = { ah = { 2, 67, 1.05 }, bags = { 1429, 113, 0.65 }, tip = 0.90, tipAt = { 1433, 480 } }
 local ahLayoutOn, saved = false, {}
+-- TV pixels -> a frame's own SetPoint units at scale s (also right when the game's UI scale is not 1)
+local function U(p, s) return p / PX / s / UIParent:GetEffectiveScale() end
 local function keep(f)
   if not f or saved[f] then return end
   local pts = {}
@@ -736,7 +739,7 @@ end
 local function putTopLeft(f, x, y, s)
   if not f or InCombatLockdown() then return end
   keep(f); f:SetScale(s); f:ClearAllPoints()
-  f:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', x / PX / s, -y / PX / s)
+  f:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', U(x, s), -U(y, s))
 end
 -- Every NPC window (vendor, trainer, bank, mailbox, quest, gossip, crafting; Joshua 2026-11-26: "at a vendor nothing
 -- else matters, use the entire screen"): the NPC window stays where WoW opens it (left; Blizzard's own frames are never
@@ -748,18 +751,18 @@ local panelOn = false
 local function openPanel()
   for _, n in ipairs(PANELS) do local f = rawget(_G, n); if f and f.IsShown and f:IsShown() then return f end end
 end
-local function px(f)   -- a frame's left, top, right, bottom in TV pixels
+local function px(f)   -- a frame's left, top, right, bottom in TV pixels (nil until it has a place)
+  if not f:GetLeft() then return nil end
   local e = f:GetEffectiveScale() * PX
   return f:GetLeft() * e, 1080 - f:GetTop() * e, f:GetRight() * e, 1080 - f:GetBottom() * e
 end
 local placing = false
-local function putTips()
-  if not (ahLayoutOn or panelOn) or placing then return end
-  placing = true
+local function placeTips()
   local x, y, limit, s = AHL.tipAt[1], AHL.tipAt[2], 1910, AHL.tip
   local panel = panelOn and openPanel()
   if panel and not ahLayoutOn then
     local _, top, right = px(panel)
+    if not right then return end
     x, y = right + 12, top
     local bags = rawget(_G, 'KroGamepadBagsFrame')
     if bags and bags:IsShown() and bags:GetLeft() then limit = (px(bags)) - 12 end
@@ -770,19 +773,33 @@ local function putTips()
     if t and t:IsShown() then
       if panel and not ahLayoutOn then s = math.max(0.6, math.min(1.0, (limit - x) / (math.max(1, t:GetWidth()) * PX))) end
       keep(t); t:SetScale(s); t:ClearAllPoints()
-      t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', x / PX / s, -y / PX / s)
+      t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', U(x, s), -U(y, s))
       main = main or t
     end
   end
   local prev = main
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local t = rawget(_G, n)
-    if prev and t and t:IsShown() then keep(t); t:SetScale(prev:GetScale()); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -28 / prev:GetScale()); prev = t end
+    if prev and t and t:IsShown() then keep(t); t:SetScale(prev:GetScale()); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -U(28, prev:GetScale())); prev = t end
   end
-  placing = false
+end
+local function putTips()
+  if not (ahLayoutOn or panelOn) or placing then return end
+  placing = true; pcall(placeTips); placing = false
+end
+local restoreLater = false
+local function restore()   -- everything the layouts moved goes back, and tooltips are free again
+  if InCombatLockdown() then restoreLater = true; return end
+  restoreLater = false; panelOn = false; ahLayoutOn = false
+  for f, v in pairs(saved) do
+    f:SetScale(v.scale); f:ClearAllPoints()
+    for _, p in ipairs(v.pts) do f:SetPoint(unpack(p)) end
+  end
+  wipe(saved)
 end
 local function panelLayout()
-  if InCombatLockdown() or ahLayoutOn then return end
+  if ahLayoutOn then return end
+  if InCombatLockdown() then if panelOn and not openPanel() then panelOn = false; restoreLater = true end return end
   local panel = openPanel()
   if panel and panel:GetTop() then
     panelOn = true
@@ -790,37 +807,23 @@ local function panelLayout()
     if bags and bags:IsShown() then
       local _, top = px(panel)
       keep(bags); bags:SetScale(0.9); bags:ClearAllPoints()
-      bags:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -10 / PX / 0.9, -(top + 80) / PX / 0.9)   -- its title bar draws 80 px above
+      bags:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -U(10, 0.9), -U(top + 80, 0.9))   -- its title bar draws 80 px above
     end
     putTips()
-  elseif panelOn then
-    panelOn = false
-    for f, v in pairs(saved) do
-      f:SetScale(v.scale); f:ClearAllPoints()
-      for _, p in ipairs(v.pts) do f:SetPoint(unpack(p)) end
-    end
-    wipe(saved)
-  end
+  elseif panelOn then restore() end
 end
 local function ahLayout(on)
+  if not on then ahLayoutOn = false; restore(); if not restoreLater then panelLayout() end return end   -- an NPC window still open gets its own layout
   if InCombatLockdown() then return end
-  ahLayoutOn = on
-  if on then
-    putTopLeft(rawget(_G, 'ImprovedForeverAuctionBuy'), AHL.ah[1], AHL.ah[2], AHL.ah[3])
-    putTopLeft(rawget(_G, 'KroGamepadBagsFrame'), AHL.bags[1], AHL.bags[2], AHL.bags[3])
-  else
-    for f, v in pairs(saved) do
-      f:SetScale(v.scale); f:ClearAllPoints()
-      for _, p in ipairs(v.pts) do f:SetPoint(unpack(p)) end
-    end
-    wipe(saved)
-  end
+  panelOn = false; ahLayoutOn = true
+  putTopLeft(rawget(_G, 'ImprovedForeverAuctionBuy'), AHL.ah[1], AHL.ah[2], AHL.ah[3])
+  putTopLeft(rawget(_G, 'KroGamepadBagsFrame'), AHL.bags[1], AHL.bags[2], AHL.bags[3])
 end
 do
   local hooked = {}
   local function hookTip(n)
     local t = rawget(_G, n)
-    if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, putTips) end end)
+    if t and not hooked[n] then hooked[n] = true; t:HookScript('OnShow', function() if ahLayoutOn or panelOn then C_Timer.After(0, putTips) end end)
       -- the auction house anchors the tooltip itself on every item change, after it shows: follow every SetPoint
       hooksecurefunc(t, 'SetPoint', function() if (ahLayoutOn or panelOn) and not placing then putTips() end end)
       -- the controller UI anchors item tooltips to the highlighted button (SetOwner with ANCHOR_RIGHT), which the game
@@ -846,7 +849,10 @@ do
     if e == 'AUCTION_HOUSE_SHOW' then C_Timer.After(0.3, function() hookAll(); ahLayout(true) end)
     else ahLayout(false) end
   end)
-  if hooksecurefunc then hooksecurefunc('GameTooltip_SetDefaultAnchor', function() if ahLayoutOn then C_Timer.After(0, putTips) end end) end
+  if hooksecurefunc then hooksecurefunc('GameTooltip_SetDefaultAnchor', function() if ahLayoutOn or panelOn then C_Timer.After(0, putTips) end end) end
+  -- a window that closed in combat is put back when combat ends; a logout or reload while one is open puts it back first
+  local rev = CreateFrame('Frame'); rev:RegisterEvent('PLAYER_REGEN_ENABLED'); rev:RegisterEvent('PLAYER_LOGOUT')
+  rev:SetScript('OnEvent', function(_, e) if restoreLater or e == 'PLAYER_LOGOUT' then restore(); if e ~= 'PLAYER_LOGOUT' then panelLayout() end end end)
 end
 _G.OmaPadAhLayout = ahLayout   -- for a /run to try it again
 
