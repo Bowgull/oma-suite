@@ -1201,10 +1201,19 @@ local function placeTips()
   end
   -- At the auction house (Joshua 2026-11-27: a wide tooltip ran into the screen's edge and the game shoved it left):
   -- the stack's right edge lines up with the bag window's right edge, just under it, so a wide one grows left.
+  -- 2026-11-27, later ("too far to the right"): left edges level with the bag window instead; a tooltip too wide to fit
+  -- from there moves left only as far as it must to stay 10 px inside the screen.
   local side, bags = 'LEFT', rawget(_G, 'KroGamepadBagsFrame')
   if ahLayoutOn and bags and bags:IsShown() and bags:GetLeft() then
-    local _, _, bRight, bBottom = px(bags)
-    if bRight then side, x, y = 'RIGHT', bRight, bBottom + 34 end   -- (the bag window's footer hangs ~26 px below its edge)
+    local bLeft, _, _, bBottom = px(bags)
+    if bLeft then
+      local widest = 0
+      for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip', 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
+        local t = rawget(_G, n)
+        if t and t:IsShown() and t.GetWidth then widest = math.max(widest, (t:GetWidth() or 0) * s * PX * UIParent:GetEffectiveScale()) end
+      end
+      x, y = math.min(bLeft, 1910 - widest), bBottom + 34   -- (the bag window's footer hangs ~26 px below its edge)
+    end
   end
   local anchor = side == 'RIGHT' and 'TOPRIGHT' or 'TOPLEFT'
   local main

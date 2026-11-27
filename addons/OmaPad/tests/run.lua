@@ -416,27 +416,27 @@ end
 -- the bag window's right edge and bottom in TV px (the AH stack lines up under it, right-aligned, 8 px down)
 local function bagEdge(w)
   local b = w.bags; local e = (b.GetEffectiveScale and b:GetEffectiveScale() or 1) * PXT
-  return b:GetRight() * e, 1080 - b:GetBottom() * e
+  return b:GetLeft() * e, 1080 - b:GetBottom() * e
 end
 tests['auction house: the Equipped boxes go on top under the bags, right-aligned, the item under the last one'] = function()
   local w, c1, c2 = ahTips()
   OmaPadPutTipsForTest()
   local r, btm = bagEdge(w)
   local p = c1.pts[1]
-  ok(p[1] == 'TOPRIGHT' and p[3] == 'TOPLEFT', 'first compare box right-aligned')
-  ok(math.abs(p[4] - r / PXT / 0.9) < 0.01, 'right edge on the bag window\'s right edge')
+  ok(p[1] == 'TOPLEFT' and p[3] == 'TOPLEFT', 'first compare box left-aligned')
+  ok(math.abs(p[4] - r / PXT / 0.9) < 0.01, 'left edge on the bag window\'s left edge')
   ok(math.abs(p[5] + (btm + 34 + 28) / PXT / 0.9) < 0.01, '8 px under the bags, pushed down by the 28 px tab (no header)')
-  ok(c2.pts[1][1] == 'TOPRIGHT' and c2.pts[1][3] == 'BOTTOMLEFT', 'second box under the first, right-aligned')
+  ok(c2.pts[1][1] == 'TOPLEFT' and c2.pts[1][3] == 'BOTTOMLEFT', 'second box under the first, left-aligned')
   local m = w.tip.pts[1]
-  ok(m[1] == 'TOPRIGHT' and m[3] == 'BOTTOMLEFT', 'item tooltip under the last compare box')
-  ok(math.abs(m[4] - (c2.l + c2.w)) < 0.01 and math.abs(m[5] - (c2.t - c2.h - 12 / PXT / 0.9)) < 0.01, 'right-aligned, 12 px under it')
+  ok(m[1] == 'TOPLEFT' and m[3] == 'BOTTOMLEFT', 'item tooltip under the last compare box')
+  ok(math.abs(m[4] - c2.l) < 0.01 and math.abs(m[5] - (c2.t - c2.h - 12 / PXT / 0.9)) < 0.01, 'left-aligned, 12 px under it')
 end
 tests['auction house: no compare box, the item tooltip sits under the bags, right-aligned'] = function()
   local w, c1, c2 = ahTips(); c1.shown = false; c2.shown = false
   OmaPadPutTipsForTest()
   local r, btm = bagEdge(w)
   local m = w.tip.pts[1]
-  ok(m[1] == 'TOPRIGHT' and math.abs(m[4] - r / PXT / 0.9) < 0.01 and math.abs(m[5] + (btm + 34) / PXT / 0.9) < 0.01, 'under the bags, right edges level')
+  ok(m[1] == 'TOPLEFT' and math.abs(m[4] - r / PXT / 0.9) < 0.01 and math.abs(m[5] + (btm + 34) / PXT / 0.9) < 0.01, 'under the bags, left edges level')
   ok(c1.pts[1][1] == 'CENTER', 'compare boxes untouched')
 end
 tests['compare tab: measured from the box header when it has one'] = function()
