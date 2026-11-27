@@ -86,12 +86,12 @@ tests['Forever (no skill lines): weapon skills from known spells, First Aid from
 end
 tests['trainer list from Polestar: new spells and upgrades, with cost'] = function()
   world()
-  _G.Polestar = { QoL = { Spells = { NewAt = function(l) return ({ [4] = { { id = 10321, rank = 0, cost = 100 }, { id = 3127, rank = 0, cost = 100 } }, [6] = { { id = 639, rank = 2, cost = 100 } } })[l] end } } }
+  _G.Polestar = { QoL = { Spells = { NewAt = function(l) return ({ [4] = { { id = 10321, rank = 0, cost = 100 }, { id = 3127, rank = 0, cost = 100 }, { id = 1152, rank = 0, cost = 100 } }, [6] = { { id = 639, rank = 2, cost = 100 } } })[l] end } } }
   local old = _G.C_Spell.GetSpellName
-  _G.C_Spell.GetSpellName = function(id) return ({ [10321] = 'Purify', [3127] = 'Two-Handed Weapon Spec', [639] = 'Holy Light' })[id] or old(id) end
+  _G.C_Spell.GetSpellName = function(id) return ({ [10321] = 'Judgement', [1152] = 'Purify', [3127] = 'Two-Handed Weapon Spec', [639] = 'Holy Light' })[id] or old(id) end
   OmaBook.save(); _G.Polestar = nil
   local j = OmaBookDB.json
-  ok(j:find('{"cost":100,"id":10321,"lvl":4,"name":"Purify","rank":0}', 1, true), 'new spell'); ok(not j:find('"id":3127', 1, true), 'a known passive is not listed'); ok(j:find('"name":"Holy Light","rank":2', 1, true), 'upgrade')
+  ok(j:find('{"cost":100,"id":1152,"lvl":4,"name":"Purify","rank":0}', 1, true), 'new spell'); ok(not j:find('"id":10321', 1, true), 'Judgement, already known, is not listed'); ok(not j:find('"id":3127', 1, true), 'a known passive is not listed'); ok(j:find('"name":"Holy Light","rank":2', 1, true), 'upgrade')
 end
 local function book4()
   _G.C_SpellBook.GetSpellBookSkillLineInfo = function() return { itemIndexOffset = 0, numSpellBookItems = 4 } end
