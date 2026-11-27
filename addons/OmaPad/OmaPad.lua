@@ -738,26 +738,69 @@ local function putTopLeft(f, x, y, s)
   keep(f); f:SetScale(s); f:ClearAllPoints()
   f:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', x / PX / s, -y / PX / s)
 end
+-- Every NPC window (vendor, trainer, bank, mailbox, quest, gossip, crafting; Joshua 2026-11-26: "at a vendor nothing
+-- else matters, use the entire screen"): the NPC window stays where WoW opens it (left; Blizzard's own frames are never
+-- moved), the bags go to the right edge at 90%, tops level, and the item tooltip plus its "Equipped" compare fill the
+-- gap between the two at up to 100%, never on either window. Back to normal when the window closes.
+local PANELS = { 'MerchantFrame', 'ClassTrainerFrame', 'BankFrame', 'MailFrame', 'QuestFrame', 'GossipFrame',
+  'TradeSkillFrame', 'ProfessionsFrame', 'CraftFrame' }
+local panelOn = false
+local function openPanel()
+  for _, n in ipairs(PANELS) do local f = rawget(_G, n); if f and f.IsShown and f:IsShown() then return f end end
+end
+local function px(f)   -- a frame's left, top, right, bottom in TV pixels
+  local e = f:GetEffectiveScale() * PX
+  return f:GetLeft() * e, 1080 - f:GetTop() * e, f:GetRight() * e, 1080 - f:GetBottom() * e
+end
 local placing = false
 local function putTips()
-  if not ahLayoutOn or placing then return end
+  if not (ahLayoutOn or panelOn) or placing then return end
   placing = true
-  local s = AHL.tip
+  local x, y, limit, s = AHL.tipAt[1], AHL.tipAt[2], 1910, AHL.tip
+  local panel = panelOn and openPanel()
+  if panel and not ahLayoutOn then
+    local _, top, right = px(panel)
+    x, y = right + 12, top
+    local bags = rawget(_G, 'KroGamepadBagsFrame')
+    if bags and bags:IsShown() and bags:GetLeft() then limit = (px(bags)) - 12 end
+  end
   local main
   for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip' }) do
     local t = rawget(_G, n)
     if t and t:IsShown() then
+      if panel and not ahLayoutOn then s = math.max(0.6, math.min(1.0, (limit - x) / (math.max(1, t:GetWidth()) * PX))) end
       keep(t); t:SetScale(s); t:ClearAllPoints()
-      t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', AHL.tipAt[1] / PX / s, -AHL.tipAt[2] / PX / s)
+      t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', x / PX / s, -y / PX / s)
       main = main or t
     end
   end
   local prev = main
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local t = rawget(_G, n)
-    if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -28 / s); prev = t end
+    if prev and t and t:IsShown() then keep(t); t:SetScale(prev:GetScale()); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -28 / prev:GetScale()); prev = t end
   end
   placing = false
+end
+local function panelLayout()
+  if InCombatLockdown() or ahLayoutOn then return end
+  local panel = openPanel()
+  if panel and panel:GetTop() then
+    panelOn = true
+    local bags = rawget(_G, 'KroGamepadBagsFrame')
+    if bags and bags:IsShown() then
+      local _, top = px(panel)
+      keep(bags); bags:SetScale(0.9); bags:ClearAllPoints()
+      bags:SetPoint('TOPRIGHT', UIParent, 'TOPRIGHT', -10 / PX / 0.9, -(top + 80) / PX / 0.9)   -- its title bar draws 80 px above
+    end
+    putTips()
+  elseif panelOn then
+    panelOn = false
+    for f, v in pairs(saved) do
+      f:SetScale(v.scale); f:ClearAllPoints()
+      for _, p in ipairs(v.pts) do f:SetPoint(unpack(p)) end
+    end
+    wipe(saved)
+  end
 end
 local function ahLayout(on)
   if InCombatLockdown() then return end
@@ -785,9 +828,14 @@ do
     for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip', 'ShoppingTooltip1', 'ShoppingTooltip2' }) do hookTip(n) end
     for _, n in ipairs({ 'ImprovedForeverAuctionBuy', 'KroGamepadBagsFrame' }) do
       local f = rawget(_G, n)
-      if f and not hooked[n] then hooked[n] = true; f:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, function() ahLayout(true) end) end end) end
+      if f and not hooked[n] then hooked[n] = true; f:HookScript('OnShow', function() if ahLayoutOn then C_Timer.After(0, function() ahLayout(true) end) elseif openPanel() then C_Timer.After(0, panelLayout) end end) end
     end
   end
+  local pev = CreateFrame('Frame')
+  for _, e in ipairs({ 'MERCHANT_SHOW', 'MERCHANT_CLOSED', 'TRAINER_SHOW', 'TRAINER_CLOSED', 'BANKFRAME_OPENED', 'BANKFRAME_CLOSED',
+    'MAIL_SHOW', 'MAIL_CLOSED', 'QUEST_DETAIL', 'QUEST_PROGRESS', 'QUEST_COMPLETE', 'QUEST_FINISHED', 'GOSSIP_SHOW', 'GOSSIP_CLOSED',
+    'TRADE_SKILL_SHOW', 'TRADE_SKILL_CLOSE' }) do pcall(pev.RegisterEvent, pev, e) end
+  pev:SetScript('OnEvent', function() C_Timer.After(0.3, function() hookAll(); panelLayout() end) end)
   local ev = CreateFrame('Frame')
   ev:RegisterEvent('AUCTION_HOUSE_SHOW'); ev:RegisterEvent('AUCTION_HOUSE_CLOSED')
   ev:SetScript('OnEvent', function(_, e)
