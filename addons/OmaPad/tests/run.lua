@@ -81,6 +81,8 @@ local function win(name, l, t, w, h)
   function f:GetScale() return self.scale end
   function f:GetEffectiveScale() return self.scale end
   function f:IsShown() return self.shown end
+  function f:IsVisible() return self.shown end
+  function f:GetEffectiveAlpha() return self.alpha or 1 end
   function f:GetLeft() return self.l end
   function f:GetTop() return self.t end
   function f:GetRight() return self.l and self.l + self.w end
@@ -98,6 +100,7 @@ local function layoutWorld()
   _G.UIParent = { GetEffectiveScale = function() return 1 end }
   _G.wipe = function(t) for k in pairs(t) do t[k] = nil end end
   _G.unpack = unpack
+  _G.NotGameTooltipKroGamepadBags = nil     -- left over from another test
   w.merchant = win('MerchantFrame', 20, 700, 340, 440)
   w.bags = win('KroGamepadBagsFrame', 900, 500, 300, 400)
   w.tip = win('GameTooltip', 500, 400, 250, 120)
@@ -353,6 +356,26 @@ tests['bags alone: the game tooltip moves when the bag window owns it, not other
   local p = w.tip.pts[1]
   ok(p and p[1] == 'TOPRIGHT' and p[3] == 'TOPLEFT', 'the bag item tooltip goes left of the bags')
   ok(back and back > 0.8 and back < 1, 'darker backing, not solid')
+end
+tests['bags alone: a vendor layout left on with no vendor window open lets go, the bag tooltip goes left of the bags'] = function()
+  local w = layoutWorld()
+  w.tip.GetOwner = function() return w.bags end
+  w.fire('MERCHANT_SHOW')                       -- vendor layout on
+  ok(w.bags.scale == 0.9, 'vendor layout')
+  w.merchant.shown = false                      -- the window went without a closing event
+  OmaPadPutTipsForTest()
+  local p = w.tip.pts[1]
+  ok(p and p[1] == 'TOPRIGHT' and p[3] == 'TOPLEFT', 'bag tooltip left of the bags, not the auction spot')
+  ok(w.bags.scale == 1, 'the bags put back')
+end
+tests['layouts: an NPC window kept shown but faded out does not count as open'] = function()
+  local w = layoutWorld()
+  w.tip.GetOwner = function() return w.bags end
+  w.merchant.alpha = 0
+  w.fire('MERCHANT_SHOW')
+  ok(w.bags.scale == 1, 'no vendor layout for an invisible window')
+  OmaPadPutTipsForTest()
+  ok(w.tip.pts[1][1] == 'TOPRIGHT', 'bag tooltip left of the bags')
 end
 tests['apply waits while he drags something'] = function()
   local w = load('PALADIN', 'Bunji'); w.cursor = { 'item', 6948 }

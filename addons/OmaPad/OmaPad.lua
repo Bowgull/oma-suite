@@ -749,7 +749,12 @@ local PANELS = { 'MerchantFrame', 'ClassTrainerFrame', 'BankFrame', 'MailFrame',
   'TradeSkillFrame', 'ProfessionsFrame', 'CraftFrame' }
 local panelOn = false
 local function openPanel()
-  for _, n in ipairs(PANELS) do local f = rawget(_G, n); if f and f.IsShown and f:IsShown() then return f end end
+  -- really on screen: shown inside a shown parent and not faded out (2026-11-27: some add-ons keep NPC windows shown
+  -- but invisible, and the vendor layout then stayed on in the open world)
+  for _, n in ipairs(PANELS) do
+    local f = rawget(_G, n)
+    if f and f.IsVisible and f:IsVisible() and (not f.GetEffectiveAlpha or f:GetEffectiveAlpha() > 0.05) then return f end
+  end
 end
 local function px(f)   -- a frame's left, top, right, bottom in TV pixels (nil until it has a place)
   if not f:GetLeft() then return nil end
@@ -813,13 +818,20 @@ local function placeBagTip()
     if c and c:IsShown() then c:SetScale(s); c:ClearAllPoints(); c:SetPoint('TOPRIGHT', prev, 'BOTTOMRIGHT', 0, -U(28, s)); prev = c end
   end
 end
+local restoreLater = false
+local restore
 local function putTips()
   if placing then return end
+  -- 2026-11-27: the vendor layout stayed on with no NPC window open (seen after a reload in Goldshire), so every
+  -- tooltip, the bags' too, went to the auction-house spot over the bag window. Check the window is really there.
+  if panelOn and not ahLayoutOn and not openPanel() then
+    panelOn = false
+    if InCombatLockdown() then restoreLater = true else placing = true; pcall(restore); placing = false end
+  end
   if ahLayoutOn or panelOn then placing = true; pcall(placeTips); placing = false
   elseif bagsAlone() then placing = true; pcall(placeBagTip); placing = false end
 end
-local restoreLater = false
-local function restore()   -- everything the layouts moved goes back, and tooltips are free again
+function restore()   -- everything the layouts moved goes back, and tooltips are free again
   if InCombatLockdown() then restoreLater = true; return end
   restoreLater = false; panelOn = false; ahLayoutOn = false
   for f, v in pairs(saved) do
