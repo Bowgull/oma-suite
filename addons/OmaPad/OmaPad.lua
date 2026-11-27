@@ -1191,6 +1191,7 @@ local TIP_BACK = { 0.03, 0.03, 0.05, 1 }
 local function solidTip(t) if t and t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end end
 -- A two-hander compared with a main hand and an off hand shows two "Equipped" boxes; the first one's "if you replace
 -- these items" already sums both (Joshua 2026-11-27: three boxes ran off the screen), so the second is hidden.
+local stackLeft, stackFor = nil, nil   -- the auction house stack's spot, kept while one item's tooltip is up
 local function twoHander(t)
   local link = t and t.GetItem and select(2, t:GetItem())
   if not link and GameTooltip and GameTooltip.GetItem and GameTooltip:IsShown() then link = select(2, GameTooltip:GetItem()) end
@@ -1228,7 +1229,11 @@ local function placeTips()
         local t = rawget(_G, n)
         if t and t:IsShown() and t.GetHeight then tall = tall + (t:GetHeight() or 0) * s * PX * ue + 40 end
       end
-      if y + tall > 1070 then
+      -- decided once per item shown (the auction house refreshes its tooltip ~5 times a second and the height settles
+      -- as lines fill in; re-deciding each time made it blink between the two spots, Joshua 2026-11-27)
+      local link = GameTooltip and GameTooltip.GetItem and select(2, GameTooltip:GetItem()) or '?'
+      if stackLeft == nil or stackFor ~= link then stackFor, stackLeft = link, (y + tall > 1070) end
+      if stackLeft then
         local _, bTop = px(bags)
         side, x, y = 'RIGHT', bLeft - 8, bTop
       end
@@ -1267,7 +1272,7 @@ local function placeTips()
     under(main, prev, U(12, main:GetScale()), side)
     -- still runs off the bottom: the item goes left of the Equipped box, tops level (Joshua: "options 2 and 3")
     local mb = main:GetBottom() and (main:GetBottom() * main:GetEffectiveScale() * PX)
-    if mb and mb < 10 then
+    if mb and mb < 10 and not stackLeft then
       local first = rawget(_G, 'ShoppingTooltip1')
       local fl, ft = first and px(first)
       if fl then local ms = main:GetScale(); main:ClearAllPoints(); main:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(fl - 12, ms), -U(ft, ms)) end
@@ -1369,6 +1374,7 @@ do
   local function hookTip(n)
     local t = rawget(_G, n)
     if t and not hooked[n] then hooked[n] = true; TIPS[t] = true; t:HookScript('OnShow', function() C_Timer.After(0, putTips) end)
+      if n == 'GameTooltip' then t:HookScript('OnHide', function() stackLeft, stackFor = nil, nil end) end
       -- the "Equipped" compare boxes: our spot ties ShoppingTooltip2 under ShoppingTooltip1; left on, the game's own
       -- side-by-side anchoring next time ties 1 to 2 and fails ("Cannot anchor to a region dependent on it", 54 times
       -- in one session, 2026-11-27). The game anchors them fresh on every show, so ours go when they close.
