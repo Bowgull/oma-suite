@@ -718,7 +718,11 @@ local PX = 1080 / 768
 -- house draws 11 px right of and 10 px above its anchor and is 1085 px wide. Both now show from y 230, bags 54-557,
 -- 12 px gap, auction house 569-1654. The minimap doesn't matter at the auction house (Joshua): tooltips go bottom-right.
 -- tooltips in the free space under the bags (bottom-left), growing up (Joshua: they hid the Sell panel's profit)
-local AHL = { scale = 0.85, ah = { 558, 240 }, bags = { 50, 307 }, tip = 0.70, tipAt = { 54, 1045 } }
+-- Full screen (Joshua: "use the FULL screen at the AH, it's a TV"): the auction house at 115% fills the left 3/4 (TV px
+-- 20-1487 across, 54-1026 down, text about 18-20 px tall); bags at 70% top-right (1496-1910, 54-504); tooltips at 85%
+-- under the bags, growing down. Anchors allow for where each window really draws (measured): bags 90 units above
+-- their anchor, the auction house 13 right / 12 up (both before scale).
+local AHL = { ah = { 5, 68, 1.15 }, bags = { 1492, 117, 0.70 }, tip = 0.85, tipAt = { 1500, 520 } }
 local ahLayoutOn, saved = false, {}
 local function keep(f)
   if not f or saved[f] then return end
@@ -741,14 +745,14 @@ local function putTips()
     local t = rawget(_G, n)
     if t and t:IsShown() then
       keep(t); t:SetScale(s); t:ClearAllPoints()
-      t:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', AHL.tipAt[1] / PX / s, (1080 - AHL.tipAt[2]) / PX / s)
+      t:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', AHL.tipAt[1] / PX / s, -AHL.tipAt[2] / PX / s)
       main = main or t
     end
   end
   local prev = main
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local t = rawget(_G, n)
-    if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('BOTTOMLEFT', prev, 'TOPLEFT', 0, 6); prev = t end
+    if prev and t and t:IsShown() then keep(t); t:SetScale(s); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -6); prev = t end
   end
   placing = false
 end
@@ -756,8 +760,8 @@ local function ahLayout(on)
   if InCombatLockdown() then return end
   ahLayoutOn = on
   if on then
-    putTopLeft(rawget(_G, 'ImprovedForeverAuctionBuy'), AHL.ah[1], AHL.ah[2], AHL.scale)
-    putTopLeft(rawget(_G, 'KroGamepadBagsFrame'), AHL.bags[1], AHL.bags[2], AHL.scale)
+    putTopLeft(rawget(_G, 'ImprovedForeverAuctionBuy'), AHL.ah[1], AHL.ah[2], AHL.ah[3])
+    putTopLeft(rawget(_G, 'KroGamepadBagsFrame'), AHL.bags[1], AHL.bags[2], AHL.bags[3])
   else
     for f, v in pairs(saved) do
       f:SetScale(v.scale); f:ClearAllPoints()
