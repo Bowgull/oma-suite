@@ -100,7 +100,7 @@ local function layoutWorld()
   _G.UIParent = { GetEffectiveScale = function() return 1 end }
   _G.wipe = function(t) for k in pairs(t) do t[k] = nil end end
   _G.unpack = unpack
-  _G.NotGameTooltipKroGamepadBags = nil     -- left over from another test
+  _G.NotGameTooltipKroGamepadBags = nil; _G.KroGamepadBagsDoll = nil     -- left over from another test
   w.merchant = win('MerchantFrame', 20, 700, 340, 440)
   w.bags = win('KroGamepadBagsFrame', 900, 500, 300, 400)
   w.tip = win('GameTooltip', 500, 400, 250, 120)
@@ -376,6 +376,16 @@ tests['layouts: an NPC window kept shown but faded out does not count as open'] 
   ok(w.bags.scale == 1, 'no vendor layout for an invisible window')
   OmaPadPutTipsForTest()
   ok(w.tip.pts[1][1] == 'TOPRIGHT', 'bag tooltip left of the bags')
+end
+tests['bags alone: with the character panel open, the tooltip goes left of it, not onto it'] = function()
+  local w = layoutWorld()
+  w.merchant.shown = false
+  w.tip.GetOwner = function() return w.bags end
+  win('KroGamepadBagsDoll', 600, 500, 290, 400)
+  w.fire('PLAYER_ENTERING_WORLD')
+  OmaPadPutTipsForTest()
+  local p = w.tip.pts[1]
+  ok(p and math.abs(p[4] - (600 * (1080 / 768) - 12) / (1080 / 768)) < 0.01, 'right edge 12 px left of the character panel')
 end
 tests['apply waits while he drags something'] = function()
   local w = load('PALADIN', 'Bunji'); w.cursor = { 'item', 6948 }

@@ -809,6 +809,12 @@ local function placeBagTip()
   if not b then return end
   local left, top = px(b)
   if not left then return end
+  -- KroGamepadBags 2.1 puts its character, bank and other-character panels to the left of the bag window as their
+  -- own frames: go left of whichever is leftmost, so the tooltip never sits on the character picture
+  for _, n in ipairs({ 'KroGamepadBagsDoll', 'KroGamepadBagsBank', 'KroGamepadBagsViewDoll' }) do
+    local f = rawget(_G, n)
+    if f and f.IsVisible and f:IsVisible() and f:GetLeft() then local l = px(f); if l and l < left then left = l end end
+  end
   local s = t:GetScale()
   t:ClearAllPoints(); t:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(left - 12, s), -U(top, s))
   if t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end
