@@ -767,6 +767,16 @@ local function px(f)   -- a frame's left, top, right, bottom in TV pixels (nil u
   return f:GetLeft() * e, 1080 - f:GetTop() * e, f:GetRight() * e, 1080 - f:GetBottom() * e
 end
 local placing = false
+-- One compare box under another, placed by screen position rather than tied to it: the game's own anchoring ties
+-- ShoppingTooltip1 to ShoppingTooltip2, and a tie the other way made a loop (2026-11-27). side: 'LEFT' or 'RIGHT' edge.
+local function under(c, prev, gap, side)
+  local e, ce = prev:GetEffectiveScale(), c:GetEffectiveScale()
+  local x, b = side == 'RIGHT' and prev:GetRight() or prev:GetLeft(), prev:GetBottom()
+  if not x or not b then return false end
+  c:ClearAllPoints()
+  c:SetPoint(side == 'RIGHT' and 'TOPRIGHT' or 'TOPLEFT', UIParent, 'BOTTOMLEFT', x * e / ce, b * e / ce - gap)
+  return true
+end
 local function placeTips()
   local x, y, limit, s = AHL.tipAt[1], AHL.tipAt[2], 1910, AHL.tip
   local panel = panelOn and openPanel()
@@ -790,7 +800,7 @@ local function placeTips()
   local prev = main
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local t = rawget(_G, n)
-    if prev and t and t:IsShown() then keep(t); t:SetScale(prev:GetScale()); t:ClearAllPoints(); t:SetPoint('TOPLEFT', prev, 'BOTTOMLEFT', 0, -U(28, prev:GetScale())); prev = t end
+    if prev and t and t:IsShown() then keep(t); t:SetScale(prev:GetScale()); if under(t, prev, U(28, prev:GetScale()), 'LEFT') then prev = t end end
   end
 end
 -- Bags open on their own (Joshua 2026-11-26: "when I'm in my bags the tooltip is in a terrible spot", it sat on the bag
@@ -826,7 +836,7 @@ local function placeBagTip()
   local prev = t
   for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
     local c = rawget(_G, n)
-    if c and c:IsShown() then c:SetScale(s); c:ClearAllPoints(); c:SetPoint('TOPRIGHT', prev, 'BOTTOMRIGHT', 0, -U(28, s)); prev = c end
+    if c and c:IsShown() then c:SetScale(s); if under(c, prev, U(28, s), 'RIGHT') then prev = c end end
   end
 end
 local restoreLater = false
@@ -881,6 +891,10 @@ do
   local function hookTip(n)
     local t = rawget(_G, n)
     if t and not hooked[n] then hooked[n] = true; TIPS[t] = true; t:HookScript('OnShow', function() C_Timer.After(0, putTips) end)
+      -- the "Equipped" compare boxes: our spot ties ShoppingTooltip2 under ShoppingTooltip1; left on, the game's own
+      -- side-by-side anchoring next time ties 1 to 2 and fails ("Cannot anchor to a region dependent on it", 54 times
+      -- in one session, 2026-11-27). The game anchors them fresh on every show, so ours go when they close.
+      if n:match('^ShoppingTooltip') then t:HookScript('OnHide', function(self) if not placing then self:ClearAllPoints() end end) end
       -- the auction house anchors the tooltip itself on every item change, after it shows: follow every SetPoint
       hooksecurefunc(t, 'SetPoint', function() if not placing then putTips() end end)
       -- the controller UI anchors item tooltips to the highlighted button (SetOwner with ANCHOR_RIGHT), which the game
