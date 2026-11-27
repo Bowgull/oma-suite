@@ -1193,6 +1193,7 @@ local function solidTip(t) if t and t.NineSlice and t.NineSlice.SetCenterColor t
 -- these items" already sums both (Joshua 2026-11-27: three boxes ran off the screen), so the second is hidden.
 local function twoHander(t)
   local link = t and t.GetItem and select(2, t:GetItem())
+  if not link and GameTooltip and GameTooltip.GetItem and GameTooltip:IsShown() then link = select(2, GameTooltip:GetItem()) end
   local loc = link and GetItemInfoInstant and select(4, GetItemInfoInstant(link))
   return loc == 'INVTYPE_2HWEAPON'
 end
@@ -1220,6 +1221,17 @@ local function placeTips()
         if t and t:IsShown() and t.GetWidth then widest = math.max(widest, (t:GetWidth() or 0) * s * PX * UIParent:GetEffectiveScale()) end
       end
       x, y = math.min(bLeft, 1910 - widest), bBottom + 34   -- (the bag window's footer hangs ~26 px below its edge)
+      -- No room under the bags for the whole stack (tall bags, a two-hander's Equipped boxes; Joshua 2026-11-27 at the
+      -- game's own auction window): the stack goes left of the bag window instead, tops level, growing left.
+      local tall, ue = 0, UIParent:GetEffectiveScale()
+      for _, n in ipairs({ 'NotGameTooltipKroGamepadBags', 'GameTooltip', 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
+        local t = rawget(_G, n)
+        if t and t:IsShown() and t.GetHeight then tall = tall + (t:GetHeight() or 0) * s * PX * ue + 40 end
+      end
+      if y + tall > 1070 then
+        local _, bTop = px(bags)
+        side, x, y = 'RIGHT', bLeft - 8, bTop
+      end
     end
   end
   local anchor = side == 'RIGHT' and 'TOPRIGHT' or 'TOPLEFT'

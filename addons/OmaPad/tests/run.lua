@@ -98,6 +98,7 @@ local function win(name, l, t, w, h)
   function f:IsVisible() return self.shown end
   function f:GetEffectiveAlpha() return self.alpha or 1 end
   function f:GetLeft() return self.l end
+  function f:GetHeight() return self.h end
   function f:GetTop() return self.t end
   function f:GetRight() return self.l and self.l + self.w end
   function f:GetBottom() return self.t and self.t - self.h end
@@ -409,6 +410,7 @@ local function ahTips(header)
   local w = layoutWorld()
   w.merchant.shown = false
   w.fire('AUCTION_HOUSE_SHOW')
+  w.bags.t, w.bags.h = 740, 200   -- short bags: room for the stack under them
   local c1 = win('ShoppingTooltip1', 600, 600, 250, 100); local c2 = win('ShoppingTooltip2', 600, 480, 250, 100)
   if header then c1.CompareHeader = header end
   return w, c1, c2
@@ -449,6 +451,15 @@ tests['auction house: a two-hander shows one Equipped box (the first sums both h
   ok(hidden, 'second Equipped box hidden')
   local m = w.tip.pts[1]
   ok(m[3] == 'BOTTOMLEFT' and math.abs(m[4] - c1.l) < 0.01, 'item tooltip straight under the first box')
+end
+tests['auction house: tall bags, no room under them: the stack goes left of the bags, tops level'] = function()
+  local w, c1 = ahTips()
+  w.bags.t, w.bags.h = 740, 640   -- the bag window reaches near the bottom of the screen
+  OmaPadPutTipsForTest()
+  local e = PXT
+  local p = c1.pts[1]
+  ok(p[1] == 'TOPRIGHT', 'right edge anchored: grows left')
+  ok(math.abs(p[4] - (900 * 0.79 * e - 8) / PXT / 0.9) < 0.01, '8 px left of the bag window')
 end
 tests['compare tab: measured from the box header when it has one'] = function()
   local h = { GetTop = function() return nil end, GetHeight = function() return 30 end, GetEffectiveScale = function() return 0.9 end,
