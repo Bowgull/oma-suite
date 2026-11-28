@@ -22,6 +22,7 @@ local function newWorld(class, name)
   W = { class = class, name = name, known = {}, slots = {}, macros = {}, bags = {}, cursor = nil, said = {}, rank = {}, sounds = {} }
   _G.GetActionTexture = function(s) if W.slots[s] then return 'icon' .. s end end
   _G.PlaySound = function(k, ch) W.sounds[#W.sounds + 1] = tostring(k) .. '/' .. tostring(ch) end
+  _G.PlaySoundFile = function(f, ch) W.sounds[#W.sounds + 1] = tostring(f) .. '/' .. tostring(ch) end
   _G.SOUNDKIT = { IG_QUEST_LIST_COMPLETE = 618 }
   _G.EnumerateFrames = nil; _G.UIParent = nil; _G.UnitAffectingCombat = nil
   W.frames = {}
@@ -529,6 +530,7 @@ tests['landing: spells learned at a trainer wait until the trainer window closes
   w.fire('TRAINER_CLOSED'); w.run()
   local s1, s2 = slotOf(1, 'RT', U), slotOf(1, 'LT', R)
   eq(w.log(), 'start layer:11 new:' .. s1 .. ' layer:12 new:' .. s2 .. ' end', 'both play once the window closes, RT before LT')
+  eq(#w.sounds, 1, 'one fanfare for the whole batch')
 end
 
 tests['landing: a spell from a quest or tome plays right away'] = function()
@@ -536,7 +538,7 @@ tests['landing: a spell from a quest or tome plays right away'] = function()
   learn({ 'Hammer of Justice' }); pad(); w.run(1000)
   ok(w.log():find('new:' .. slotOf(1, 'RT', U), 1, true), 'played within a second: ' .. w.log())
   w.run(); ok(w.log():find('end', 1, true), 'and ends')
-  eq(#w.sounds, 1, 'one chime'); eq(w.sounds[1], '618/SFX', 'default kit on the SFX channel')
+  eq(#w.sounds, 1, 'one chime'); eq(w.sounds[1], 'Interface\\AddOns\\OmaPad\\sounds\\fanfare.ogg/SFX', 'the fanfare on the SFX channel')
 end
 
 tests['landing: order bare pad, RT, LT, LT+RT, set 2; upgrades of a layer together, left to right'] = function()
@@ -596,7 +598,7 @@ tests['landing: /omapad landtest plays a sample landing and upgrade, /omapad sou
   ok(L:find('new:', 1, true) and L:find('up:', 1, true) and L:find('end', 1, true), 'sample played: ' .. L)
   eq(OmaPadDB.landCheck.found, 8, 'found the pad buttons'); eq(OmaPadDB.landCheck.err, nil, 'drawing ran clean')
   pad('sound 3337'); eq(OmaPadDB.landSound, 3337); eq(w.sounds[#w.sounds], '3337/SFX', 'played to hear it')
-  pad('sound default'); eq(OmaPadDB.landSound, nil)
+  pad('sound default'); eq(OmaPadDB.landSound, nil); ok(w.sounds[#w.sounds]:find('fanfare.ogg', 1, true), 'back to the fanfare')
 end
 local names = {}; for n in pairs(tests) do names[#names + 1] = n end; table.sort(names)
 local pass, fail = 0, 0

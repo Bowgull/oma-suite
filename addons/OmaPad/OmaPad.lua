@@ -452,15 +452,19 @@ local function layerKey(slot) local set, bar = layerOf(slot); return set * 10 + 
 local function inCombat() return InCombatLockdown() or (UnitAffectingCombat and UnitAffectingCombat('player')) or false end
 local function note(k, v) if type(OmaPadDB) == 'table' then OmaPadDB.landCheck = OmaPadDB.landCheck or {}; OmaPadDB.landCheck[k] = v end end
 
--- the chime: new spells only, once each, on the SFX channel so it sits under the music. One setting, picked by ear on
--- the TV (/omapad sound <id>); the default is the new-recipe chime if this client has it, else quest complete.
+-- the chime: new spells only, once per batch, on the SFX channel so it sits under the music. The default is OmaPad's own
+-- fanfare (sounds/fanfare.ogg, about 6.5 s, made for it; sounds/fanfare.py rebuilds it). /omapad sound <id> swaps in a game
+-- sound kit instead; /omapad sound default goes back to the fanfare.
+local FANFARE = 'Interface\\AddOns\\OmaPad\\sounds\\fanfare.ogg'
 local function landSound()
   local k = type(OmaPadDB) == 'table' and tonumber(OmaPadDB.landSound)
-  if k then return k end
-  local S = rawget(_G, 'SOUNDKIT') or {}
-  return S.UI_PROFESSIONS_NEW_RECIPE_LEARNED_TOAST or S.IG_QUEST_LIST_COMPLETE
+  return k or 'fanfare'
 end
-local function chime() local k = landSound(); if k and PlaySound then pcall(PlaySound, k, 'SFX') end end
+local function chime()
+  local k = landSound()
+  if k == 'fanfare' then if PlaySoundFile then pcall(PlaySoundFile, FANFARE, 'SFX') end
+  elseif PlaySound then pcall(PlaySound, k, 'SFX') end
+end
 
 -- The order to play a batch in: layer by layer; in each, the new spells one at a time left to right, then all of the
 -- layer's upgrades together.
@@ -721,6 +725,7 @@ function Land.run(items)
   local function at(ms, fn) C_Timer.After(ms / 1000, function() if Land.gen == gen then fn() end end) end
   local alone = #steps == 1 and steps[1].kind == 'new'
   local pending = {}; for _, s in ipairs(steps) do if s.kind == 'new' then pending[s.slot] = true end end
+  local rang = false                                        -- one fanfare per batch, on its first new spell
   Land.log[#Land.log + 1] = 'start'
   draw('start', #steps)
   local t, cur = 0, nil
@@ -732,7 +737,7 @@ function Land.run(items)
     end
     at(t, function() draw('dots', #steps, i) end)
     if s.kind == 'new' then
-      at(t, function() pending[s.slot] = nil; Land.log[#Land.log + 1] = 'new:' .. s.slot; chime(); draw('pop', s.slot, alone, at) end)
+      at(t, function() pending[s.slot] = nil; Land.log[#Land.log + 1] = 'new:' .. s.slot; if not rang then rang = true; chime() end; draw('pop', s.slot, alone, at) end)
       t = t + (alone and 6200 or 1200)
     else
       for j, slot in ipairs(s.slots) do
@@ -1505,8 +1510,8 @@ if hooksecurefunc then                                        -- after-hooks onl
 end
 
 -- /ompad: re-check now.  /ompad sim: replay levelling on a copy and check the rules.  /ompad mine: hand every pad button back to the add-on (forgets which were his).
--- /omapad landtest: one sample landing and one upgrade on the pad.  /omapad sound <id>: the chime (a sound kit id),
--- played once to hear it; /omapad sound default: back to the default; /omapad sound: says which one is set.
+-- /omapad landtest: one sample landing and one upgrade on the pad.  /omapad sound <id>: a game sound kit instead of the
+-- fanfare, played once to hear it; /omapad sound default: back to the fanfare; /omapad sound: says which one is set.
 SLASH_OMASHUPAD1 = '/ompad'
 SLASH_OMASHUPAD2 = '/omapad'
 SlashCmdList.OMASHUPAD = function(m)
