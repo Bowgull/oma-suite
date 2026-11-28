@@ -1191,7 +1191,18 @@ local TIP_BACK = { 0.03, 0.03, 0.05, 1 }
 local function solidTip(t) if t and t.NineSlice and t.NineSlice.SetCenterColor then pcall(t.NineSlice.SetCenterColor, t.NineSlice, unpack(TIP_BACK)) end end
 -- A two-hander compared with a main hand and an off hand shows two "Equipped" boxes; the first one's "if you replace
 -- these items" already sums both (Joshua 2026-11-27: three boxes ran off the screen), so the second is hidden.
-local stackLeft, stackFor = nil, nil   -- the auction house stack's spot, kept while one item's tooltip is up
+-- The auction house stack's spot, one per tooltip (an item's link, else its first line, e.g. a price). The AH hides and
+-- re-shows its tooltip ~5 times a second while the lines fill in, so the spot only ever moves one way per tooltip:
+-- further left, from under the bags to left of them, item beside the Equipped box. It never flips back (Joshua
+-- 2026-11-27: "still kind of buggy"; a spot wiped on every hide and a bottom check that read a stale position blinked).
+local spot = {}
+local function spotFor()
+  local link = GameTooltip and GameTooltip.GetItem and select(2, GameTooltip:GetItem())
+  local l1 = rawget(_G, 'GameTooltipTextLeft1')
+  local key = link or ('t:' .. tostring(l1 and l1.GetText and l1:GetText() or '?'))
+  if spot.key ~= key then spot = { key = key } end
+  return spot
+end
 local function twoHander(t)
   local link = t and t.GetItem and select(2, t:GetItem())
   if not link and GameTooltip and GameTooltip.GetItem and GameTooltip:IsShown() then link = select(2, GameTooltip:GetItem()) end
@@ -1221,7 +1232,9 @@ local function placeTips()
         local t = rawget(_G, n)
         if t and t:IsShown() and t.GetWidth then widest = math.max(widest, (t:GetWidth() or 0) * s * PX * UIParent:GetEffectiveScale()) end
       end
-      x, y = math.min(bLeft, 1910 - widest), bBottom + 34   -- (the bag window's footer hangs ~26 px below its edge)
+      local sp = spotFor()
+      sp.x = math.min(sp.x or bLeft, bLeft, 1910 - widest)
+      x, y = sp.x, bBottom + 34   -- (the bag window's footer hangs ~26 px below its edge)
       -- No room under the bags for the whole stack (tall bags, a two-hander's Equipped boxes; Joshua 2026-11-27 at the
       -- game's own auction window): the stack goes left of the bag window instead, tops level, growing left.
       local tall, ue = 0, UIParent:GetEffectiveScale()
@@ -1229,11 +1242,8 @@ local function placeTips()
         local t = rawget(_G, n)
         if t and t:IsShown() and t.GetHeight then tall = tall + (t:GetHeight() or 0) * s * PX * ue + 40 end
       end
-      -- decided once per item shown (the auction house refreshes its tooltip ~5 times a second and the height settles
-      -- as lines fill in; re-deciding each time made it blink between the two spots, Joshua 2026-11-27)
-      local link = GameTooltip and GameTooltip.GetItem and select(2, GameTooltip:GetItem()) or '?'
-      if stackLeft == nil or stackFor ~= link then stackFor, stackLeft = link, (y + tall > 1070) end
-      if stackLeft then
+      if y + tall > 1070 then sp.left = true end
+      if sp.left then
         local _, bTop = px(bags)
         side, x, y = 'RIGHT', bLeft - 8, bTop
       end
@@ -1270,9 +1280,18 @@ local function placeTips()
   end
   if prev then
     under(main, prev, U(12, main:GetScale()), side)
-    -- still runs off the bottom: the item goes left of the Equipped box, tops level (Joshua: "options 2 and 3")
-    local mb = main:GetBottom() and (main:GetBottom() * main:GetEffectiveScale() * PX)
-    if mb and mb < 10 and not stackLeft then
+    -- still runs off the bottom: the item goes left of the Equipped box, tops level (Joshua: "options 2 and 3").
+    -- Worked out from the heights, not read back from the screen: a frame just moved still reports its old spot.
+    local sp, ue = ahLayoutOn and spotFor(), UIParent:GetEffectiveScale()
+    if sp and not sp.left and not sp.beside then
+      local h = function(t) return (t:GetHeight() or 0) * t:GetScale() * ue * PX end
+      local bottom = y + h(main) + 12
+      for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
+        local t = rawget(_G, n); if t and t:IsShown() then bottom = bottom + tabPx(t) + h(t) end
+      end
+      if bottom > 1070 then sp.beside = true end
+    end
+    if sp and sp.beside and not sp.left then
       local first = rawget(_G, 'ShoppingTooltip1')
       local fl, ft = first and px(first)
       if fl then local ms = main:GetScale(); main:ClearAllPoints(); main:SetPoint('TOPRIGHT', UIParent, 'TOPLEFT', U(fl - 12, ms), -U(ft, ms)) end
@@ -1365,7 +1384,7 @@ end
 local function ahLayout(on)
   if not on then ahLayoutOn = false; restore(); if not restoreLater then panelLayout() end return end   -- an NPC window still open gets its own layout
   if InCombatLockdown() then return end
-  panelOn = false; ahLayoutOn = true
+  panelOn = false; ahLayoutOn = true; spot = {}
   putTopLeft(rawget(_G, 'ImprovedForeverAuctionBuy'), AHL.ah[1], AHL.ah[2], AHL.ah[3])
   putTopLeft(rawget(_G, 'KroGamepadBagsFrame'), AHL.bags[1], AHL.bags[2], AHL.bags[3])
 end
@@ -1374,7 +1393,6 @@ do
   local function hookTip(n)
     local t = rawget(_G, n)
     if t and not hooked[n] then hooked[n] = true; TIPS[t] = true; t:HookScript('OnShow', function() C_Timer.After(0, putTips) end)
-      if n == 'GameTooltip' then t:HookScript('OnHide', function() stackLeft, stackFor = nil, nil end) end
       -- the "Equipped" compare boxes: our spot ties ShoppingTooltip2 under ShoppingTooltip1; left on, the game's own
       -- side-by-side anchoring next time ties 1 to 2 and fails ("Cannot anchor to a region dependent on it", 54 times
       -- in one session, 2026-11-27). The game anchors them fresh on every show, so ours go when they close.

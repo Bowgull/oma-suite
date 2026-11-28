@@ -461,6 +461,21 @@ tests['auction house: tall bags, no room under them: the stack goes left of the 
   ok(p[1] == 'TOPRIGHT', 'right edge anchored: grows left')
   ok(math.abs(p[4] - (900 * 0.79 * e - 8) / PXT / 0.9) < 0.01, '8 px left of the bag window')
 end
+tests['auction house: the spot settles one way per tooltip and never flips back (the AH re-shows it ~5 times a second)'] = function()
+  local w, c1 = ahTips()
+  local link = 'item:1'; w.tip.GetItem = function() return 'Thing', link end
+  OmaPadPutTipsForTest()
+  ok(c1.pts[1][1] == 'TOPLEFT', 'short: under the bags')
+  w.tip.h = 900                                   -- the lines fill in: no room under the bags
+  OmaPadPutTipsForTest()
+  ok(c1.pts[1][1] == 'TOPRIGHT', 'tall: left of the bags')
+  w.tip.h = 120                                   -- a refresh measures it short again
+  OmaPadPutTipsForTest()
+  ok(c1.pts[1][1] == 'TOPRIGHT', 'same item: stays left of the bags, no flip back')
+  link = 'item:2'                                 -- another item gets its own spot
+  OmaPadPutTipsForTest()
+  ok(c1.pts[1][1] == 'TOPLEFT', 'next item: decided afresh')
+end
 tests['compare tab: measured from the box header when it has one'] = function()
   local h = { GetTop = function() return nil end, GetHeight = function() return 30 end, GetEffectiveScale = function() return 0.9 end,
               IsShown = function() return true end }
