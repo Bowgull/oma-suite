@@ -1214,7 +1214,7 @@ local function twoHander(t)
   local loc = link and GetItemInfoInstant and select(4, GetItemInfoInstant(link))
   return loc == 'INVTYPE_2HWEAPON'
 end
-local function placeTips()
+local function placeTips(quick)   -- quick: at the moment the game shows it, sizes may still be the last item's: decide nothing new
   local x, y, limit, s = AHL.tipAt[1], AHL.tipAt[2], 1910, AHL.tip
   local panel = panelOn and openPanel()
   if panel and not ahLayoutOn then
@@ -1238,8 +1238,8 @@ local function placeTips()
         if t and t:IsShown() and t.GetWidth then widest = math.max(widest, (t:GetWidth() or 0) * s * PX * UIParent:GetEffectiveScale()) end
       end
       local sp = spotFor()
-      sp.x = math.min(sp.x or bLeft, bLeft, 1910 - widest)
-      x, y = sp.x, bBottom + 34   -- (the bag window's footer hangs ~26 px below its edge)
+      if not quick then sp.x = math.min(sp.x or bLeft, bLeft, 1910 - widest) end
+      x, y = sp.x or bLeft, bBottom + 34   -- (the bag window's footer hangs ~26 px below its edge)
       -- No room under the bags for the whole stack (tall bags, a two-hander's Equipped boxes; Joshua 2026-11-27 at the
       -- game's own auction window): the stack goes left of the bag window instead, tops level, growing left.
       local tall, ue = 0, UIParent:GetEffectiveScale()
@@ -1247,7 +1247,7 @@ local function placeTips()
         local t = rawget(_G, n)
         if t and t:IsShown() and t.GetHeight then tall = tall + (t:GetHeight() or 0) * s * PX * ue + 40 end
       end
-      if y + tall > 1070 then sp.left = true end
+      if not quick and y + tall > 1070 then sp.left = true end
       if sp.left then
         local _, bTop = px(bags)
         side, x, y = 'RIGHT', bLeft - 8, bTop
@@ -1288,7 +1288,7 @@ local function placeTips()
     -- still runs off the bottom: the item goes left of the Equipped box, tops level (Joshua: "options 2 and 3").
     -- Worked out from the heights, not read back from the screen: a frame just moved still reports its old spot.
     local sp, ue = ahLayoutOn and spotFor(), UIParent:GetEffectiveScale()
-    if sp and not sp.left and not sp.beside then
+    if sp and not quick and not sp.left and not sp.beside then
       local h = function(t) return (t:GetHeight() or 0) * t:GetScale() * ue * PX end
       local bottom = y + h(main) + 12
       for _, n in ipairs({ 'ShoppingTooltip1', 'ShoppingTooltip2' }) do
@@ -1348,7 +1348,7 @@ local function placeBagTip()
 end
 local restoreLater = false
 local restore
-local function putTips()
+local function putTips(quick)
   if placing then return end
   -- 2026-11-27: the vendor layout stayed on with no NPC window open (seen after a reload in Goldshire), so every
   -- tooltip, the bags' too, went to the auction-house spot over the bag window. Check the window is really there.
@@ -1356,7 +1356,7 @@ local function putTips()
     panelOn = false
     if InCombatLockdown() then restoreLater = true else placing = true; pcall(restore); placing = false end
   end
-  if ahLayoutOn or panelOn then placing = true; pcall(placeTips); placing = false
+  if ahLayoutOn or panelOn then placing = true; pcall(placeTips, quick == true); placing = false
   elseif bagsAlone() then placing = true; pcall(placeBagTip); placing = false end
 end
 function restore()   -- everything the layouts moved goes back, and tooltips are free again
@@ -1397,7 +1397,9 @@ do
   local hooked = {}
   local function hookTip(n)
     local t = rawget(_G, n)
-    if t and not hooked[n] then hooked[n] = true; TIPS[t] = true; t:HookScript('OnShow', function() C_Timer.After(0, putTips) end)
+    -- placed the moment the game shows it, then again next frame with the real sizes (Joshua 2026-11-27: "the tooltip still
+    -- flickers on ah"): waiting a frame let the game draw it once in its own spot on every refresh, ~5 times a second
+    if t and not hooked[n] then hooked[n] = true; TIPS[t] = true; t:HookScript('OnShow', function() putTips(true); C_Timer.After(0, putTips) end)
       -- the "Equipped" compare boxes: our spot ties ShoppingTooltip2 under ShoppingTooltip1; left on, the game's own
       -- side-by-side anchoring next time ties 1 to 2 and fails ("Cannot anchor to a region dependent on it", 54 times
       -- in one session, 2026-11-27). The game anchors them fresh on every show, so ours go when they close.
@@ -1441,7 +1443,7 @@ do
     if hooksecurefunc and rawget(_G, fn) then hooksecurefunc(fn, function(t) solid(t) end) end
   end
   if hooksecurefunc then hooksecurefunc('GameTooltip_SetDefaultAnchor', function(t, parent)
-    if ahLayoutOn or panelOn then C_Timer.After(0, putTips); return end
+    if ahLayoutOn or panelOn then putTips(true); C_Timer.After(0, putTips); return end
     -- The world's tooltip (people, mobs) opens just above Polestar's target list, right edges level, instead of on it
     -- (Joshua 2026-11-27: "the tooltip is covering everything" in the bottom-right corner where the list sits).
     if not fixing and t == GameTooltip and not bagsAlone() then

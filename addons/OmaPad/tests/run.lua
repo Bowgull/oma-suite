@@ -104,7 +104,7 @@ local function win(name, l, t, w, h)
   function f:GetRight() return self.l and self.l + self.w end
   function f:GetBottom() return self.t and self.t - self.h end
   function f:GetWidth() return self.w end
-  function f:HookScript() end
+  function f:HookScript(e, fn) self.hooks = self.hooks or {}; self.hooks[e] = fn end
   function f:SetAnchorType(a) self.anchor = a end
   _G[name] = f
   return f
@@ -476,6 +476,18 @@ tests['auction house: the spot settles one way per tooltip and never flips back 
   link = 'item:2'                                 -- another item gets its own spot
   OmaPadPutTipsForTest()
   ok(c1.pts[1][1] == 'TOPLEFT', 'next item: decided afresh')
+end
+tests['auction house: placed the moment the game shows it, without deciding on the last item\'s size'] = function()
+  local w, c1 = ahTips()
+  local later = {}; _G.C_Timer = { After = function(_, fn) later[#later + 1] = fn end }
+  local link = 'item:1'; w.tip.GetItem = function() return 'Thing', link end
+  w.tip.h = 900                                   -- still the last, tall item's size when the game shows the new one
+  c1.pts = { { 'CENTER', nil, 'CENTER', 0, 0 } }
+  ok(GameTooltip.hooks and GameTooltip.hooks.OnShow, 'hooked')
+  GameTooltip.hooks.OnShow()
+  ok(c1.pts[1][1] == 'TOPLEFT', 'placed at once, under the bags, before any timer: ' .. tostring(c1.pts[1][1]))
+  w.tip.h = 120; for _, fn in ipairs(later) do fn() end
+  ok(c1.pts[1][1] == 'TOPLEFT', 'next frame, real size: still under the bags (the stale size decided nothing)')
 end
 tests['compare tab: measured from the box header when it has one'] = function()
   local h = { GetTop = function() return nil end, GetHeight = function() return 30 end, GetEffectiveScale = function() return 0.9 end,
